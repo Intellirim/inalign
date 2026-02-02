@@ -60,31 +60,13 @@ class InjectionDetector:
     # Public API
     # ------------------------------------------------------------------
 
-    def detect(self, text: str) -> list[dict[str, Any]]:
+    async def detect(self, text: str) -> dict[str, Any]:
         """Detect prompt injection threats in *text*.
 
-        Parameters
-        ----------
-        text:
-            The input text to analyse.
-
-        Returns
-        -------
-        list[dict]:
-            Each dict contains:
-            - ``type``          -- ``"injection"``
-            - ``subtype``       -- category / detection method
-            - ``pattern_id``    -- unique pattern ID
-            - ``matched_text``  -- matched substring or phrase
-            - ``position``      -- ``(start, end)`` character span
-            - ``confidence``    -- ``[0.0, 1.0]``
-            - ``severity``      -- ``"low"`` | ``"medium"`` | ``"high"`` | ``"critical"``
-            - ``description``   -- human-readable description
-            - ``risk_score``    -- aggregate risk score for all threats
-            - ``risk_level``    -- aggregate risk level label
+        Returns a dict with ``threats`` list and ``risk_score`` float.
         """
         if not text or not text.strip():
-            return []
+            return {"threats": [], "risk_score": 0.0, "risk_level": "negligible"}
 
         rule_threats = self._rule_detector.detect(text)
 
@@ -97,7 +79,6 @@ class InjectionDetector:
 
         merged = self._merge_results(rule_threats, embedding_threats)
 
-        # Compute aggregate risk and annotate each threat.
         risk_score = self._compute_risk_score(merged)
         risk_level = self._determine_risk_level(risk_score)
 
@@ -112,7 +93,7 @@ class InjectionDetector:
             risk_level,
             len(text),
         )
-        return merged
+        return {"threats": merged, "risk_score": risk_score, "risk_level": risk_level}
 
     # ------------------------------------------------------------------
     # Internal helpers

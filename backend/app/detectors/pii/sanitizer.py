@@ -78,13 +78,16 @@ class PIISanitizer:
 
         # Sort by start position descending so we can replace safely
         # from the end of the string backwards.
-        sorted_items = sorted(pii_items, key=lambda x: x.get("start", 0), reverse=True)
+        sorted_items = sorted(
+            pii_items,
+            key=lambda x: self._get_start(x),
+            reverse=True,
+        )
         result = text
 
         for item in sorted_items:
-            pii_type: str = item.get("pii_type", "unknown")
-            start: int = item.get("start", 0)
-            end: int = item.get("end", 0)
+            pii_type: str = item.get("pii_type") or item.get("type", "unknown")
+            start, end = self._get_span(item)
 
             if start < 0 or end <= start or end > len(result):
                 logger.warning(
@@ -100,6 +103,26 @@ class PIISanitizer:
             result = result[:start] + label + result[end:]
 
         return result
+
+    # ------------------------------------------------------------------
+    # Span extraction helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _get_span(item: dict[str, Any]) -> tuple[int, int]:
+        """Extract ``(start, end)`` from a PII item dict."""
+        pos = item.get("position")
+        if pos and isinstance(pos, (list, tuple)) and len(pos) == 2:
+            return int(pos[0]), int(pos[1])
+        return item.get("start", 0), item.get("end", 0)
+
+    @staticmethod
+    def _get_start(item: dict[str, Any]) -> int:
+        """Extract the start offset from a PII item dict (for sorting)."""
+        pos = item.get("position")
+        if pos and isinstance(pos, (list, tuple)) and len(pos) >= 1:
+            return int(pos[0])
+        return item.get("start", 0)
 
     # ------------------------------------------------------------------
     # Partial masking
@@ -212,13 +235,16 @@ class PIISanitizer:
         if not pii_items:
             return text
 
-        sorted_items = sorted(pii_items, key=lambda x: x.get("start", 0), reverse=True)
+        sorted_items = sorted(
+            pii_items,
+            key=lambda x: self._get_start(x),
+            reverse=True,
+        )
         result = text
 
         for item in sorted_items:
-            pii_type: str = item.get("pii_type", "unknown")
-            start: int = item.get("start", 0)
-            end: int = item.get("end", 0)
+            pii_type: str = item.get("pii_type") or item.get("type", "unknown")
+            start, end = self._get_span(item)
 
             if start < 0 or end <= start or end > len(result):
                 continue

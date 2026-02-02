@@ -71,75 +71,34 @@ def _validate_phone_korea(value: str) -> bool:
 # ---------------------------------------------------------------------------
 
 KOREAN_PII_PATTERNS: dict[str, dict[str, Any]] = {
-    # -- Resident Registration Number (주민등록번호) --
     "resident_id": {
-        "pattern": r"\b(\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))\s*[-]\s*([1-8]\d{6})\b",
+        "pattern": r"(?<!\d)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\s*-\s*[1-8]\d{6}(?!\d)",
         "severity": "critical",
         "description": "Korean Resident Registration Number (주민등록번호)",
         "validator": validate_korean_rrn,
     },
-
-    # -- Mobile phone (010-xxxx-xxxx) --
     "phone_mobile": {
-        "pattern": r"\b(010)[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b",
+        "pattern": r"(?<!\d)010[-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)",
         "severity": "high",
         "description": "Korean mobile phone number (휴대폰번호)",
         "validator": _validate_phone_korea,
     },
-
-    # -- Landline phone --
     "phone_landline": {
-        "pattern": r"\b(0(?:2|3[1-3]|4[1-4]|5[1-5]|6[1-4]))[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b",
+        "pattern": r"(?<!\d)0(?:2|3[1-3]|4[1-4]|5[1-5]|6[1-4])[-.\s]?\d{3,4}[-.\s]?\d{4}(?!\d)",
         "severity": "high",
         "description": "Korean landline phone number (유선 전화번호)",
         "validator": _validate_phone_korea,
     },
-
-    # -- Passport (여권번호) --
     "passport": {
-        "pattern": r"\b([A-Z]{1,2}\d{7,8})\b",
+        "pattern": r"(?<![A-Z])[A-Z]{1,2}\d{7,8}(?!\d)",
         "severity": "high",
         "description": "Korean passport number (여권번호)",
         "validator": None,
     },
-
-    # -- Driver's license (운전면허번호) --
     "driver_license": {
-        "pattern": r"\b(\d{2})[-.\s]?(\d{2})[-.\s]?(\d{6})[-.\s]?(\d{2})\b",
+        "pattern": r"(?<!\d)\d{2}[-.\s]?\d{2}[-.\s]?\d{6}[-.\s]?\d{2}(?!\d)",
         "severity": "high",
         "description": "Korean driver's license number (운전면허번호)",
-        "validator": None,
-    },
-
-    # -- Bank account numbers per bank --
-    "bank_kb": {
-        "pattern": r"\b(\d{3})[-.\s]?(\d{2})[-.\s]?(\d{4})[-.\s]?(\d{3})\b",
-        "severity": "high",
-        "description": "KB Kookmin Bank account number (국민은행 계좌번호)",
-        "validator": None,
-    },
-    "bank_shinhan": {
-        "pattern": r"\b(\d{3})[-.\s]?(\d{3})[-.\s]?(\d{6})\b",
-        "severity": "high",
-        "description": "Shinhan Bank account number (신한은행 계좌번호)",
-        "validator": None,
-    },
-    "bank_woori": {
-        "pattern": r"\b(\d{4})[-.\s]?(\d{3})[-.\s]?(\d{6})\b",
-        "severity": "high",
-        "description": "Woori Bank account number (우리은행 계좌번호)",
-        "validator": None,
-    },
-    "bank_hana": {
-        "pattern": r"\b(\d{3})[-.\s]?(\d{6})[-.\s]?(\d{5})\b",
-        "severity": "high",
-        "description": "Hana Bank account number (하나은행 계좌번호)",
-        "validator": None,
-    },
-    "bank_nh": {
-        "pattern": r"\b(\d{3})[-.\s]?(\d{4})[-.\s]?(\d{4})[-.\s]?(\d{2})\b",
-        "severity": "high",
-        "description": "NH NongHyup Bank account number (농협 계좌번호)",
         "validator": None,
     },
 }

@@ -71,29 +71,13 @@ class PIIDetector:
     # Public API
     # ------------------------------------------------------------------
 
-    def detect(self, text: str) -> list[dict[str, Any]]:
+    async def detect(self, text: str) -> dict[str, Any]:
         """Scan *text* for PII matches.
 
-        Parameters
-        ----------
-        text:
-            The input text to analyse.
-
-        Returns
-        -------
-        list[dict]:
-            Each dict (PIIInfo-shaped) contains:
-            - ``pii_type``    -- identifier (e.g. ``"email"``, ``"resident_id"``)
-            - ``value``       -- the matched substring
-            - ``start``       -- start index in the text
-            - ``end``         -- end index in the text
-            - ``severity``    -- ``"low"`` | ``"medium"`` | ``"high"`` | ``"critical"``
-            - ``description`` -- human-readable description
-            - ``validated``   -- ``True`` if passed the optional validator,
-                                 ``None`` if no validator exists
+        Returns a dict with ``pii_entities`` list and ``sanitized_text``.
         """
         if not text or not text.strip():
-            return []
+            return {"pii_entities": [], "sanitized_text": text}
 
         results: list[dict[str, Any]] = []
         seen_spans: set[tuple[int, int]] = set()
@@ -105,13 +89,11 @@ class PIIDetector:
             for match in compiled.finditer(text):
                 span = match.span()
 
-                # Skip overlapping matches (keep the first match found).
                 if self._overlaps_existing(span, seen_spans):
                     continue
 
                 matched_value = match.group()
 
-                # Run optional validator.
                 validated: Optional[bool] = None
                 if validator is not None:
                     try:
@@ -124,29 +106,30 @@ class PIIDetector:
                         )
                         validated = False
 
-                    # If validator returns False, skip this match.
                     if validated is False:
                         continue
 
                 seen_spans.add(span)
                 results.append(
                     {
-                        "pii_type": entry["pii_type"],
+                        "type": entry["pii_type"],
+                        "subtype": entry["pii_type"],
                         "value": matched_value,
-                        "start": span[0],
-                        "end": span[1],
+                        "position": [span[0], span[1]],
+                        "confidence": 1.0 if validated is not False else 0.8,
                         "severity": entry["severity"],
                         "description": entry["description"],
-                        "validated": validated,
                     }
                 )
+
+        sanitized_text = self._sanitizer.sanitize(text, results)
 
         logger.debug(
             "PIIDetector found %d PII item(s) in text of length %d.",
             len(results),
             len(text),
         )
-        return results
+        return {"pii_entities": results, "sanitized_text": sanitized_text}
 
     def sanitize(self, text: str, auto: bool = True) -> str:
         """Detect and replace PII in *text*.

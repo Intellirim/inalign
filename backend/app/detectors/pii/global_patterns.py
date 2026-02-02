@@ -81,8 +81,9 @@ def _validate_ipv4(value: str) -> bool:
 
 GLOBAL_PII_PATTERNS: dict[str, dict[str, Any]] = {
     # -- Email address --
+    # Use lookaround instead of \b so patterns work adjacent to Korean text.
     "email": {
-        "pattern": r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b",
+        "pattern": r"(?<![A-Za-z0-9._%+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![A-Za-z])",
         "severity": "medium",
         "description": "Email address",
         "validator": _validate_email,
@@ -90,7 +91,7 @@ GLOBAL_PII_PATTERNS: dict[str, dict[str, Any]] = {
 
     # -- Credit card number (13-19 digits, optional separators) --
     "credit_card": {
-        "pattern": r"\b(?:\d[ \-]*?){13,19}\b",
+        "pattern": r"(?<!\d)(?:\d[ \-]*?){13,19}(?!\d)",
         "severity": "critical",
         "description": "Credit card number",
         "validator": validate_luhn,
@@ -98,7 +99,7 @@ GLOBAL_PII_PATTERNS: dict[str, dict[str, Any]] = {
 
     # -- IPv4 address --
     "ip_address": {
-        "pattern": r"\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b",
+        "pattern": r"(?<!\d)(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)(?!\d)",
         "severity": "low",
         "description": "IPv4 address",
         "validator": _validate_ipv4,
@@ -106,7 +107,7 @@ GLOBAL_PII_PATTERNS: dict[str, dict[str, Any]] = {
 
     # -- US Social Security Number --
     "ssn_us": {
-        "pattern": r"\b(?!000|666|9\d{2})\d{3}[-.\s]?(?!00)\d{2}[-.\s]?(?!0000)\d{4}\b",
+        "pattern": r"(?<!\d)(?!000|666|9\d{2})\d{3}[-.\s]?(?!00)\d{2}[-.\s]?(?!0000)\d{4}(?!\d)",
         "severity": "critical",
         "description": "US Social Security Number (SSN)",
         "validator": None,
@@ -114,7 +115,7 @@ GLOBAL_PII_PATTERNS: dict[str, dict[str, Any]] = {
 
     # -- General passport number (1-2 alpha + 6-9 digits) --
     "passport_general": {
-        "pattern": r"\b[A-Z]{1,2}\d{6,9}\b",
+        "pattern": r"(?<![A-Z])[A-Z]{1,2}\d{6,9}(?!\d)",
         "severity": "high",
         "description": "Passport number (general format)",
         "validator": None,

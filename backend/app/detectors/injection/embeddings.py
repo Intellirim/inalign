@@ -14,7 +14,10 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +92,7 @@ class EmbeddingDetector:
     def __init__(self, model_name: str = _DEFAULT_MODEL_NAME) -> None:
         self._model_name = model_name
         self._model: Any = None
-        self._phrase_embeddings: Optional[np.ndarray] = None
+        self._phrase_embeddings: Any = None
 
     # ------------------------------------------------------------------
     # Lazy model loading
@@ -220,7 +223,7 @@ class EmbeddingDetector:
 
     def _compute_similarity(
         self, text: str, phrases: list[str]
-    ) -> np.ndarray:
+    ) -> Any:
         """Compute cosine similarity between *text* and every phrase.
 
         Parameters
@@ -235,10 +238,10 @@ class EmbeddingDetector:
         np.ndarray:
             1-D array of similarity scores with the same length as *phrases*.
         """
-        if self._model is None or self._phrase_embeddings is None:
-            return np.array([])
+        if self._model is None or self._phrase_embeddings is None or np is None:
+            return []
 
-        text_embedding: np.ndarray = self._model.encode(
+        text_embedding = self._model.encode(
             [text],
             convert_to_numpy=True,
             normalize_embeddings=True,
@@ -246,7 +249,7 @@ class EmbeddingDetector:
         )
 
         # Cosine similarity (both vectors are already L2-normalised).
-        similarities: np.ndarray = np.dot(
+        similarities = np.dot(
             self._phrase_embeddings, text_embedding.T
         ).flatten()
 
