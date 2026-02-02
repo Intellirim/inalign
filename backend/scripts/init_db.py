@@ -93,11 +93,35 @@ async def main() -> None:
             )
             session.add(admin_user)
             await session.commit()
+            await session.refresh(admin_user)
             logger.info(
                 "Admin user created: email=%s role=%s",
                 admin_user.email,
                 admin_user.role.value,
             )
+
+            # Create initial API key for the admin user
+            from app.models.api_key import APIKey
+            from app.core.security import generate_api_key, hash_api_key, get_api_key_prefix
+            from uuid import uuid4
+
+            raw_key = generate_api_key()
+            api_key = APIKey(
+                id=uuid4(),
+                user_id=admin_user.id,
+                name="admin-default",
+                key_hash=hash_api_key(raw_key),
+                key_prefix=get_api_key_prefix(raw_key),
+                permissions={"scan:read": True, "scan:write": True, "logs:read": True, "logs:write": True, "reports:read": True, "admin": True},
+                is_active=True,
+            )
+            session.add(api_key)
+            await session.commit()
+            logger.info("Admin API key created: %s", raw_key)
+            print(f"\n{'='*60}")
+            print(f"  ADMIN API KEY (save this, shown only once):")
+            print(f"  {raw_key}")
+            print(f"{'='*60}\n")
 
     await init_engine.dispose()
     logger.info("Database initialisation complete.")

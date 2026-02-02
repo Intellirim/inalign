@@ -81,12 +81,12 @@ class Alert(Base):
         nullable=False,
     )
     alert_type: Mapped[AlertType] = mapped_column(
-        Enum(AlertType, name="alert_type", create_constraint=True),
+        Enum(AlertType, name="alert_type", create_constraint=True, values_callable=lambda e: [m.value for m in e]),
         index=True,
         nullable=False,
     )
     severity: Mapped[AlertSeverity] = mapped_column(
-        Enum(AlertSeverity, name="alert_severity", create_constraint=True),
+        Enum(AlertSeverity, name="alert_severity", create_constraint=True, values_callable=lambda e: [m.value for m in e]),
         index=True,
         nullable=False,
     )

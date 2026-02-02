@@ -60,7 +60,12 @@ class User(Base):
         nullable=False,
     )
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, name="user_role", create_constraint=True),
+        Enum(
+            UserRole,
+            name="user_role",
+            create_constraint=True,
+            values_callable=lambda e: [m.value for m in e],
+        ),
         default=UserRole.USER,
         server_default=UserRole.USER.value,
         nullable=False,

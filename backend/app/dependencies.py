@@ -226,7 +226,7 @@ async def get_current_user(
     # may import *this* module, creating a circular dependency.
     result = await db.execute(
         text(
-            "SELECT id, user_id, org_id, scopes, is_active "
+            "SELECT id, user_id, permissions, is_active "
             "FROM api_keys WHERE key_hash = :key_hash"
         ),
         {"key_hash": key_hash},
@@ -249,13 +249,12 @@ async def get_current_user(
     except Exception:
         logger.debug("Failed to update last_used_at for key %s", row["id"], exc_info=True)
 
-    scopes = row["scopes"] if row["scopes"] else []
+    permissions = row["permissions"] if row["permissions"] else {}
 
     return {
         "api_key_id": row["id"],
         "user_id": row["user_id"],
-        "org_id": row["org_id"],
-        "scopes": scopes,
+        "permissions": permissions,
     }
 
 
