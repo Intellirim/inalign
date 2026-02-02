@@ -1,0 +1,25 @@
+export { AgentShield } from "./client";
+
+export type {
+  AgentShieldConfig,
+  ScanInputRequest,
+  ScanInputResponse,
+  ScanOutputRequest,
+  ScanOutputResponse,
+  ThreatInfo,
+  PIIInfo,
+  LogActionRequest,
+  LogActionResponse,
+  AnomalyInfo,
+  SessionResponse,
+  ListSessionsParams,
+  ListSessionsResponse,
+  ReportRequest,
+  ReportResponse,
+  Recommendation,
+  ListAlertsParams,
+  ListAlertsResponse,
+  AlertResponse,
+  PaginatedResponse,
+  AgentShieldErrorResponse,
+} from "./types";

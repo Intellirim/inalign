@@ -1,0 +1,184 @@
+{
+  "korean": {
+    "resident_id": {
+      "pattern": "\\b(\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01]))\\s*[-]\\s*([1-8]\\d{6})\\b",
+      "severity": "critical",
+      "description": "Korean Resident Registration Number (주민등록번호)",
+      "has_validator": true,
+      "examples": ["880101-1234567", "950315-2345678"]
+    },
+    "phone_mobile": {
+      "pattern": "\\b(010)[-.]?\\s?(\\d{3,4})[-.]?\\s?(\\d{4})\\b",
+      "severity": "high",
+      "description": "Korean mobile phone number (휴대폰번호)",
+      "has_validator": true,
+      "examples": ["010-1234-5678", "01012345678"]
+    },
+    "phone_landline": {
+      "pattern": "\\b(0(?:2|3[1-3]|4[1-4]|5[1-5]|6[1-4]))[-.]?\\s?(\\d{3,4})[-.]?\\s?(\\d{4})\\b",
+      "severity": "high",
+      "description": "Korean landline phone number (유선 전화번호)",
+      "has_validator": true,
+      "examples": ["02-1234-5678", "031-123-4567"]
+    },
+    "passport": {
+      "pattern": "\\b([A-Z]{1,2}\\d{7,8})\\b",
+      "severity": "high",
+      "description": "Korean passport number (여권번호)",
+      "has_validator": false,
+      "examples": ["M12345678", "AB1234567"]
+    },
+    "driver_license": {
+      "pattern": "\\b(\\d{2})[-.]?\\s?(\\d{2})[-.]?\\s?(\\d{6})[-.]?\\s?(\\d{2})\\b",
+      "severity": "high",
+      "description": "Korean driver's license number (운전면허번호)",
+      "has_validator": false,
+      "examples": ["11-22-123456-78"]
+    },
+    "bank_kb": {
+      "pattern": "\\b(\\d{3})[-.]?\\s?(\\d{2})[-.]?\\s?(\\d{4})[-.]?\\s?(\\d{3})\\b",
+      "severity": "high",
+      "description": "KB Kookmin Bank account number (국민은행 계좌번호)",
+      "has_validator": false,
+      "examples": ["123-45-6789-012"]
+    },
+    "bank_shinhan": {
+      "pattern": "\\b(\\d{3})[-.]?\\s?(\\d{3})[-.]?\\s?(\\d{6})\\b",
+      "severity": "high",
+      "description": "Shinhan Bank account number (신한은행 계좌번호)",
+      "has_validator": false,
+      "examples": ["110-123-456789"]
+    },
+    "bank_woori": {
+      "pattern": "\\b(\\d{4})[-.]?\\s?(\\d{3})[-.]?\\s?(\\d{6})\\b",
+      "severity": "high",
+      "description": "Woori Bank account number (우리은행 계좌번호)",
+      "has_validator": false,
+      "examples": ["1234-567-890123"]
+    },
+    "bank_hana": {
+      "pattern": "\\b(\\d{3})[-.]?\\s?(\\d{6})[-.]?\\s?(\\d{5})\\b",
+      "severity": "high",
+      "description": "Hana Bank account number (하나은행 계좌번호)",
+      "has_validator": false,
+      "examples": ["123-456789-01234"]
+    },
+    "bank_nh": {
+      "pattern": "\\b(\\d{3})[-.]?\\s?(\\d{4})[-.]?\\s?(\\d{4})[-.]?\\s?(\\d{2})\\b",
+      "severity": "high",
+      "description": "NH NongHyup Bank account number (농협 계좌번호)",
+      "has_validator": false,
+      "examples": ["123-4567-8901-23"]
+    },
+    "korean_name_with_context": {
+      "pattern": "(?:이름|성명|본인|고객명)\\s*[:：]?\\s*([가-힣]{2,5})",
+      "severity": "high",
+      "description": "Korean personal name in context (이름: 홍길동)",
+      "has_validator": false,
+      "examples": ["이름: 홍길동", "고객명 김철수"]
+    },
+    "business_registration": {
+      "pattern": "\\b(\\d{3})[-]?(\\d{2})[-]?(\\d{5})\\b",
+      "severity": "high",
+      "description": "Korean business registration number (사업자등록번호)",
+      "has_validator": false,
+      "examples": ["123-45-67890"]
+    }
+  },
+  "global": {
+    "email": {
+      "pattern": "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b",
+      "severity": "medium",
+      "description": "Email address",
+      "has_validator": false,
+      "examples": ["user@example.com", "john.doe@company.co.kr"]
+    },
+    "credit_card_visa": {
+      "pattern": "\\b4[0-9]{3}[-\\s]?[0-9]{4}[-\\s]?[0-9]{4}[-\\s]?[0-9]{4}\\b",
+      "severity": "critical",
+      "description": "Visa credit card number",
+      "has_validator": true,
+      "validator_type": "luhn",
+      "examples": ["4111-1111-1111-1111"]
+    },
+    "credit_card_mastercard": {
+      "pattern": "\\b5[1-5][0-9]{2}[-\\s]?[0-9]{4}[-\\s]?[0-9]{4}[-\\s]?[0-9]{4}\\b",
+      "severity": "critical",
+      "description": "MasterCard credit card number",
+      "has_validator": true,
+      "validator_type": "luhn",
+      "examples": ["5500-0000-0000-0004"]
+    },
+    "credit_card_amex": {
+      "pattern": "\\b3[47][0-9]{2}[-\\s]?[0-9]{6}[-\\s]?[0-9]{5}\\b",
+      "severity": "critical",
+      "description": "American Express credit card number",
+      "has_validator": true,
+      "validator_type": "luhn",
+      "examples": ["3400-000000-00009"]
+    },
+    "ssn_us": {
+      "pattern": "\\b(?!000|666|9\\d{2})\\d{3}[-]?(?!00)\\d{2}[-]?(?!0000)\\d{4}\\b",
+      "severity": "critical",
+      "description": "US Social Security Number (SSN)",
+      "has_validator": false,
+      "examples": ["123-45-6789"]
+    },
+    "ipv4_address": {
+      "pattern": "\\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\b",
+      "severity": "low",
+      "description": "IPv4 address",
+      "has_validator": false,
+      "examples": ["192.168.1.1", "10.0.0.1"]
+    },
+    "phone_international": {
+      "pattern": "\\+[1-9]\\d{1,14}",
+      "severity": "medium",
+      "description": "International phone number (E.164 format)",
+      "has_validator": false,
+      "examples": ["+821012345678", "+14155551234"]
+    },
+    "aws_access_key": {
+      "pattern": "\\b(AKIA[0-9A-Z]{16})\\b",
+      "severity": "critical",
+      "description": "AWS Access Key ID",
+      "has_validator": false,
+      "examples": ["AKIAIOSFODNN7EXAMPLE"]
+    },
+    "generic_api_key": {
+      "pattern": "(?i)(api[_-]?key|apikey|api_secret|access_token)\\s*[=:]\\s*['\"]?([A-Za-z0-9_\\-]{20,})['\"]?",
+      "severity": "critical",
+      "description": "Generic API key or access token in key=value format",
+      "has_validator": false,
+      "examples": ["api_key=abc123def456ghi789jkl012"]
+    },
+    "jwt_token": {
+      "pattern": "\\beyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b",
+      "severity": "high",
+      "description": "JSON Web Token (JWT)",
+      "has_validator": false,
+      "examples": ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc123"]
+    },
+    "date_of_birth": {
+      "pattern": "(?:생년월일|DOB|date\\s*of\\s*birth)\\s*[:：]?\\s*(\\d{4}[-/.]\\d{1,2}[-/.]\\d{1,2})",
+      "severity": "medium",
+      "description": "Date of birth with context label",
+      "has_validator": false,
+      "examples": ["DOB: 1990-01-15", "생년월일: 1985/03/22"]
+    },
+    "url_with_credentials": {
+      "pattern": "https?://[^:]+:[^@]+@[^\\s]+",
+      "severity": "critical",
+      "description": "URL containing embedded credentials",
+      "has_validator": false,
+      "examples": ["https://user:password@example.com"]
+    },
+    "private_key": {
+      "pattern": "-----BEGIN\\s+(RSA\\s+)?PRIVATE\\s+KEY-----",
+      "severity": "critical",
+      "description": "Private key block header",
+      "has_validator": false,
+      "examples": ["-----BEGIN RSA PRIVATE KEY-----"]
+    }
+  }
+}

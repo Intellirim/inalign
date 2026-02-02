@@ -1,0 +1,827 @@
+openapi: 3.0.3
+info:
+  title: AgentShield API
+  description: |
+    AgentShield is an AI Agent Security Platform that provides real-time threat detection,
+    PII scanning, anomaly detection, and comprehensive audit logging for AI agents.
+
+    ## Authentication
+    All API endpoints require a Bearer token in the Authorization header.
+    ```
+    Authorization: Bearer your-api-key
+    ```
+
+    ## Rate Limiting
+    API requests are rate-limited per API key. Default limit is 100 requests per minute.
+    Rate limit headers are included in all responses:
+    - `X-RateLimit-Limit`: Maximum requests per window
+    - `X-RateLimit-Remaining`: Remaining requests in current window
+    - `X-RateLimit-Reset`: Unix timestamp when the window resets
+  version: 1.0.0
+  contact:
+    name: AgentShield Team
+    email: support@agentshield.io
+    url: https://agentshield.io
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.agentshield.io
+    description: Production server
+  - url: https://staging-api.agentshield.io
+    description: Staging server
+  - url: http://localhost:8000
+    description: Local development server
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Scanning
+    description: Input and output scanning for threats and PII
+  - name: Actions
+    description: Agent action logging and anomaly detection
+  - name: Sessions
+    description: Session management and monitoring
+  - name: Reports
+    description: Security report generation
+  - name: Alerts
+    description: Security alert management
+  - name: Health
+    description: API health checks
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns the health status of the API.
+      security: []
+      responses:
+        "200":
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /v1/scan/input:
+    post:
+      tags: [Scanning]
+      summary: Scan user input
+      description: |
+        Scans user input text for potential threats including prompt injection,
+        jailbreak attempts, and personally identifiable information (PII).
+      operationId: scanInput
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanInputRequest"
+            example:
+              text: "My name is John Doe and my SSN is 123-45-6789. Help me reset my password."
+              agent_id: "customer-support-agent-01"
+              session_id: "sess-abc-123"
+              metadata:
+                channel: web
+                user_tier: premium
+      responses:
+        "200":
+          description: Scan completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanInputResponse"
+              example:
+                scan_id: "scan-001"
+                is_safe: false
+                risk_level: high
+                risk_score: 0.85
+                threats:
+                  - type: prompt_injection
+                    severity: high
+                    confidence: 0.92
+                    description: "Detected prompt injection attempt."
+                pii_detected:
+                  - type: ssn
+                    value: "***-**-6789"
+                    start: 30
+                    end: 41
+                    confidence: 0.99
+                recommendations:
+                  - "Block this input"
+                  - "Log for review"
+                processing_time_ms: 45
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+
+  /v1/scan/output:
+    post:
+      tags: [Scanning]
+      summary: Scan agent output
+      description: |
+        Scans agent output text for sensitive data leakage, PII exposure,
+        and other security concerns before sending to the user.
+      operationId: scanOutput
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScanOutputRequest"
+            example:
+              text: "Hi John! Your account number is 9876543210. I've sent a reset link to j.doe@example.com."
+              agent_id: "customer-support-agent-01"
+              session_id: "sess-abc-123"
+              auto_sanitize: true
+      responses:
+        "200":
+          description: Scan completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanOutputResponse"
+              example:
+                scan_id: "scan-002"
+                is_safe: false
+                risk_level: medium
+                risk_score: 0.55
+                pii_detected:
+                  - type: email
+                    value: "j.***@example.com"
+                    start: 72
+                    end: 90
+                    confidence: 0.98
+                data_leakage_risk: true
+                sanitized_text: "Hi John! Your account number is [REDACTED]. I've sent a reset link to [REDACTED]."
+                issues:
+                  - "Email address exposed in output"
+                  - "Account number exposed in output"
+                processing_time_ms: 38
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+
+  /v1/actions/log:
+    post:
+      tags: [Actions]
+      summary: Log agent action
+      description: |
+        Logs an agent action for audit trailing and anomaly detection.
+        The system analyzes the action against baseline behavior patterns
+        and flags anomalous activity.
+      operationId: logAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogActionRequest"
+            example:
+              agent_id: "customer-support-agent-01"
+              session_id: "sess-abc-123"
+              action_type: "tool_call"
+              name: "password_reset"
+              target: "user_management_api"
+              parameters:
+                user_id: "usr-456"
+                method: "email"
+              result_summary: "Password reset email sent successfully."
+              duration_ms: 234
+              context:
+                triggered_by: "user_request"
+      responses:
+        "200":
+          description: Action logged successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogActionResponse"
+              example:
+                action_id: "act-001"
+                status: "recorded"
+                risk_level: "low"
+                anomalies: []
+                is_anomalous: false
+                recommendations: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+        "429":
+          $ref: "#/components/responses/RateLimitExceeded"
+
+  /v1/sessions/{session_id}:
+    get:
+      tags: [Sessions]
+      summary: Get session details
+      description: Retrieves detailed information about a specific session.
+      operationId: getSession
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "sess-abc-123"
+      responses:
+        "200":
+          description: Session details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/sessions:
+    get:
+      tags: [Sessions]
+      summary: List sessions
+      description: Lists sessions with optional filtering by status and risk level.
+      operationId: listSessions
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, completed, flagged, terminated]
+          description: Filter by session status
+        - name: risk_level
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+          description: Filter by risk level
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: Sessions listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SessionResponse"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  size:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/reports/generate:
+    post:
+      tags: [Reports]
+      summary: Generate security report
+      description: |
+        Generates a comprehensive security analysis report for a session.
+        Reports include threat analysis, anomaly detection, risk scoring,
+        and actionable recommendations.
+      operationId: generateReport
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportRequest"
+            example:
+              session_id: "sess-abc-123"
+              report_type: "security_analysis"
+              language: "ko"
+      responses:
+        "200":
+          description: Report generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+
+  /v1/alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      description: Retrieves security alerts with optional filtering.
+      operationId: listAlerts
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+        - name: acknowledged
+          in: query
+          schema:
+            type: boolean
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: Alerts listed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AlertResponse"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  size:
+                    type: integer
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/alerts/{alert_id}/acknowledge:
+    patch:
+      tags: [Alerts]
+      summary: Acknowledge alert
+      description: Acknowledges a security alert.
+      operationId: acknowledgeAlert
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Alert acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  acknowledged:
+                    type: boolean
+                    example: true
+                  acknowledged_at:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: "API key obtained from the AgentShield dashboard"
+
+  schemas:
+    ScanInputRequest:
+      type: object
+      required: [text, agent_id, session_id]
+      properties:
+        text:
+          type: string
+          description: The user input text to scan
+          maxLength: 50000
+        agent_id:
+          type: string
+          description: Identifier of the AI agent
+        session_id:
+          type: string
+          description: Current session identifier
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Optional additional metadata
+
+    ScanInputResponse:
+      type: object
+      properties:
+        scan_id:
+          type: string
+        is_safe:
+          type: boolean
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        risk_score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        threats:
+          type: array
+          items:
+            $ref: "#/components/schemas/ThreatInfo"
+        pii_detected:
+          type: array
+          items:
+            $ref: "#/components/schemas/PIIInfo"
+        recommendations:
+          type: array
+          items:
+            type: string
+        processing_time_ms:
+          type: integer
+
+    ScanOutputRequest:
+      type: object
+      required: [text, agent_id, session_id]
+      properties:
+        text:
+          type: string
+          maxLength: 50000
+        agent_id:
+          type: string
+        session_id:
+          type: string
+        auto_sanitize:
+          type: boolean
+          default: false
+
+    ScanOutputResponse:
+      type: object
+      properties:
+        scan_id:
+          type: string
+        is_safe:
+          type: boolean
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        risk_score:
+          type: number
+          format: float
+        pii_detected:
+          type: array
+          items:
+            $ref: "#/components/schemas/PIIInfo"
+        data_leakage_risk:
+          type: boolean
+        sanitized_text:
+          type: string
+          nullable: true
+        issues:
+          type: array
+          items:
+            type: string
+        processing_time_ms:
+          type: integer
+
+    ThreatInfo:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Type of threat
+          enum: [prompt_injection, jailbreak, data_extraction, social_engineering, malicious_code]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        confidence:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        description:
+          type: string
+        matched_pattern:
+          type: string
+          nullable: true
+
+    PIIInfo:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [ssn, email, phone, credit_card, address, name, date_of_birth, passport, driver_license]
+        value:
+          type: string
+          description: Detected value (may be masked)
+        start:
+          type: integer
+        end:
+          type: integer
+        confidence:
+          type: number
+          format: float
+
+    LogActionRequest:
+      type: object
+      required: [agent_id, session_id, action_type, name]
+      properties:
+        agent_id:
+          type: string
+        session_id:
+          type: string
+        action_type:
+          type: string
+          enum: [tool_call, api_request, database_query, file_operation, llm_call, custom]
+        name:
+          type: string
+        target:
+          type: string
+          default: ""
+        parameters:
+          type: object
+          additionalProperties: true
+          default: {}
+        result_summary:
+          type: string
+          default: ""
+        duration_ms:
+          type: integer
+          default: 0
+        context:
+          type: object
+          additionalProperties: true
+
+    LogActionResponse:
+      type: object
+      properties:
+        action_id:
+          type: string
+        status:
+          type: string
+          enum: [recorded, flagged, blocked]
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        anomalies:
+          type: array
+          items:
+            $ref: "#/components/schemas/AnomalyInfo"
+        is_anomalous:
+          type: boolean
+        recommendations:
+          type: array
+          items:
+            type: string
+
+    AnomalyInfo:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [unusual_frequency, privilege_escalation, data_exfiltration, pattern_deviation, resource_abuse]
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        description:
+          type: string
+        score:
+          type: number
+          format: float
+        baseline_deviation:
+          type: number
+          format: float
+          nullable: true
+
+    SessionResponse:
+      type: object
+      properties:
+        session_id:
+          type: string
+        agent_id:
+          type: string
+        status:
+          type: string
+          enum: [active, completed, flagged, terminated]
+        risk_level:
+          type: string
+          enum: [low, medium, high, critical]
+        risk_score:
+          type: number
+          format: float
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+        total_actions:
+          type: integer
+        total_scans:
+          type: integer
+        threats_detected:
+          type: integer
+        anomalies_detected:
+          type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ReportRequest:
+      type: object
+      required: [session_id]
+      properties:
+        session_id:
+          type: string
+        report_type:
+          type: string
+          enum: [security_analysis, compliance, executive_summary]
+          default: security_analysis
+        language:
+          type: string
+          default: ko
+          description: Language code for the report
+
+    ReportResponse:
+      type: object
+      properties:
+        report_id:
+          type: string
+        session_id:
+          type: string
+        report_type:
+          type: string
+        language:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        risk_level:
+          type: string
+        risk_score:
+          type: number
+          format: float
+        total_events:
+          type: integer
+        threats_found:
+          type: integer
+        anomalies_found:
+          type: integer
+        recommendations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Recommendation"
+        generated_at:
+          type: string
+          format: date-time
+        content:
+          type: string
+          nullable: true
+
+    Recommendation:
+      type: object
+      properties:
+        priority:
+          type: string
+          enum: [low, medium, high, critical]
+        category:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        affected_actions:
+          type: array
+          items:
+            type: string
+
+    AlertResponse:
+      type: object
+      properties:
+        alert_id:
+          type: string
+        session_id:
+          type: string
+        agent_id:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        acknowledged:
+          type: boolean
+        acknowledged_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+        code:
+          type: string
+          description: Machine-readable error code
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Invalid or expired API key"
+            code: "auth_error"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "The requested resource was not found"
+            code: "not_found"
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Validation error: 'text' field is required"
+            code: "validation_error"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            detail: "Rate limit exceeded. Please retry after 60 seconds."
+            code: "rate_limit"
