@@ -40,39 +40,124 @@ _INVISIBLE_RE = re.compile(
 
 # -----------------------------------------------------------------------
 # Homoglyph → ASCII mapping (Unicode → closest Latin letter)
+# Expanded to cover more Cyrillic, Greek, Armenian, and special characters
 # -----------------------------------------------------------------------
 _HOMOGLYPH_MAP: dict[str, str] = {
-    # Cyrillic → Latin
-    "\u0430": "a",   # а
-    "\u0435": "e",   # е
-    "\u043e": "o",   # о
-    "\u0456": "i",   # і
-    "\u0441": "c",   # с
-    "\u0440": "p",   # р
-    "\u0455": "s",   # ѕ
-    "\u0443": "y",   # у (also used for u)
+    # Cyrillic → Latin (expanded)
+    "\u0430": "a",   # а (Cyrillic small a)
+    "\u0410": "A",   # А (Cyrillic capital A)
+    "\u0435": "e",   # е (Cyrillic small ie)
+    "\u0415": "E",   # Е (Cyrillic capital IE)
+    "\u0451": "e",   # ё (Cyrillic small io)
+    "\u043e": "o",   # о (Cyrillic small o)
+    "\u041e": "O",   # О (Cyrillic capital O)
+    "\u0456": "i",   # і (Cyrillic small i)
+    "\u0406": "I",   # І (Cyrillic capital I)
+    "\u0441": "c",   # с (Cyrillic small es)
+    "\u0421": "C",   # С (Cyrillic capital ES)
+    "\u0440": "p",   # р (Cyrillic small er)
+    "\u0420": "P",   # Р (Cyrillic capital ER)
+    "\u0455": "s",   # ѕ (Cyrillic small dze)
+    "\u0405": "S",   # Ѕ (Cyrillic capital DZE)
+    "\u0443": "y",   # у (Cyrillic small u)
+    "\u0423": "Y",   # У (Cyrillic capital U)
     "\u0578": "n",   # Armenian ո
-    "\u0501": "d",   # ԁ
-    "\u04cf": "l",   # palochka ӏ
-    "\u0433": "r",   # г
-    "\u0442": "t",   # т
-    "\u043a": "k",   # к
-    "\u043c": "m",   # м
-    "\u0445": "x",   # х
-    "\u0432": "v",   # в
-    "\u044c": "b",   # ь (soft sign, sometimes confused)
+    "\u0501": "d",   # ԁ (Cyrillic small komi de)
+    "\u0500": "D",   # Ԁ (Cyrillic capital komi de)
+    "\u04cf": "l",   # ӏ (Cyrillic palochka)
+    "\u04c0": "I",   # Ӏ (Cyrillic capital palochka)
+    "\u0433": "r",   # г (Cyrillic small ghe - sometimes used as r)
+    "\u0442": "t",   # т (Cyrillic small te)
+    "\u0422": "T",   # Т (Cyrillic capital TE)
+    "\u043a": "k",   # к (Cyrillic small ka)
+    "\u041a": "K",   # К (Cyrillic capital KA)
+    "\u043c": "m",   # м (Cyrillic small em)
+    "\u041c": "M",   # М (Cyrillic capital EM)
+    "\u0445": "x",   # х (Cyrillic small ha)
+    "\u0425": "X",   # Х (Cyrillic capital HA)
+    "\u0432": "v",   # в (Cyrillic small ve)
+    "\u0412": "V",   # В (Cyrillic capital VE)
+    "\u0431": "b",   # б (Cyrillic small be - visual similarity)
+    "\u044c": "b",   # ь (soft sign)
     "\u0261": "g",   # ɡ (Latin small script g)
+    "\u0447": "h",   # ч (Cyrillic small che - resembles h in some fonts)
+    "\u043d": "h",   # н (Cyrillic small en - resembles h)
+    "\u041d": "H",   # Н (Cyrillic capital EN)
+    "\u0448": "w",   # ш (Cyrillic small sha - resembles w)
+    "\u0428": "W",   # Ш (Cyrillic capital SHA)
+    "\u0436": "x",   # ж (Cyrillic small zhe - resembles x)
 
-    # Diacritics → base Latin
+    # Greek → Latin
+    "\u03b1": "a",   # α (Greek small alpha)
+    "\u0391": "A",   # Α (Greek capital Alpha)
+    "\u03b5": "e",   # ε (Greek small epsilon)
+    "\u0395": "E",   # Ε (Greek capital Epsilon)
+    "\u03b7": "n",   # η (Greek small eta)
+    "\u0397": "H",   # Η (Greek capital Eta)
+    "\u03b9": "i",   # ι (Greek small iota)
+    "\u0399": "I",   # Ι (Greek capital Iota)
+    "\u03ba": "k",   # κ (Greek small kappa)
+    "\u039a": "K",   # Κ (Greek capital Kappa)
+    "\u03bc": "u",   # μ (Greek small mu)
+    "\u039c": "M",   # Μ (Greek capital Mu)
+    "\u03bd": "v",   # ν (Greek small nu)
+    "\u039d": "N",   # Ν (Greek capital Nu)
+    "\u03bf": "o",   # ο (Greek small omicron)
+    "\u039f": "O",   # Ο (Greek capital Omicron)
+    "\u03c1": "p",   # ρ (Greek small rho)
+    "\u03a1": "P",   # Ρ (Greek capital Rho)
+    "\u03c3": "s",   # σ (Greek small sigma)
+    "\u03a3": "S",   # Σ (Greek capital Sigma - also used as E)
+    "\u03c4": "t",   # τ (Greek small tau)
+    "\u03a4": "T",   # Τ (Greek capital Tau)
+    "\u03c5": "u",   # υ (Greek small upsilon)
+    "\u03a5": "Y",   # Υ (Greek capital Upsilon)
+    "\u03c7": "x",   # χ (Greek small chi)
+    "\u03a7": "X",   # Χ (Greek capital Chi)
+    "\u03c9": "w",   # ω (Greek small omega)
+    "\u03a9": "W",   # Ω (Greek capital Omega)
+
+    # Armenian → Latin
+    "\u0561": "a",   # ա (Armenian small ayb)
+    "\u0562": "b",   # բ (Armenian small ben)
+    "\u0563": "g",   # գ (Armenian small gim)
+    "\u0564": "d",   # դ (Armenian small da)
+    "\u0565": "e",   # ե (Armenian small ech)
+    "\u0566": "z",   # զ (Armenian small za)
+    "\u056b": "l",   # լ (Armenian small liwn)
+    "\u056d": "x",   # խ (Armenian small xa)
+    "\u0570": "h",   # հ (Armenian small ho)
+    "\u0578": "o",   # ո (Armenian small vo)
+    "\u057a": "p",   # պ (Armenian small peh)
+    "\u057d": "s",   # ս (Armenian small seh)
+    "\u057e": "v",   # վ (Armenian small vew)
+    "\u057f": "t",   # տ (Armenian small tiwn)
+
+    # Diacritics → base Latin (expanded)
     "\u00e0": "a", "\u00e1": "a", "\u00e2": "a", "\u00e3": "a", "\u00e4": "a",
-    "\u1ea1": "a", "\u00e5": "a",
+    "\u1ea1": "a", "\u00e5": "a", "\u0103": "a", "\u0105": "a", "\u01ce": "a",
     "\u00e8": "e", "\u00e9": "e", "\u00ea": "e", "\u00eb": "e", "\u1eb9": "e",
+    "\u0119": "e", "\u011b": "e", "\u0117": "e",
     "\u00ec": "i", "\u00ed": "i", "\u00ee": "i", "\u00ef": "i", "\u1ecb": "i",
-    "\u0131": "i",  # dotless ı
+    "\u0131": "i", "\u012f": "i", "\u0129": "i",   # dotless ı, etc.
     "\u00f2": "o", "\u00f3": "o", "\u00f4": "o", "\u00f5": "o", "\u00f6": "o",
-    "\u1ecd": "o",
-    "\u00f9": "u", "\u00fa": "u", "\u00fb": "u", "\u00fc": "u",
-    "\u00f1": "n", "\u00e7": "c", "\u015f": "s",
+    "\u1ecd": "o", "\u01a1": "o", "\u014d": "o",
+    "\u00f9": "u", "\u00fa": "u", "\u00fb": "u", "\u00fc": "u", "\u016f": "u",
+    "\u0169": "u", "\u0171": "u",
+    "\u00f1": "n", "\u0144": "n", "\u0148": "n",
+    "\u00e7": "c", "\u0107": "c", "\u010d": "c",
+    "\u015f": "s", "\u015b": "s", "\u0161": "s",
+    "\u017a": "z", "\u017c": "z", "\u017e": "z",
+    "\u0111": "d", "\u010f": "d",
+    "\u0142": "l", "\u013e": "l", "\u013c": "l",
+    "\u0159": "r", "\u0155": "r",
+    "\u0165": "t", "\u0163": "t",
+    "\u00fd": "y", "\u00ff": "y",
+
+    # Math symbols used as letters
+    "\u2202": "d",   # ∂ partial differential
+    "\u03c0": "n",   # π pi
+    "\u221e": "oo",  # ∞ infinity
 
     # Fullwidth → ASCII
     "\uff41": "a", "\uff42": "b", "\uff43": "c", "\uff44": "d", "\uff45": "e",
@@ -87,20 +172,58 @@ _HOMOGLYPH_MAP: dict[str, str] = {
     "\uff30": "P", "\uff31": "Q", "\uff32": "R", "\uff33": "S", "\uff34": "T",
     "\uff35": "U", "\uff36": "V", "\uff37": "W", "\uff38": "X", "\uff39": "Y",
     "\uff3a": "Z",
+
+    # Small caps and subscript/superscript
+    "\u1d00": "a", "\u1d04": "c", "\u1d07": "e", "\u1d0d": "m", "\u1d0f": "o",
+    "\u1d18": "p", "\u1d1b": "t", "\u1d1c": "u", "\u1d20": "v", "\u1d21": "w",
 }
 
 # -----------------------------------------------------------------------
-# Leetspeak → ASCII mapping
+# Leetspeak → ASCII mapping (expanded)
 # -----------------------------------------------------------------------
 _LEET_MAP: dict[str, str] = {
-    "@": "a", "4": "a", "^": "a",
-    "3": "e", "\u20ac": "e",          # €
-    "1": "i", "!": "i", "|": "l",     # | → l (more common in leet)
-    "0": "o", "\u00d8": "o",          # Ø
-    "5": "s", "$": "s", "\u00a7": "s", # §
-    "7": "t", "+": "t",
-    "8": "b", "\u00df": "b",          # ß
-    "9": "g", "6": "g",
+    # A variants
+    "@": "a", "4": "a", "^": "a", "∆": "a", "λ": "a", "Λ": "A",
+    # B variants
+    "8": "b", "\u00df": "b", "ß": "b", "Ƀ": "b", "ʙ": "b",
+    # C variants
+    "(": "c", "<": "c", "¢": "c", "©": "c",
+    # D variants
+    "∂": "d",
+    # E variants
+    "3": "e", "\u20ac": "e", "€": "e", "£": "e", "ε": "e", "є": "e",
+    # G variants
+    "9": "g", "6": "g", "&": "g",
+    # H variants
+    "#": "h",
+    # I variants
+    "1": "i", "!": "i", "¡": "i", "¦": "i",
+    # L variants
+    "|": "l", "ℓ": "l", "£": "l",
+    # N variants
+    "ท": "n", "И": "n",
+    # O variants
+    "0": "o", "\u00d8": "o", "Ø": "o", "θ": "o", "Θ": "o", "ø": "o", "○": "o", "◯": "o",
+    # P variants
+    "℗": "p", "þ": "p",
+    # R variants
+    "®": "r", "Я": "r",
+    # S variants
+    "5": "s", "$": "s", "\u00a7": "s", "§": "s", "ş": "s", "š": "s",
+    # T variants
+    "7": "t", "+": "t", "†": "t", "┼": "t",
+    # U variants
+    "µ": "u", "ц": "u",
+    # V variants
+    "√": "v",
+    # W variants
+    "ω": "w", "ш": "w",
+    # X variants
+    "×": "x", "✕": "x", "χ": "x",
+    # Y variants
+    "¥": "y", "ý": "y", "ÿ": "y",
+    # Z variants
+    "2": "z", "ʐ": "z",
 }
 
 # Multi-char leet sequences (handled separately in normalise)
@@ -112,6 +235,31 @@ _MULTI_LEET: list[tuple[str, str]] = [
     ("|\\|", "n"),
     ("/\\", "a"),
     ("\\/", "v"),
+    ("|<", "k"),
+    ("|_", "l"),
+    ("/_", "l"),
+    ("|)", "d"),
+    ("(|", "d"),
+    ("!!", "i"),
+    ("}{", "h"),
+    ("|\\/|", "m"),
+    ("|v|", "m"),
+    ("/\\/\\", "m"),
+    ("^^", "m"),
+    ("()", "o"),
+    ("|=", "f"),
+    ("ph", "f"),  # Common replacement
+    ("|-", "r"),
+    ("|2", "r"),
+    ("|3", "b"),
+    ("|>", "p"),
+    ("5|", "sl"),
+    ("51", "sl"),
+    ("|7", "t"),
+    ("\\_/", "u"),
+    ("\\/\\/", "w"),
+    ("><", "x"),
+    ("'/", "y"),
 ]
 
 # Build a set of leet chars for fast lookup
@@ -233,10 +381,35 @@ def _collapse_word_splits(text: str) -> str:
 
 # Common English words that could be formed by rejoining splits
 _ATTACK_KEYWORDS = {
-    "ignore", "system", "prompt", "admin", "override", "instructions",
-    "password", "reveal", "execute", "bypass", "jailbreak", "pretend",
-    "disable", "extract", "export", "delete", "remove", "sudo",
-    "developer", "maintenance", "unrestricted", "configuration",
+    # Instruction manipulation
+    "ignore", "disregard", "forget", "override", "bypass", "skip",
+    "dismiss", "overlook", "cancel", "void", "nullify", "negate",
+    # System/prompt related
+    "system", "prompt", "instruction", "instructions", "command", "commands",
+    "directive", "directives", "rule", "rules", "guideline", "guidelines",
+    "policy", "policies", "constraint", "constraints", "restriction", "restrictions",
+    # Access/privilege
+    "admin", "administrator", "root", "sudo", "superuser", "privilege",
+    "access", "permission", "permissions", "role", "roles", "elevated",
+    # Actions
+    "reveal", "show", "display", "print", "output", "expose", "leak",
+    "extract", "export", "dump", "retrieve", "fetch", "obtain", "get",
+    "execute", "run", "perform", "activate", "enable", "invoke",
+    "delete", "remove", "erase", "wipe", "clear", "destroy", "drop",
+    "modify", "change", "alter", "edit", "update", "replace",
+    "disable", "deactivate", "turn", "switch", "toggle",
+    # Security/control
+    "jailbreak", "escape", "break", "crack", "hack", "exploit",
+    "pretend", "imagine", "assume", "roleplay", "act", "simulate",
+    "unrestricted", "unlimited", "uncensored", "unfiltered", "unbound",
+    # Identity/mode
+    "developer", "debug", "test", "testing", "dev", "maintenance",
+    "configuration", "config", "settings", "options", "parameters",
+    # Sensitive data
+    "password", "secret", "key", "token", "credential", "credentials",
+    "private", "confidential", "sensitive", "internal", "hidden",
+    # Korean attack keywords (romanized)
+    "mubsi", "munseo", "bimil", "amho", "kwolhan", "siseutem",
 }
 
 
