@@ -7,7 +7,9 @@ if they should be allowed, blocked, warned, or require confirmation.
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
+import logging
 import re
 import uuid
 from datetime import datetime, timezone
@@ -17,6 +19,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Agent, Policy, PolicyViolation
+
+
+logger = logging.getLogger("agentshield.policy_engine")
 
 
 class PolicyEngine:
@@ -456,7 +461,7 @@ class PolicyEngine:
         parameters: dict[str, Any],
         result: dict[str, Any],
     ) -> None:
-        """Record a policy violation."""
+        """Record a policy violation and dispatch notifications."""
         violation = PolicyViolation(
             policy_id=policy.id,
             agent_id=agent_id,
@@ -479,3 +484,45 @@ class PolicyEngine:
         # Increment violation count
         policy.violation_count += 1
         policy.last_evaluated_at = datetime.now(timezone.utc)
+
+        # Dispatch notification asynchronously (fire-and-forget)
+        asyncio.create_task(
+            self._send_violation_notification(
+                agent_id=agent_id,
+                session_id=session_id,
+                action_type=action_type,
+                action_name=action_name,
+                target=target,
+                policy_name=policy.name,
+                reason=result.get("reason", ""),
+                risk_score=result.get("risk_score", 0.0),
+            )
+        )
+
+    async def _send_violation_notification(
+        self,
+        agent_id: str,
+        session_id: str,
+        action_type: str,
+        action_name: str,
+        target: str,
+        policy_name: str,
+        reason: str,
+        risk_score: float,
+    ) -> None:
+        """Send notification for policy violation."""
+        try:
+            from app.services.notification_dispatcher import get_notification_dispatcher
+
+            dispatcher = get_notification_dispatcher()
+            await dispatcher.dispatch_policy_violation(
+                agent_id=agent_id,
+                session_id=session_id,
+                action_type=action_type,
+                action_target=target or action_name,
+                violation_reason=reason,
+                policy_name=policy_name,
+                risk_score=risk_score,
+            )
+        except Exception as e:
+            logger.warning("Failed to send violation notification: %s", e)

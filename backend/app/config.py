@@ -98,11 +98,15 @@ class Settings(BaseSettings):
 
     # -- Notification channels -----------------------------------------------
     slack_webhook_url: str | None = Field(default=None)
+    slack_min_severity: str = Field(default="medium", description="Min severity for Slack alerts")
     telegram_bot_token: str | None = Field(default=None)
     telegram_chat_id: str | None = Field(default=None)
+    telegram_min_severity: str = Field(default="high", description="Min severity for Telegram alerts")
     sendgrid_api_key: str | None = Field(default=None)
     notification_from_email: str | None = Field(default=None)
     notification_to_emails: list[str] = Field(default_factory=list)
+    webhook_notification_url: str | None = Field(default=None, description="Generic webhook for alerts")
+    webhook_min_severity: str = Field(default="low", description="Min severity for webhook alerts")
 
     # -- Rate limiting -------------------------------------------------------
     rate_limit_per_minute: int = Field(default=100, ge=1)

@@ -36,6 +36,9 @@ from app.models.api_key import APIKey  # noqa: F401
 from app.models.usage import Usage  # noqa: F401
 from app.models.alert import Alert  # noqa: F401
 from app.models.webhook import Webhook  # noqa: F401
+from app.models.agent import Agent  # noqa: F401
+from app.models.policy import Policy, PolicyViolation  # noqa: F401
+from app.models.activity import Activity, AgentMetrics  # noqa: F401
 
 logger = logging.getLogger("alembic.env")
 
