@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.dependencies import CurrentUser, DBSession, Neo4jSession
+from app.dependencies import CurrentUser, DBSession
 from app.schemas.report import ReportRequest, ReportResponse
 
 logger = logging.getLogger("agentshield.api.reports")
@@ -51,16 +51,26 @@ async def generate_report(
 
     from app.services.report_service import ReportService  # noqa: WPS433
 
-    # The GraphRAG pipeline is lazily constructed to avoid heavy imports at
-    # module level.  In a full deployment this would be provided via DI.
+    # Construct the GraphRAG pipeline with proper dependencies.
     try:
         from app.graphrag.pipeline import GraphRAGPipeline  # type: ignore[import-untyped]
-        pipeline = GraphRAGPipeline()
-    except ImportError:
-        logger.warning("GraphRAG pipeline not available, using stub")
+        from app.graph.neo4j_client import Neo4jClient
+        from app.config import get_settings
+
+        settings = get_settings()
+        neo4j_client = Neo4jClient(
+            uri=settings.neo4j_uri,
+            username=settings.neo4j_user,
+            password=settings.neo4j_password,
+            database=settings.neo4j_database,
+        )
+        await neo4j_client.connect()
+        pipeline = GraphRAGPipeline(neo4j_client=neo4j_client, settings=settings)
+    except Exception:
+        logger.warning("GraphRAG pipeline not available, using stub", exc_info=True)
 
         class _Stub:
-            async def analyse(self, **kwargs: object) -> dict:
+            async def generate_report(self, **kwargs: object) -> dict:
                 return {"risk_score": 0.0, "primary_concerns": [], "recommendations": []}
 
         pipeline = _Stub()  # type: ignore[assignment]

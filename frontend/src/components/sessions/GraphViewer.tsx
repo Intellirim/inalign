@@ -9,16 +9,15 @@ interface GraphViewerProps {
 }
 
 export default function GraphViewer({ graph }: GraphViewerProps) {
-  const nodeCount = graph?.node_count ?? 8;
-  const edgeCount = graph?.edge_count ?? 12;
-  const hotspots = graph?.risk_hotspots ?? ['node-3', 'node-7'];
+  const nodeCount = graph?.nodes ?? 8;
+  const edgeCount = graph?.edges ?? 12;
 
   // Generate pseudo-random node positions in a circle layout
   const nodes = Array.from({ length: nodeCount }, (_, i) => {
     const angle = (2 * Math.PI * i) / nodeCount;
     const cx = 250 + 150 * Math.cos(angle);
     const cy = 200 + 130 * Math.sin(angle);
-    const isHotspot = hotspots.includes(`node-${i + 1}`) || i < hotspots.length;
+    const isHotspot = i < 2;
     return { id: i, cx, cy, isHotspot };
   });
 

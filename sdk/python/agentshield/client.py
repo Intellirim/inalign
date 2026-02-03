@@ -11,7 +11,7 @@ class BaseClient:
     """Base client providing shared configuration and utilities.
 
     Args:
-        api_key: Your AgentShield API key.
+        api_key: Your AgentShield API key (``ask_`` prefixed) or a JWT token.
         base_url: Base URL for the AgentShield API.
         timeout: Request timeout in seconds.
     """
@@ -30,19 +30,27 @@ class BaseClient:
 
     @property
     def _headers(self) -> dict[str, str]:
-        """Return default headers including Authorization Bearer token."""
-        return {
-            "Authorization": f"Bearer {self.api_key}",
+        """Return default headers with the appropriate auth header.
+
+        API keys (prefixed with ``ask_``) are sent via ``X-API-Key``.
+        JWT tokens are sent via ``Authorization: Bearer``.
+        """
+        headers: dict[str, str] = {
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": "agentshield-python/0.1.0",
         }
+        if self.api_key.startswith("ask_"):
+            headers["X-API-Key"] = self.api_key
+        else:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return headers
 
     def _build_url(self, path: str) -> str:
         """Build a full URL from a relative API path.
 
         Args:
-            path: The relative API path (e.g., "/v1/scan/input").
+            path: The relative API path (e.g., "/api/v1/scan/input").
 
         Returns:
             The full URL string.

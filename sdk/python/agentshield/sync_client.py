@@ -8,10 +8,13 @@ import httpx
 
 from agentshield.client import BaseClient
 from agentshield.models import (
+    AlertListResponse,
+    AlertResponse,
     LogActionResponse,
     ReportResponse,
     ScanInputResponse,
     ScanOutputResponse,
+    SessionListResponse,
     SessionResponse,
 )
 
@@ -23,7 +26,7 @@ class AgentShield(BaseClient):
 
         from agentshield import AgentShield
 
-        client = AgentShield(api_key="your-api-key")
+        client = AgentShield(api_key="ask_your-api-key")
         result = client.scan_input(
             text="Hello, my SSN is 123-45-6789",
             agent_id="agent-1",
@@ -55,19 +58,12 @@ class AgentShield(BaseClient):
         self._client.close()
 
     def _request(self, method: str, path: str, **kwargs: Any) -> dict:
-        """Make a synchronous HTTP request.
-
-        Args:
-            method: HTTP method (GET, POST, PUT, PATCH, DELETE).
-            path: Relative API path.
-            **kwargs: Additional arguments passed to httpx.Client.request.
-
-        Returns:
-            Parsed JSON response.
-        """
+        """Make a synchronous HTTP request."""
         url = self._build_url(path)
         response = self._client.request(method, url, **kwargs)
         return self._handle_response(response)
+
+    # ── Scan ────────────────────────────────────────────────────────────
 
     def scan_input(
         self,
@@ -94,7 +90,7 @@ class AgentShield(BaseClient):
         }
         if metadata is not None:
             payload["metadata"] = metadata
-        data = self._request("POST", "/v1/scan/input", json=payload)
+        data = self._request("POST", "/api/v1/scan/input", json=payload)
         return ScanInputResponse(**data)
 
     def scan_output(
@@ -121,8 +117,10 @@ class AgentShield(BaseClient):
             "session_id": session_id,
             "auto_sanitize": auto_sanitize,
         }
-        data = self._request("POST", "/v1/scan/output", json=payload)
+        data = self._request("POST", "/api/v1/scan/output", json=payload)
         return ScanOutputResponse(**data)
+
+    # ── Log / Action ────────────────────────────────────────────────────
 
     def log_action(
         self,
@@ -155,17 +153,21 @@ class AgentShield(BaseClient):
         payload: dict[str, Any] = {
             "agent_id": agent_id,
             "session_id": session_id,
-            "action_type": action_type,
-            "name": name,
-            "target": target,
-            "parameters": parameters or {},
-            "result_summary": result_summary,
-            "duration_ms": duration_ms,
+            "action": {
+                "type": action_type,
+                "name": name,
+                "target": target,
+                "parameters": parameters or {},
+                "result_summary": result_summary,
+                "duration_ms": duration_ms,
+            },
         }
         if context is not None:
             payload["context"] = context
-        data = self._request("POST", "/v1/actions/log", json=payload)
+        data = self._request("POST", "/api/v1/logs/action", json=payload)
         return LogActionResponse(**data)
+
+    # ── Sessions ────────────────────────────────────────────────────────
 
     def get_session(self, session_id: str) -> SessionResponse:
         """Retrieve detailed information about a session.
@@ -176,7 +178,7 @@ class AgentShield(BaseClient):
         Returns:
             SessionResponse with session details and security summary.
         """
-        data = self._request("GET", f"/v1/sessions/{session_id}")
+        data = self._request("GET", f"/api/v1/sessions/{session_id}")
         return SessionResponse(**data)
 
     def list_sessions(
@@ -185,7 +187,7 @@ class AgentShield(BaseClient):
         risk_level: Optional[str] = None,
         page: int = 1,
         size: int = 20,
-    ) -> dict:
+    ) -> SessionListResponse:
         """List sessions with optional filtering.
 
         Args:
@@ -195,19 +197,23 @@ class AgentShield(BaseClient):
             size: Number of items per page.
 
         Returns:
-            Dict containing items list and pagination metadata.
+            SessionListResponse with items and pagination metadata.
         """
         params: dict[str, Any] = {"page": page, "size": size}
         if status is not None:
             params["status"] = status
         if risk_level is not None:
             params["risk_level"] = risk_level
-        return self._request("GET", "/v1/sessions", params=params)
+        data = self._request("GET", "/api/v1/sessions", params=params)
+        return SessionListResponse(**data)
+
+    # ── Reports ─────────────────────────────────────────────────────────
 
     def generate_report(
         self,
         session_id: str,
         report_type: str = "security_analysis",
+        include_recommendations: bool = True,
         language: str = "ko",
     ) -> ReportResponse:
         """Generate a security analysis report for a session.
@@ -215,18 +221,55 @@ class AgentShield(BaseClient):
         Args:
             session_id: The session identifier.
             report_type: Type of report to generate.
+            include_recommendations: Whether to include recommendations.
             language: Language for the report (default: "ko" for Korean).
 
         Returns:
             ReportResponse with the generated report.
         """
         payload = {
-            "session_id": session_id,
             "report_type": report_type,
+            "include_recommendations": include_recommendations,
             "language": language,
         }
-        data = self._request("POST", "/v1/reports/generate", json=payload)
+        data = self._request(
+            "POST",
+            f"/api/v1/reports/sessions/{session_id}/report",
+            json=payload,
+        )
         return ReportResponse(**data)
+
+    def get_report(self, report_id: str) -> ReportResponse:
+        """Retrieve a previously generated report.
+
+        Args:
+            report_id: The report identifier.
+
+        Returns:
+            ReportResponse with report details.
+        """
+        data = self._request("GET", f"/api/v1/reports/{report_id}")
+        return ReportResponse(**data)
+
+    def list_reports(
+        self,
+        page: int = 1,
+        size: int = 20,
+    ) -> list[ReportResponse]:
+        """List generated reports.
+
+        Args:
+            page: Page number for pagination.
+            size: Number of items per page.
+
+        Returns:
+            List of ReportResponse objects.
+        """
+        params: dict[str, Any] = {"page": page, "size": size}
+        data = self._request("GET", "/api/v1/reports", params=params)
+        return [ReportResponse(**item) for item in data]
+
+    # ── Alerts ──────────────────────────────────────────────────────────
 
     def get_alerts(
         self,
@@ -234,7 +277,7 @@ class AgentShield(BaseClient):
         acknowledged: Optional[bool] = None,
         page: int = 1,
         size: int = 20,
-    ) -> dict:
+    ) -> AlertListResponse:
         """Retrieve security alerts with optional filtering.
 
         Args:
@@ -244,22 +287,39 @@ class AgentShield(BaseClient):
             size: Number of items per page.
 
         Returns:
-            Dict containing alerts list and pagination metadata.
+            AlertListResponse with items and pagination metadata.
         """
         params: dict[str, Any] = {"page": page, "size": size}
         if severity is not None:
             params["severity"] = severity
         if acknowledged is not None:
             params["acknowledged"] = str(acknowledged).lower()
-        return self._request("GET", "/v1/alerts", params=params)
+        data = self._request("GET", "/api/v1/alerts", params=params)
+        return AlertListResponse(**data)
 
-    def acknowledge_alert(self, alert_id: str) -> dict:
+    def acknowledge_alert(
+        self,
+        alert_id: str,
+        acknowledged_by: str = "system",
+        note: str = "",
+    ) -> AlertResponse:
         """Acknowledge a security alert.
 
         Args:
             alert_id: The alert identifier.
+            acknowledged_by: Who is acknowledging the alert.
+            note: Optional note about the acknowledgement.
 
         Returns:
-            Dict with acknowledgement confirmation.
+            AlertResponse with updated alert details.
         """
-        return self._request("PATCH", f"/v1/alerts/{alert_id}/acknowledge")
+        payload = {
+            "acknowledged_by": acknowledged_by,
+            "note": note,
+        }
+        data = self._request(
+            "POST",
+            f"/api/v1/alerts/{alert_id}/acknowledge",
+            json=payload,
+        )
+        return AlertResponse(**data)

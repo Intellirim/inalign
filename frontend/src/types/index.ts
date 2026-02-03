@@ -8,12 +8,13 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 export interface ThreatInfo {
   type: string;
-  category: string;
-  severity: Severity;
+  subtype?: string;
+  pattern_id?: string;
+  matched_text?: string;
+  position?: number[];
   confidence: number;
+  severity: Severity;
   description: string;
-  evidence?: string;
-  mitigations?: string[];
 }
 
 export interface PIIInfo {
@@ -28,39 +29,41 @@ export interface PIIInfo {
 // ── Scan ────────────────────────────────────────────────────────────────
 
 export interface ScanInputRequest {
-  session_id: string;
-  agent_id: string;
-  input_text: string;
+  text: string;
+  agent_id?: string;
+  session_id?: string;
   metadata?: Record<string, unknown>;
 }
 
 export interface ScanInputResponse {
   request_id: string;
-  session_id: string;
+  safe: boolean;
   risk_level: RiskLevel;
+  risk_score: number;
+  latency_ms: number;
   threats: ThreatInfo[];
-  pii_detected: PIIInfo[];
-  sanitized_input?: string;
-  blocked: boolean;
-  processing_time_ms: number;
+  recommendation: string;
+  action_taken: string;
 }
 
 export interface ScanOutputRequest {
-  session_id: string;
-  agent_id: string;
-  output_text: string;
-  metadata?: Record<string, unknown>;
+  text: string;
+  agent_id?: string;
+  session_id?: string;
+  auto_sanitize?: boolean;
 }
 
 export interface ScanOutputResponse {
   request_id: string;
-  session_id: string;
+  safe: boolean;
   risk_level: RiskLevel;
-  threats: ThreatInfo[];
+  risk_score: number;
+  latency_ms: number;
   pii_detected: PIIInfo[];
-  sanitized_output?: string;
-  blocked: boolean;
-  processing_time_ms: number;
+  original_text: string;
+  sanitized_text: string;
+  recommendation: string;
+  action_taken: string;
 }
 
 // ── Log / Action ────────────────────────────────────────────────────────
@@ -74,72 +77,73 @@ export interface AnomalyInfo {
   observed_value?: number;
 }
 
+export interface ActionInfo {
+  type: string;
+  target?: string;
+  parameters?: Record<string, unknown>;
+}
+
 export interface LogActionRequest {
-  session_id: string;
   agent_id: string;
-  action_type: string;
-  action_details: Record<string, unknown>;
-  resource?: string;
-  metadata?: Record<string, unknown>;
+  session_id: string;
+  action: ActionInfo;
+  context?: Record<string, unknown>;
+  timestamp?: string;
 }
 
 export interface LogActionResponse {
   request_id: string;
-  session_id: string;
-  risk_level: RiskLevel;
+  logged: boolean;
+  action_id: string;
+  node_id?: string;
+  anomaly_detected: boolean;
   anomalies: AnomalyInfo[];
-  blocked: boolean;
-  processing_time_ms: number;
+  session_risk_score: number;
+  alerts_triggered: string[];
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────
 
 export interface SessionStats {
-  total_requests: number;
+  total_actions: number;
+  input_scans: number;
+  output_scans: number;
   threats_detected: number;
-  threats_blocked: number;
   pii_detected: number;
-  pii_sanitized: number;
   anomalies_detected: number;
-  avg_risk_score: number;
 }
 
 export interface TimelineEvent {
-  id: string;
   timestamp: string;
-  event_type: string;
+  type: string;
+  severity: string;
   description: string;
-  risk_level: RiskLevel;
-  details?: Record<string, unknown>;
 }
 
 export interface GraphSummary {
-  node_count: number;
-  edge_count: number;
-  risk_hotspots: string[];
-  graph_data?: Record<string, unknown>;
+  nodes: number;
+  edges: number;
+  clusters: number;
 }
 
 export interface SessionResponse {
-  id: string;
+  session_id: string;
   agent_id: string;
-  status: 'active' | 'completed' | 'terminated';
+  status: string;
   risk_level: RiskLevel;
   risk_score: number;
-  started_at: string;
-  last_activity: string;
-  ended_at?: string;
+  started_at: string | null;
+  last_activity_at: string | null;
   stats: SessionStats;
   timeline: TimelineEvent[];
-  graph_summary?: GraphSummary;
-  metadata?: Record<string, unknown>;
+  graph_summary: GraphSummary;
 }
 
 export interface SessionListResponse {
-  sessions: SessionResponse[];
+  items: SessionResponse[];
   total: number;
   page: number;
-  page_size: number;
+  size: number;
 }
 
 // ── Reports ─────────────────────────────────────────────────────────────
@@ -195,19 +199,22 @@ export interface ReportAnalysis {
 }
 
 export interface ReportResponse {
-  id: string;
+  request_id?: string;
+  report_id: string;
   session_id: string;
+  status: string;
   generated_at: string;
+  generation_time_ms?: number;
   summary: ReportSummary;
   analysis: ReportAnalysis;
-  metadata?: Record<string, unknown>;
+  recommendations: Recommendation[];
+  raw_graph_data?: Record<string, unknown>;
 }
 
 export interface ReportRequest {
-  session_id: string;
+  report_type?: string;
   include_recommendations?: boolean;
-  include_similar_attacks?: boolean;
-  format?: 'json' | 'pdf' | 'markdown';
+  language?: string;
 }
 
 // ── Alerts ──────────────────────────────────────────────────────────────
@@ -216,22 +223,22 @@ export interface AlertResponse {
   id: string;
   session_id: string;
   agent_id: string;
+  alert_type: string;
   severity: Severity;
   title: string;
   description: string;
-  threat_type: string;
-  created_at: string;
-  acknowledged: boolean;
-  acknowledged_at?: string;
-  acknowledged_by?: string;
-  metadata?: Record<string, unknown>;
+  details?: Record<string, unknown> | null;
+  is_acknowledged: boolean;
+  acknowledged_by?: string | null;
+  acknowledged_at?: string | null;
+  created_at: string | null;
 }
 
 export interface AlertListResponse {
-  alerts: AlertResponse[];
+  items: AlertResponse[];
   total: number;
   page: number;
-  page_size: number;
+  size: number;
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────────
@@ -241,24 +248,20 @@ export interface DashboardStats {
   threats_blocked: number;
   pii_sanitized: number;
   active_sessions: number;
-  requests_trend: number;
-  threats_trend: number;
-  pii_trend: number;
-  sessions_trend: number;
+  anomalies_detected: number;
+  risk_distribution?: Record<string, number>;
+  [key: string]: unknown;
 }
 
 export interface TrendData {
   timestamp: string;
-  injection_attempts: number;
-  pii_detections: number;
-  anomalies: number;
+  count: number;
 }
 
 export interface TopThreat {
   type: string;
   count: number;
   severity: Severity;
-  last_seen: string;
 }
 
 // ── Users & API Keys ────────────────────────────────────────────────────
@@ -267,10 +270,15 @@ export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: string;
+  is_active: boolean;
   created_at: string;
-  last_login?: string;
-  avatar_url?: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
 }
 
 export interface APIKey {
@@ -278,10 +286,11 @@ export interface APIKey {
   name: string;
   key_prefix: string;
   permissions: string[];
-  created_at: string;
-  last_used?: string;
-  expires_at?: string;
   is_active: boolean;
+  last_used_at?: string | null;
+  expires_at?: string | null;
+  created_at: string | null;
+  key?: string | null;
 }
 
 export interface APIKeyCreateRequest {

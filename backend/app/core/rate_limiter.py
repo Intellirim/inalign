@@ -2,11 +2,9 @@
 Redis-based sliding window rate limiter for FastAPI.
 """
 
-from __future__ import annotations
-
 import logging
 import time
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
@@ -20,7 +18,7 @@ logger = logging.getLogger("agentshield.rate_limiter")
 class RateLimiter:
     """Sliding-window rate limiter backed by Redis sorted sets."""
 
-    def __init__(self, max_requests: int | None = None, window_seconds: int = 60):
+    def __init__(self, max_requests: Optional[int] = None, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
 

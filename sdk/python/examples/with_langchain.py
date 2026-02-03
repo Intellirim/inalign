@@ -66,7 +66,7 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
             )
             self._last_input_scan = result
 
-            if not result.is_safe:
+            if not result.safe:
                 print(f"[AgentShield] WARNING - Unsafe input detected! Risk: {result.risk_level}")
                 for threat in result.threats:
                     print(f"  Threat: {threat.type} (severity: {threat.severity})")
@@ -99,7 +99,7 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
                     auto_sanitize=self.auto_sanitize_outputs,
                 )
 
-                if not result.is_safe:
+                if not result.safe:
                     print(f"[AgentShield] WARNING - Unsafe output detected! Risk: {result.risk_level}")
                     if result.pii_detected:
                         for pii in result.pii_detected:
@@ -188,8 +188,10 @@ def main() -> None:
     # Generate session report
     print("\n=== Session Report ===")
     report = shield_handler.get_session_report(language="ko")
-    print(f"Report: {report.title}")
-    print(f"Summary: {report.summary}")
+    print(f"Report ID: {report.report_id}")
+    if report.summary:
+        print(f"Risk Level: {report.summary.risk_level}")
+        print(f"Primary Concerns: {report.summary.primary_concerns}")
 
     # Clean up
     shield_handler.client.close()

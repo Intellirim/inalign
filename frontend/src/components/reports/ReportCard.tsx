@@ -15,7 +15,7 @@ export default function ReportCard({ report }: ReportCardProps) {
   const { summary } = report;
 
   return (
-    <Link href={`/dashboard/reports/${report.id}`}>
+    <Link href={`/dashboard/reports/${report.report_id}`}>
       <Card className="transition-colors hover:border-slate-600">
         <CardHeader className="flex flex-row items-start justify-between">
           <div>

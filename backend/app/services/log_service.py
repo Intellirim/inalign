@@ -27,10 +27,10 @@ class LogService:
 
     def __init__(
         self,
-        neo4j_client: object,
+        neo4j_session: object,
         anomaly_detector: object,
     ) -> None:
-        self._neo4j = neo4j_client
+        self._neo4j = neo4j_session
         self._anomaly_detector = anomaly_detector
 
     # ------------------------------------------------------------------
@@ -38,18 +38,7 @@ class LogService:
     # ------------------------------------------------------------------
 
     async def log_action(self, request: LogActionRequest) -> LogActionResponse:
-        """Persist an action, run anomaly detection, and return results.
-
-        Parameters
-        ----------
-        request:
-            The action payload including agent/session IDs and action details.
-
-        Returns
-        -------
-        LogActionResponse
-            Confirmation of logging plus any anomalies detected.
-        """
+        """Persist an action, run anomaly detection, and return results."""
         request_id = str(uuid4())
         action_id = str(uuid4())
         node_id = ""
@@ -63,18 +52,43 @@ class LogService:
             request.action.type,
         )
 
-        # 1) Store action in Neo4j --------------------------------------------
+        # 1) Ensure Session+Agent nodes exist, then create Action ----------
         try:
             from app.graph import queries  # noqa: WPS433
+
+            # Auto-create Agent + Session if they don't exist yet
+            await self._neo4j.run(
+                queries.CREATE_SESSION,
+                {
+                    "session_id": request.session_id,
+                    "agent_id": request.agent_id,
+                    "user_id": "",
+                    "status": "active",
+                    "risk_score": 0.0,
+                    "started_at": timestamp.isoformat(),
+                    "metadata": "{}",
+                },
+            )
+            # Also ensure Agent node exists
+            await self._neo4j.run(
+                queries.CREATE_AGENT,
+                {
+                    "agent_id": request.agent_id,
+                    "name": request.agent_id,
+                    "description": "",
+                    "owner": "",
+                    "metadata": "{}",
+                },
+            )
 
             params = {
                 "action_id": action_id,
                 "session_id": request.session_id,
                 "action_type": request.action.type,
                 "input": json.dumps(request.action.parameters) if request.action.parameters else "",
-                "output": request.action.result_summary,
+                "output": request.action.result_summary or "",
                 "risk_score": 0.0,
-                "latency_ms": request.action.duration_ms,
+                "latency_ms": request.action.duration_ms or 0,
                 "timestamp": timestamp.isoformat(),
                 "metadata": json.dumps({
                     "name": request.action.name,
@@ -82,47 +96,52 @@ class LogService:
                 }),
             }
 
-            result = await self._neo4j.execute_write(  # type: ignore[attr-defined]
-                queries.CREATE_ACTION,
-                params,
-            )
-            if result:
-                node_id = result.get("action_id", action_id)
+            result = await self._neo4j.run(queries.CREATE_ACTION, params)
+            records = await result.data()
+            if records:
+                node_id = records[0].get("action_id", action_id)
             logger.debug("Action %s stored in Neo4j (node_id=%s)", action_id, node_id)
         except Exception:
             logger.exception("Failed to store action %s in Neo4j", action_id)
 
-        # 2) Run anomaly detection --------------------------------------------
+        # 2) Run anomaly detection ------------------------------------------
         anomalies: list[AnomalyInfo] = []
         alerts_triggered: list[str] = []
         try:
-            detection_result = await self._anomaly_detector.detect(  # type: ignore[attr-defined]
-                session_id=request.session_id,
-                agent_id=request.agent_id,
-                action=request.action.model_dump(),
+            # AnomalyDetector.detect() is synchronous and expects
+            # (action: dict, session_context: dict)
+            action_dict = request.action.model_dump()
+            session_context: dict = {
+                "action_timestamps": [],
+                "recent_actions": [],
+                "failure_count": 0,
+                "privilege_changes": [],
+            }
+            raw_anomalies = self._anomaly_detector.detect(
+                action=action_dict,
+                session_context=session_context,
             )
-            raw_anomalies = detection_result.get("anomalies", [])
             for a in raw_anomalies:
                 anomalies.append(
                     AnomalyInfo(
-                        type=a.get("type", "unknown"),
+                        type=a.get("rule_name", a.get("type", "unknown")),
                         severity=Severity(a.get("severity", "medium")),
                         description=a.get("description", ""),
-                        score=a.get("score", 0.0),
+                        score=a.get("score", 0.5),
                     )
                 )
-            alerts_triggered = detection_result.get("alert_ids", [])
+            alerts_triggered = [a.get("rule_id", "") for a in raw_anomalies if a.get("rule_id")]
         except Exception:
             logger.exception("Anomaly detection failed for action %s", action_id)
 
-        # 3) Update session risk score -----------------------------------------
+        # 3) Update session risk score ---------------------------------------
         session_risk_score = 0.0
         if anomalies:
             session_risk_score = round(max(a.score for a in anomalies), 4)
             try:
                 from app.graph import queries as q  # noqa: WPS433
 
-                await self._neo4j.execute_write(  # type: ignore[attr-defined]
+                await self._neo4j.run(
                     q.UPDATE_SESSION_RISK,
                     {
                         "session_id": request.session_id,

@@ -9,50 +9,52 @@ import type { SessionResponse, RiskLevel, Severity } from '@/types';
 
 const sampleSessions: SessionResponse[] = [
   {
-    id: 'sess-001',
+    session_id: 'sess-001',
     agent_id: 'agent-alpha',
     status: 'active',
     risk_level: 'high',
-    risk_score: 78,
+    risk_score: 0.78,
     started_at: new Date(Date.now() - 3600 * 1000).toISOString(),
-    last_activity: new Date(Date.now() - 120 * 1000).toISOString(),
-    stats: { total_requests: 45, threats_detected: 3, threats_blocked: 2, pii_detected: 5, pii_sanitized: 5, anomalies_detected: 1, avg_risk_score: 65 },
+    last_activity_at: new Date(Date.now() - 120 * 1000).toISOString(),
+    stats: { total_actions: 45, input_scans: 20, output_scans: 25, threats_detected: 3, pii_detected: 5, anomalies_detected: 1 },
     timeline: [],
+    graph_summary: { nodes: 0, edges: 0, clusters: 0 },
   },
   {
-    id: 'sess-002',
+    session_id: 'sess-002',
     agent_id: 'agent-beta',
     status: 'completed',
     risk_level: 'low',
-    risk_score: 15,
+    risk_score: 0.15,
     started_at: new Date(Date.now() - 7200 * 1000).toISOString(),
-    last_activity: new Date(Date.now() - 3600 * 1000).toISOString(),
-    ended_at: new Date(Date.now() - 3600 * 1000).toISOString(),
-    stats: { total_requests: 120, threats_detected: 0, threats_blocked: 0, pii_detected: 2, pii_sanitized: 2, anomalies_detected: 0, avg_risk_score: 10 },
+    last_activity_at: new Date(Date.now() - 3600 * 1000).toISOString(),
+    stats: { total_actions: 120, input_scans: 60, output_scans: 60, threats_detected: 0, pii_detected: 2, anomalies_detected: 0 },
     timeline: [],
+    graph_summary: { nodes: 0, edges: 0, clusters: 0 },
   },
   {
-    id: 'sess-003',
+    session_id: 'sess-003',
     agent_id: 'agent-gamma',
     status: 'terminated',
     risk_level: 'critical',
-    risk_score: 95,
+    risk_score: 0.95,
     started_at: new Date(Date.now() - 10800 * 1000).toISOString(),
-    last_activity: new Date(Date.now() - 7200 * 1000).toISOString(),
-    ended_at: new Date(Date.now() - 7200 * 1000).toISOString(),
-    stats: { total_requests: 67, threats_detected: 8, threats_blocked: 6, pii_detected: 12, pii_sanitized: 10, anomalies_detected: 4, avg_risk_score: 88 },
+    last_activity_at: new Date(Date.now() - 7200 * 1000).toISOString(),
+    stats: { total_actions: 67, input_scans: 30, output_scans: 37, threats_detected: 8, pii_detected: 12, anomalies_detected: 4 },
     timeline: [],
+    graph_summary: { nodes: 0, edges: 0, clusters: 0 },
   },
   {
-    id: 'sess-004',
+    session_id: 'sess-004',
     agent_id: 'agent-delta',
     status: 'active',
     risk_level: 'medium',
-    risk_score: 42,
+    risk_score: 0.42,
     started_at: new Date(Date.now() - 1800 * 1000).toISOString(),
-    last_activity: new Date(Date.now() - 60 * 1000).toISOString(),
-    stats: { total_requests: 23, threats_detected: 1, threats_blocked: 1, pii_detected: 0, pii_sanitized: 0, anomalies_detected: 1, avg_risk_score: 35 },
+    last_activity_at: new Date(Date.now() - 60 * 1000).toISOString(),
+    stats: { total_actions: 23, input_scans: 10, output_scans: 13, threats_detected: 1, pii_detected: 0, anomalies_detected: 1 },
     timeline: [],
+    graph_summary: { nodes: 0, edges: 0, clusters: 0 },
   },
 ];
 
@@ -104,12 +106,12 @@ export default function SessionList({ sessions }: SessionListProps) {
       <TableBody>
         {data.map((session) => (
           <TableRow
-            key={session.id}
+            key={session.session_id}
             className="cursor-pointer"
-            onClick={() => router.push(`/dashboard/sessions/${session.id}`)}
+            onClick={() => router.push(`/dashboard/sessions/${session.session_id}`)}
           >
             <TableCell className="font-mono text-xs text-blue-400">
-              {session.id}
+              {session.session_id}
             </TableCell>
             <TableCell>{session.agent_id}</TableCell>
             <TableCell>
@@ -122,17 +124,17 @@ export default function SessionList({ sessions }: SessionListProps) {
                 <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-700">
                   <div
                     className={cn('h-full rounded-full transition-all', riskBarColor(session.risk_level))}
-                    style={{ width: `${session.risk_score}%` }}
+                    style={{ width: `${Math.round(session.risk_score * 100)}%` }}
                   />
                 </div>
-                <span className="text-xs text-slate-400">{session.risk_score}</span>
+                <span className="text-xs text-slate-400">{Math.round(session.risk_score * 100)}</span>
               </div>
             </TableCell>
             <TableCell className="text-xs">
-              {session.stats.total_requests} req
+              {session.stats.total_actions} acts
             </TableCell>
             <TableCell className="text-xs">{formatDate(session.started_at)}</TableCell>
-            <TableCell className="text-xs">{formatRelativeTime(session.last_activity)}</TableCell>
+            <TableCell className="text-xs">{formatRelativeTime(session.last_activity_at)}</TableCell>
           </TableRow>
         ))}
       </TableBody>

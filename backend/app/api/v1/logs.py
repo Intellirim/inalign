@@ -52,7 +52,7 @@ async def log_action(
     from app.services.log_service import LogService  # noqa: WPS433
 
     service = LogService(
-        neo4j_client=neo4j_session,
+        neo4j_session=neo4j_session,
         anomaly_detector=AnomalyDetector(),
     )
 

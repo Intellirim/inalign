@@ -17,12 +17,12 @@ export default function SessionsPage() {
       setLoading(true);
       try {
         const params: Record<string, string | number | undefined> = {
-          page_size: 50,
+          size: 50,
         };
         if (statusFilter) params.status = statusFilter;
         if (riskFilter) params.risk_level = riskFilter;
         const res = await api.getSessions(params);
-        setSessions(res.sessions);
+        setSessions(res.items);
       } catch {
         // Use sample data from component
       } finally {

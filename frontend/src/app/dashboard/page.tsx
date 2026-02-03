@@ -21,13 +21,13 @@ export default function DashboardPage() {
         const [statsRes, trendsRes, alertsRes, sessionsRes] = await Promise.allSettled([
           api.getDashboardStats(),
           api.getDashboardTrends(),
-          api.getAlerts({ page_size: 5 }),
-          api.getSessions({ page_size: 5 }),
+          api.getAlerts({ size: 5 }),
+          api.getSessions({ size: 5 }),
         ]);
         if (statsRes.status === 'fulfilled') setStats(statsRes.value);
         if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value);
-        if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.alerts);
-        if (sessionsRes.status === 'fulfilled') setSessions(sessionsRes.value.sessions);
+        if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.items);
+        if (sessionsRes.status === 'fulfilled') setSessions(sessionsRes.value.items);
       } catch {
         // Fall back to sample data (components use defaults)
       }

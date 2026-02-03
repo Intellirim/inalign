@@ -83,9 +83,9 @@ class ShieldedOpenAI:
             metadata=metadata,
         )
 
-        print(f"[AgentShield] Input scan - Safe: {input_scan.is_safe}, Risk: {input_scan.risk_level}")
+        print(f"[AgentShield] Input scan - Safe: {input_scan.safe}, Risk: {input_scan.risk_level}")
 
-        if not input_scan.is_safe:
+        if not input_scan.safe:
             for threat in input_scan.threats:
                 print(f"  Threat: {threat.type} ({threat.severity}) - {threat.description}")
 
@@ -137,9 +137,9 @@ class ShieldedOpenAI:
             auto_sanitize=self.auto_sanitize,
         )
 
-        print(f"[AgentShield] Output scan - Safe: {output_scan.is_safe}, Risk: {output_scan.risk_level}")
+        print(f"[AgentShield] Output scan - Safe: {output_scan.safe}, Risk: {output_scan.risk_level}")
 
-        if not output_scan.is_safe:
+        if not output_scan.safe:
             if output_scan.pii_detected:
                 for pii in output_scan.pii_detected:
                     print(f"  PII detected in output: {pii.type}")
@@ -239,13 +239,15 @@ def main() -> None:
     print("Session Security Report")
     print("=" * 60)
     report = client.get_report(language="ko")
-    print(f"Title: {report.title}")
-    print(f"Summary: {report.summary}")
-    print(f"Risk Level: {report.risk_level}")
+    print(f"Report ID: {report.report_id}")
+    print(f"Status: {report.status}")
+    if report.summary:
+        print(f"Risk Level: {report.summary.risk_level}")
+        print(f"Primary Concerns: {report.summary.primary_concerns}")
     if report.recommendations:
         print("Recommendations:")
         for rec in report.recommendations:
-            print(f"  [{rec.priority}] {rec.title}")
+            print(f"  [{rec.priority}] {rec.action}: {rec.reason}")
 
     # Clean up
     client.close()

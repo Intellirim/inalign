@@ -7,6 +7,7 @@ structured JSON parsing from LLM output, and token usage tracking.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -237,7 +238,7 @@ class ReportGenerator:
                     str(exc),
                     wait,
                 )
-                time.sleep(wait)
+                await asyncio.sleep(wait)
 
         raise RuntimeError(
             f"OpenAI API call failed after {_MAX_RETRIES} attempts."
@@ -310,7 +311,7 @@ class ReportGenerator:
                     str(exc),
                     wait,
                 )
-                time.sleep(wait)
+                await asyncio.sleep(wait)
 
         raise RuntimeError(
             f"Anthropic API call failed after {_MAX_RETRIES} attempts."

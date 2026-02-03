@@ -84,6 +84,18 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    agents: Mapped[list["Agent"]] = relationship(  # noqa: F821
+        "Agent",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    policies: Mapped[list["Policy"]] = relationship(  # noqa: F821
+        "Policy",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<User(id={self.id!r}, email={self.email!r}, role={self.role!r})>"

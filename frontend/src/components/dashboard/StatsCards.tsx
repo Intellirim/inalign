@@ -61,17 +61,14 @@ export default function StatsCards({ stats }: StatsCardsProps) {
     threats_blocked: 142,
     pii_sanitized: 387,
     active_sessions: 12,
-    requests_trend: 12.5,
-    threats_trend: -8.3,
-    pii_trend: 5.2,
-    sessions_trend: 3.1,
+    anomalies_detected: 8,
   };
 
   const cards: StatCardProps[] = [
     {
       title: 'Total Requests',
-      value: data.total_requests,
-      trend: data.requests_trend,
+      value: data.total_requests ?? 0,
+      trend: 0,
       color: 'bg-blue-500/20 text-blue-400',
       icon: (
         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -81,8 +78,8 @@ export default function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: 'Threats Blocked',
-      value: data.threats_blocked,
-      trend: data.threats_trend,
+      value: data.threats_blocked ?? 0,
+      trend: 0,
       color: 'bg-red-500/20 text-red-400',
       icon: (
         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -92,8 +89,8 @@ export default function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: 'PII Sanitized',
-      value: data.pii_sanitized,
-      trend: data.pii_trend,
+      value: data.pii_sanitized ?? 0,
+      trend: 0,
       color: 'bg-orange-500/20 text-orange-400',
       icon: (
         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -103,8 +100,8 @@ export default function StatsCards({ stats }: StatsCardsProps) {
     },
     {
       title: 'Active Sessions',
-      value: data.active_sessions,
-      trend: data.sessions_trend,
+      value: data.active_sessions ?? 0,
+      trend: 0,
       color: 'bg-green-500/20 text-green-400',
       icon: (
         <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

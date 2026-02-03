@@ -16,63 +16,65 @@ from agentshield.exceptions import (
     ValidationError,
 )
 from agentshield.models import (
+    AlertListResponse,
+    AlertResponse,
     LogActionResponse,
     ReportResponse,
     ScanInputResponse,
     ScanOutputResponse,
+    SessionListResponse,
     SessionResponse,
 )
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Fixtures — aligned with backend Pydantic schemas
 # ---------------------------------------------------------------------------
 
 MOCK_SCAN_INPUT_RESPONSE = {
-    "scan_id": "scan-001",
-    "is_safe": False,
+    "request_id": "req-001",
+    "safe": False,
     "risk_level": "high",
     "risk_score": 0.85,
+    "latency_ms": 45.2,
     "threats": [
         {
             "type": "prompt_injection",
-            "severity": "high",
+            "subtype": "direct",
+            "pattern_id": "PI-001",
+            "matched_text": "ignore previous instructions",
+            "position": [10, 38],
             "confidence": 0.92,
+            "severity": "high",
             "description": "Detected prompt injection attempt.",
         }
     ],
-    "pii_detected": [
-        {
-            "type": "ssn",
-            "value": "***-**-6789",
-            "start": 30,
-            "end": 41,
-            "confidence": 0.99,
-        }
-    ],
-    "recommendations": ["Block this input", "Log for review"],
-    "processing_time_ms": 45,
+    "recommendation": "block",
+    "action_taken": "blocked",
 }
 
 MOCK_SCAN_OUTPUT_RESPONSE = {
-    "scan_id": "scan-002",
-    "is_safe": True,
+    "request_id": "req-002",
+    "safe": True,
     "risk_level": "low",
     "risk_score": 0.1,
+    "latency_ms": 30.0,
     "pii_detected": [],
-    "data_leakage_risk": False,
+    "original_text": None,
     "sanitized_text": None,
-    "issues": [],
-    "processing_time_ms": 30,
+    "recommendation": "allow",
+    "action_taken": "logged",
 }
 
 MOCK_LOG_ACTION_RESPONSE = {
+    "request_id": "req-003",
+    "logged": True,
     "action_id": "act-001",
-    "status": "recorded",
-    "risk_level": "low",
+    "node_id": "neo4j-node-abc",
+    "anomaly_detected": False,
     "anomalies": [],
-    "is_anomalous": False,
-    "recommendations": [],
+    "session_risk_score": 0.12,
+    "alerts_triggered": [],
 }
 
 MOCK_SESSION_RESPONSE = {
@@ -81,48 +83,64 @@ MOCK_SESSION_RESPONSE = {
     "status": "active",
     "risk_level": "medium",
     "risk_score": 0.45,
-    "start_time": "2025-01-15T10:00:00Z",
-    "end_time": None,
-    "total_actions": 5,
-    "total_scans": 3,
-    "threats_detected": 1,
-    "anomalies_detected": 0,
-    "metadata": {},
+    "started_at": "2025-01-15T10:00:00Z",
+    "last_activity_at": "2025-01-15T10:30:00Z",
+    "stats": {
+        "total_actions": 5,
+        "input_scans": 3,
+        "output_scans": 2,
+        "threats_detected": 1,
+        "pii_detected": 0,
+        "anomalies_detected": 0,
+    },
+    "timeline": [],
+    "graph_summary": {"nodes": 8, "edges": 12, "clusters": 2},
 }
 
 MOCK_REPORT_RESPONSE = {
+    "request_id": "req-004",
     "report_id": "rpt-001",
     "session_id": "sess-001",
-    "report_type": "security_analysis",
-    "language": "ko",
-    "title": "Security Analysis Report",
-    "summary": "Session showed moderate risk with one threat detected.",
-    "risk_level": "medium",
-    "risk_score": 0.45,
-    "total_events": 8,
-    "threats_found": 1,
-    "anomalies_found": 0,
+    "status": "completed",
+    "generated_at": "2025-01-15T12:00:00Z",
+    "generation_time_ms": 1234.5,
+    "summary": {
+        "risk_level": "medium",
+        "risk_score": 0.45,
+        "primary_concerns": ["Prompt injection detected"],
+    },
+    "analysis": {
+        "attack_vectors": [],
+        "behavior_graph_analysis": None,
+        "timeline_analysis": "",
+    },
     "recommendations": [
         {
             "priority": "high",
-            "category": "input_validation",
-            "title": "Enhance input filtering",
-            "description": "Add stricter input validation rules.",
-            "affected_actions": ["act-001"],
+            "action": "Enhance input filtering",
+            "reason": "Prompt injection was detected but not fully blocked.",
         }
     ],
-    "generated_at": "2025-01-15T12:00:00Z",
-    "content": "# Report\n\nFull report content...",
+    "raw_graph_data": None,
 }
 
-MOCK_ALERTS_RESPONSE = {
-    "items": [
-        {
-            "alert_id": "alrt-001",
-            "severity": "high",
-            "title": "Prompt injection detected",
-        }
-    ],
+MOCK_ALERT_RESPONSE = {
+    "id": "alrt-001",
+    "session_id": "sess-001",
+    "agent_id": "agent-001",
+    "alert_type": "threat_detected",
+    "severity": "high",
+    "title": "Prompt injection detected",
+    "description": "A prompt injection attempt was detected.",
+    "details": {"pattern_id": "PI-001"},
+    "is_acknowledged": False,
+    "acknowledged_by": None,
+    "acknowledged_at": None,
+    "created_at": "2025-01-15T10:05:00Z",
+}
+
+MOCK_ALERTS_LIST_RESPONSE = {
+    "items": [MOCK_ALERT_RESPONSE],
     "total": 1,
     "page": 1,
     "size": 20,
@@ -159,18 +177,25 @@ class TestBaseClient:
         assert client.base_url == "https://custom.api.io"
         assert client.timeout == 60
 
-    def test_headers(self) -> None:
-        client = BaseClient(api_key="my-secret-key")
+    def test_headers_jwt(self) -> None:
+        """JWT tokens use Authorization: Bearer header."""
+        client = BaseClient(api_key="eyJhbGciOiJIUzI1NiJ9.test")
         headers = client._headers
-        assert headers["Authorization"] == "Bearer my-secret-key"
+        assert headers["Authorization"] == "Bearer eyJhbGciOiJIUzI1NiJ9.test"
+        assert "X-API-Key" not in headers
         assert headers["Content-Type"] == "application/json"
-        assert headers["Accept"] == "application/json"
-        assert "agentshield-python" in headers["User-Agent"]
+
+    def test_headers_api_key(self) -> None:
+        """API keys (ask_ prefix) use X-API-Key header."""
+        client = BaseClient(api_key="ask_abc123def456")
+        headers = client._headers
+        assert headers["X-API-Key"] == "ask_abc123def456"
+        assert "Authorization" not in headers
 
     def test_build_url(self) -> None:
         client = BaseClient(api_key="key")
-        assert client._build_url("/v1/scan/input") == "https://api.agentshield.io/v1/scan/input"
-        assert client._build_url("v1/scan/input") == "https://api.agentshield.io/v1/scan/input"
+        assert client._build_url("/api/v1/scan/input") == "https://api.agentshield.io/api/v1/scan/input"
+        assert client._build_url("api/v1/scan/input") == "https://api.agentshield.io/api/v1/scan/input"
 
     def test_handle_response_success(self) -> None:
         response = _mock_response({"status": "ok"}, 200)
@@ -219,7 +244,7 @@ class TestBaseClient:
 class TestSyncClient:
     def test_scan_input(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
@@ -232,18 +257,17 @@ class TestSyncClient:
         )
 
         assert isinstance(result, ScanInputResponse)
-        assert result.scan_id == "scan-001"
-        assert result.is_safe is False
+        assert result.request_id == "req-001"
+        assert result.safe is False
         assert result.risk_level == "high"
         assert len(result.threats) == 1
         assert result.threats[0].type == "prompt_injection"
-        assert len(result.pii_detected) == 1
-        assert result.pii_detected[0].type == "ssn"
+        assert result.recommendation == "block"
         client.close()
 
     def test_scan_input_with_metadata(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
@@ -258,7 +282,6 @@ class TestSyncClient:
 
         assert isinstance(result, ScanInputResponse)
 
-        # Verify the request body included metadata
         request = httpx_mock.get_request()
         body = json.loads(request.content)
         assert body["metadata"] == {"source": "web"}
@@ -266,7 +289,7 @@ class TestSyncClient:
 
     def test_scan_output(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/output",
+            url="https://api.agentshield.io/api/v1/scan/output",
             method="POST",
             json=MOCK_SCAN_OUTPUT_RESPONSE,
         )
@@ -280,7 +303,7 @@ class TestSyncClient:
         )
 
         assert isinstance(result, ScanOutputResponse)
-        assert result.is_safe is True
+        assert result.safe is True
         assert result.risk_level == "low"
 
         request = httpx_mock.get_request()
@@ -290,7 +313,7 @@ class TestSyncClient:
 
     def test_log_action(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/actions/log",
+            url="https://api.agentshield.io/api/v1/logs/action",
             method="POST",
             json=MOCK_LOG_ACTION_RESPONSE,
         )
@@ -309,13 +332,20 @@ class TestSyncClient:
 
         assert isinstance(result, LogActionResponse)
         assert result.action_id == "act-001"
-        assert result.status == "recorded"
-        assert result.is_anomalous is False
+        assert result.logged is True
+        assert result.anomaly_detected is False
+
+        # Verify nested action body
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["action"]["type"] == "tool_call"
+        assert body["action"]["name"] == "search"
+        assert body["action"]["target"] == "google.com"
         client.close()
 
     def test_get_session(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/sessions/sess-001",
+            url="https://api.agentshield.io/api/v1/sessions/sess-001",
             method="GET",
             json=MOCK_SESSION_RESPONSE,
         )
@@ -326,7 +356,8 @@ class TestSyncClient:
         assert isinstance(result, SessionResponse)
         assert result.session_id == "sess-001"
         assert result.status == "active"
-        assert result.total_actions == 5
+        assert result.stats.total_actions == 5
+        assert result.graph_summary.nodes == 8
         client.close()
 
     def test_list_sessions(self, httpx_mock) -> None:
@@ -344,13 +375,15 @@ class TestSyncClient:
         client = AgentShield(api_key="test-key")
         result = client.list_sessions(status="active", risk_level="medium")
 
-        assert result["total"] == 1
-        assert len(result["items"]) == 1
+        assert isinstance(result, SessionListResponse)
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].session_id == "sess-001"
         client.close()
 
     def test_generate_report(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/reports/generate",
+            url="https://api.agentshield.io/api/v1/reports/sessions/sess-001/report",
             method="POST",
             json=MOCK_REPORT_RESPONSE,
         )
@@ -364,40 +397,55 @@ class TestSyncClient:
 
         assert isinstance(result, ReportResponse)
         assert result.report_id == "rpt-001"
-        assert result.language == "ko"
+        assert result.status == "completed"
         assert len(result.recommendations) == 1
         assert result.recommendations[0].priority == "high"
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["report_type"] == "security_analysis"
+        assert body["include_recommendations"] is True
+        assert body["language"] == "ko"
         client.close()
 
     def test_get_alerts(self, httpx_mock) -> None:
         httpx_mock.add_response(
             method="GET",
-            json=MOCK_ALERTS_RESPONSE,
+            json=MOCK_ALERTS_LIST_RESPONSE,
         )
 
         client = AgentShield(api_key="test-key")
         result = client.get_alerts(severity="high")
 
-        assert result["total"] == 1
-        assert len(result["items"]) == 1
+        assert isinstance(result, AlertListResponse)
+        assert result.total == 1
+        assert len(result.items) == 1
+        assert result.items[0].alert_type == "threat_detected"
         client.close()
 
     def test_acknowledge_alert(self, httpx_mock) -> None:
+        ack_response = {**MOCK_ALERT_RESPONSE, "is_acknowledged": True, "acknowledged_by": "admin"}
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/alerts/alrt-001/acknowledge",
-            method="PATCH",
-            json={"acknowledged": True, "acknowledged_at": "2025-01-15T12:00:00Z"},
+            url="https://api.agentshield.io/api/v1/alerts/alrt-001/acknowledge",
+            method="POST",
+            json=ack_response,
         )
 
         client = AgentShield(api_key="test-key")
-        result = client.acknowledge_alert("alrt-001")
+        result = client.acknowledge_alert("alrt-001", acknowledged_by="admin")
 
-        assert result["acknowledged"] is True
+        assert isinstance(result, AlertResponse)
+        assert result.is_acknowledged is True
+        assert result.acknowledged_by == "admin"
+
+        request = httpx_mock.get_request()
+        body = json.loads(request.content)
+        assert body["acknowledged_by"] == "admin"
         client.close()
 
     def test_context_manager(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
@@ -412,7 +460,7 @@ class TestSyncClient:
 
     def test_auth_error_handling(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             status_code=401,
             json={"detail": "Invalid API key"},
@@ -425,7 +473,7 @@ class TestSyncClient:
 
     def test_rate_limit_error_handling(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             status_code=429,
             json={"detail": "Rate limit exceeded"},
@@ -434,6 +482,22 @@ class TestSyncClient:
         client = AgentShield(api_key="test-key")
         with pytest.raises(RateLimitError):
             client.scan_input(text="test", agent_id="a", session_id="s")
+        client.close()
+
+    def test_api_key_header(self, httpx_mock) -> None:
+        """API keys with ask_ prefix use X-API-Key header."""
+        httpx_mock.add_response(
+            url="https://api.agentshield.io/api/v1/scan/input",
+            method="POST",
+            json=MOCK_SCAN_INPUT_RESPONSE,
+        )
+
+        client = AgentShield(api_key="ask_test123")
+        client.scan_input(text="test", agent_id="a", session_id="s")
+
+        request = httpx_mock.get_request()
+        assert request.headers.get("X-API-Key") == "ask_test123"
+        assert "Authorization" not in request.headers
         client.close()
 
 
@@ -446,7 +510,7 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_scan_input(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
@@ -459,13 +523,13 @@ class TestAsyncClient:
             )
 
         assert isinstance(result, ScanInputResponse)
-        assert result.scan_id == "scan-001"
-        assert result.is_safe is False
+        assert result.request_id == "req-001"
+        assert result.safe is False
 
     @pytest.mark.asyncio
     async def test_scan_output(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/output",
+            url="https://api.agentshield.io/api/v1/scan/output",
             method="POST",
             json=MOCK_SCAN_OUTPUT_RESPONSE,
         )
@@ -478,12 +542,12 @@ class TestAsyncClient:
             )
 
         assert isinstance(result, ScanOutputResponse)
-        assert result.is_safe is True
+        assert result.safe is True
 
     @pytest.mark.asyncio
     async def test_log_action(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/actions/log",
+            url="https://api.agentshield.io/api/v1/logs/action",
             method="POST",
             json=MOCK_LOG_ACTION_RESPONSE,
         )
@@ -502,7 +566,7 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_generate_report(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/reports/generate",
+            url="https://api.agentshield.io/api/v1/reports/sessions/sess-001/report",
             method="POST",
             json=MOCK_REPORT_RESPONSE,
         )
@@ -516,7 +580,7 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_auth_error(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/v1/scan/input",
+            url="https://api.agentshield.io/api/v1/scan/input",
             method="POST",
             status_code=401,
             json={"detail": "Invalid API key"},

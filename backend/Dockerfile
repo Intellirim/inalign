@@ -56,6 +56,9 @@ WORKDIR /app
 # Copy application code
 COPY . .
 
+# Make entrypoint executable
+RUN chmod +x entrypoint.sh
+
 # Change ownership to non-root user
 RUN chown -R appuser:appuser /app
 
@@ -68,5 +71,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run with uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Run via entrypoint (init_db + uvicorn)
+CMD ["./entrypoint.sh"]

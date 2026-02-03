@@ -24,9 +24,9 @@ const sampleAlerts: AlertResponse[] = [
     severity: 'critical',
     title: 'Prompt injection detected',
     description: 'System prompt override attempt.',
-    threat_type: 'prompt_injection',
+    alert_type: 'prompt_injection',
     created_at: new Date(Date.now() - 5 * 60000).toISOString(),
-    acknowledged: false,
+    is_acknowledged: false,
   },
   {
     id: 'alert-2',
@@ -35,9 +35,9 @@ const sampleAlerts: AlertResponse[] = [
     severity: 'high',
     title: 'PII leakage in agent output',
     description: 'SSN found in unfiltered output.',
-    threat_type: 'pii_leakage',
+    alert_type: 'pii_leakage',
     created_at: new Date(Date.now() - 23 * 60000).toISOString(),
-    acknowledged: false,
+    is_acknowledged: false,
   },
   {
     id: 'alert-3',
@@ -46,9 +46,9 @@ const sampleAlerts: AlertResponse[] = [
     severity: 'medium',
     title: 'Anomalous API call frequency',
     description: '15x normal request rate detected.',
-    threat_type: 'anomaly',
+    alert_type: 'anomaly',
     created_at: new Date(Date.now() - 2 * 3600000).toISOString(),
-    acknowledged: true,
+    is_acknowledged: true,
     acknowledged_at: new Date(Date.now() - 3600000).toISOString(),
     acknowledged_by: 'admin',
   },
@@ -59,9 +59,9 @@ const sampleAlerts: AlertResponse[] = [
     severity: 'low',
     title: 'Unusual tool usage',
     description: 'File system access outside scope.',
-    threat_type: 'behavior_anomaly',
+    alert_type: 'behavior_anomaly',
     created_at: new Date(Date.now() - 5 * 3600000).toISOString(),
-    acknowledged: false,
+    is_acknowledged: false,
   },
   {
     id: 'alert-5',
@@ -70,9 +70,9 @@ const sampleAlerts: AlertResponse[] = [
     severity: 'info',
     title: 'New unregistered agent session',
     description: 'Unknown agent ID initiated session.',
-    threat_type: 'unknown_agent',
+    alert_type: 'unknown_agent',
     created_at: new Date(Date.now() - 12 * 3600000).toISOString(),
-    acknowledged: true,
+    is_acknowledged: true,
     acknowledged_at: new Date(Date.now() - 6 * 3600000).toISOString(),
     acknowledged_by: 'admin',
   },
@@ -85,11 +85,11 @@ export default function AlertsPage() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const params: Record<string, string | number | boolean | undefined> = { page_size: 50 };
+      const params: Record<string, string | number | boolean | undefined> = { size: 50 };
       if (severityFilter) params.severity = severityFilter;
       if (acknowledgedFilter !== '') params.acknowledged = acknowledgedFilter === 'true';
       const res = await api.getAlerts(params);
-      setAlerts(res.alerts);
+      setAlerts(res.items);
     } catch {
       // Keep sample data
     }
@@ -105,15 +105,14 @@ export default function AlertsPage() {
       setAlerts((prev) =>
         prev.map((a) =>
           a.id === id
-            ? { ...a, acknowledged: true, acknowledged_at: new Date().toISOString(), acknowledged_by: 'admin' }
+            ? { ...a, is_acknowledged: true, acknowledged_at: new Date().toISOString(), acknowledged_by: 'admin' }
             : a,
         ),
       );
     } catch {
-      // Optimistically update the UI anyway
       setAlerts((prev) =>
         prev.map((a) =>
-          a.id === id ? { ...a, acknowledged: true } : a,
+          a.id === id ? { ...a, is_acknowledged: true } : a,
         ),
       );
     }
@@ -121,7 +120,7 @@ export default function AlertsPage() {
 
   const filtered = alerts.filter((a) => {
     if (severityFilter && a.severity !== severityFilter) return false;
-    if (acknowledgedFilter !== '' && String(a.acknowledged) !== acknowledgedFilter) return false;
+    if (acknowledgedFilter !== '' && String(a.is_acknowledged) !== acknowledgedFilter) return false;
     return true;
   });
 
@@ -190,19 +189,19 @@ export default function AlertsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="text-xs">{alert.agent_id}</TableCell>
-                  <TableCell className="text-xs">{alert.threat_type}</TableCell>
+                  <TableCell className="text-xs">{alert.alert_type}</TableCell>
                   <TableCell className="text-xs">
                     {formatRelativeTime(alert.created_at)}
                   </TableCell>
                   <TableCell>
-                    {alert.acknowledged ? (
+                    {alert.is_acknowledged ? (
                       <span className="text-xs text-green-400">Acknowledged</span>
                     ) : (
                       <span className="text-xs text-yellow-400">Pending</span>
                     )}
                   </TableCell>
                   <TableCell>
-                    {!alert.acknowledged && (
+                    {!alert.is_acknowledged && (
                       <Button
                         size="sm"
                         variant="secondary"

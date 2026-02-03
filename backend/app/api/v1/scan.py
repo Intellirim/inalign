@@ -31,17 +31,21 @@ router = APIRouter()
 # --------------------------------------------------------------------------
 
 
-def _get_scan_service() -> ScanService:
+def _get_scan_service(neo4j_session=None) -> ScanService:
     """Construct a :class:`ScanService` with the registered detector singletons.
 
     Detectors are imported lazily so this module stays importable even when
     detector packages have heavy optional dependencies.
+
+    When *neo4j_session* is provided, Graph RAG-based detection and
+    attack knowledge logging are enabled.
     """
     from app.detectors import InjectionDetector, PIIDetector  # noqa: WPS433
 
     return ScanService(
         injection_detector=InjectionDetector(),
         pii_detector=PIIDetector(),
+        neo4j_session=neo4j_session,
     )
 
 
@@ -65,8 +69,13 @@ def _get_scan_service() -> ScanService:
 async def scan_input(
     body: ScanInputRequest,
     current_user: CurrentUser,
+    neo4j: Neo4jSession,
 ) -> ScanInputResponse:
-    """Scan incoming agent input for injection attacks."""
+    """Scan incoming agent input for injection attacks.
+
+    Graph RAG is automatically enabled: every scan result is stored in the
+    Neo4j knowledge graph, and similar known attacks boost detection.
+    """
     logger.info(
         "POST /scan/input  user=%s  session=%s  agent=%s",
         current_user["user_id"],
@@ -74,7 +83,7 @@ async def scan_input(
         body.agent_id,
     )
 
-    service = _get_scan_service()
+    service = _get_scan_service(neo4j_session=neo4j)
 
     try:
         result = await service.scan_input(body)

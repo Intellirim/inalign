@@ -1,6 +1,13 @@
-version: "3.9"
+# ==========================================================================
+# AgentShield Full-Stack Docker Compose
+# Usage:  docker compose up --build -d
+# Stop:   docker compose down
+# Reset:  docker compose down -v   (deletes data volumes)
+# ==========================================================================
 
 services:
+  # ---------- Infrastructure ----------
+
   postgres:
     image: postgres:15-alpine
     container_name: agentshield-postgres
@@ -17,6 +24,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - agentshield-net
 
   neo4j:
     image: neo4j:5-community
@@ -37,6 +46,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - agentshield-net
 
   redis:
     image: redis:7-alpine
@@ -51,8 +62,77 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - agentshield-net
+
+  # ---------- Backend API ----------
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: agentshield-backend
+    ports:
+      - "8000:8000"
+    environment:
+      API_HOST: "0.0.0.0"
+      API_PORT: "8000"
+      API_ENV: "development"
+      SECRET_KEY: "agentshield-dev-secret-key-32chars"
+      ALLOWED_ORIGINS: '["http://localhost:3000","http://localhost:8000"]'
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "agentshield"
+      POSTGRES_USER: "agentshield"
+      POSTGRES_PASSWORD: "agentshield_dev"
+      NEO4J_URI: "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASSWORD: "agentshield_dev"
+      NEO4J_DATABASE: "neo4j"
+      REDIS_URL: "redis://redis:6379/0"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      RATE_LIMIT_PER_MINUTE: "100"
+      LOG_LEVEL: "INFO"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - agentshield-net
+
+  # ---------- Frontend ----------
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: agentshield-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: "production"
+      BACKEND_URL: "http://backend:8000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - agentshield-net
 
 volumes:
   postgres_data:
   neo4j_data:
   redis_data:
+
+networks:
+  agentshield-net:
+    driver: bridge

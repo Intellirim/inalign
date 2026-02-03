@@ -18,14 +18,36 @@ from app.graph import queries
 logger = logging.getLogger("agentshield.graph.neo4j_client")
 
 
+def _convert_neo4j_value(value: Any) -> Any:
+    """Convert Neo4j temporal/spatial types to JSON-serializable Python types."""
+    # neo4j.time.DateTime, neo4j.time.Date, neo4j.time.Time, etc.
+    try:
+        from neo4j.time import DateTime as Neo4jDateTime, Date as Neo4jDate, Time as Neo4jTime, Duration as Neo4jDuration
+        if isinstance(value, Neo4jDateTime):
+            return value.iso_format()
+        if isinstance(value, Neo4jDate):
+            return value.iso_format()
+        if isinstance(value, Neo4jTime):
+            return value.iso_format()
+        if isinstance(value, Neo4jDuration):
+            return str(value)
+    except ImportError:
+        pass
+    # Fallback: if it has iso_format method, use it
+    if hasattr(value, "iso_format"):
+        return value.iso_format()
+    return value
+
+
 def _node_to_dict(node: Any) -> dict[str, Any]:
     """Convert a Neo4j ``Node`` object into a plain dictionary."""
     if node is None:
         return {}
     if isinstance(node, dict):
-        return node
+        return {k: _convert_neo4j_value(v) for k, v in node.items()}
     try:
-        return dict(node)
+        raw = dict(node)
+        return {k: _convert_neo4j_value(v) for k, v in raw.items()}
     except (TypeError, ValueError):
         return {}
 

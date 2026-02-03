@@ -34,12 +34,10 @@ export default function SessionDetailPage() {
   async function handleGenerateReport() {
     if (!session) return;
     try {
-      const report = await api.generateReport({
-        session_id: session.id,
+      const report = await api.generateReport(session.session_id, {
         include_recommendations: true,
-        include_similar_attacks: true,
       });
-      router.push(`/dashboard/reports/${report.id}`);
+      router.push(`/dashboard/reports/${report.report_id}`);
     } catch {
       alert('Failed to generate report. Please try again.');
     }

@@ -136,12 +136,23 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-011",
         "category": "role_manipulation",
         "patterns": [
+            r"(?i)act\s+as\s+(a|an|the|if\s+you\s+were)\s+(?:\w+\s+)*?(hacker|attacker|admin|administrator|root|unrestricted|unfiltered|uncensored|malicious|evil|villain|criminal|spy|pirate)",
+            r"(?i)behave\s+(like|as)\s+(a|an|the)\s+(?:\w+\s+)*?(hacker|attacker|admin|unrestricted|unfiltered|uncensored|malicious|evil)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Requesting the model to act as a suspicious/malicious persona.",
+    },
+    {
+        "id": "INJ-011b",
+        "category": "role_manipulation",
+        "patterns": [
             r"(?i)act\s+as\s+(a|an|the|if\s+you\s+were)\s+\w+",
             r"(?i)behave\s+(like|as)\s+(a|an|the)\s+\w+",
         ],
-        "severity": "high",
-        "confidence_base": 0.82,
-        "description": "Requesting the model to act as a different persona.",
+        "severity": "low",
+        "confidence_base": 0.18,
+        "description": "Generic role assignment (low confidence, often legitimate).",
     },
     {
         "id": "INJ-012",
@@ -180,8 +191,8 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-015",
         "category": "role_manipulation",
         "patterns": [
-            r"(?:인|인것|인척|처럼)\s*(?:해|하세요|해줘|행동)",
-            r"\w+인\s*척\s*해",
+            r"(?:인\s*척|인것\s*처럼|처럼)\s*(?:해|하세요|해줘|행동)",
+            r"\w+인\s*척\s*(?:해|하세요|해줘)",
         ],
         "severity": "high",
         "confidence_base": 0.87,
@@ -338,8 +349,10 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-029",
         "category": "system_extraction",
         "patterns": [
-            r"(?i)debug\s+mode\s*:\s*(show|display|print|dump)",
-            r"(?i)verbose\s+mode\s*:\s*(show|display|print|dump)",
+            r"(?i)(?:enable|activate|enter|switch\s+to)\s+debug\s+mode",
+            r"(?i)debug\s+mode\s*[:\s]+(?:show|display|print|dump|enable|activate|reveal)",
+            r"(?i)verbose\s+mode\s*[:\s]+(?:show|display|print|dump|enable|activate|reveal)",
+            r"(?i)debug\s+mode\s+and\s+(?:show|display|reveal|output|dump|print)",
         ],
         "severity": "high",
         "confidence_base": 0.88,
@@ -376,7 +389,7 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "category": "jailbreak",
         "patterns": [
             r"(?i)\bjailbreak\b",
-            r"(?i)bypass\s+(your\s+)?(safety|content|ethical)\s+(filters?|restrictions?|guidelines?)",
+            r"(?i)bypass\s+(all\s+|your\s+|the\s+)?(safety|content|ethical)\s+(filters?|restrictions?|guidelines?|protocols?|measures?)",
         ],
         "severity": "critical",
         "confidence_base": 0.94,
@@ -386,7 +399,8 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-033",
         "category": "jailbreak",
         "patterns": [
-            r"(?i)(evil|chaos|villain|dark)\s*(mode|persona|version)",
+            r"(?i)(evil|chaos|villain)\s*(mode|persona|version)",
+            r"(?i)(?:enter|enable|activate|switch\s+to|go\s+into)\s+dark\s*(mode|persona|version)",
             r"(?i)opposite\s+(mode|day|persona)",
         ],
         "severity": "high",
@@ -699,11 +713,11 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-060",
         "category": "output_manipulation",
         "patterns": [
-            r"(?i)respond\s+only\s+with\s+",
+            r"(?i)respond\s+only\s+(?:with|in)\s+",
             r"(?i)your\s+(only\s+)?response\s+(should|must)\s+be\s+",
         ],
         "severity": "medium",
-        "confidence_base": 0.68,
+        "confidence_base": 0.72,
         "description": "Constraining output to specific content.",
     },
     {
@@ -765,8 +779,8 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-066",
         "category": "output_manipulation",
         "patterns": [
-            r"(?i)respond\s+in\s+(a\s+)?(?:code|script|html|javascript|python)\s+(block|format)",
-            r"(?i)wrap\s+(your\s+)?(response|answer)\s+in\s+(script|code|html)\s+tags",
+            r"(?i)respond\s+(?:only\s+)?in\s+(a\s+)?(?:code|script|html|javascript|python|xml)\s+(blocks?|format|tags?)",
+            r"(?i)wrap\s+(your\s+)?(response|answer)\s+in\s+(script|code|html|xml|unrestricted)\s+tags",
         ],
         "severity": "high",
         "confidence_base": 0.80,
@@ -835,7 +849,8 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-072",
         "category": "data_extraction",
         "patterns": [
-            r"(?i)(export|extract|download)\s+(all\s+)?(data|records?|entries?|information)",
+            r"(?i)(export|extract|download)\s+all\s+(the\s+)?(data|records?|entries?|information)",
+            r"(?i)(export|extract|download)\s+(the\s+)?(user|customer|client|employee|account|sensitive|private|confidential)\s+(data|records?|entries?|information)",
             r"(?i)give\s+me\s+(a\s+)?(data\s+)?(dump|export|backup)",
         ],
         "severity": "high",
@@ -868,8 +883,9 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-075",
         "category": "data_extraction",
         "patterns": [
-            r"(?i)read\s+(the\s+)?(file|contents?\s+of)\s+(/etc/passwd|/etc/shadow|\.env|config\.)",
+            r"(?i)read\s+(the\s+)?(file|contents?\s+of\s+)?(/etc/passwd|/etc/shadow|\.env\b|config\.)",
             r"(?i)(cat|type|more)\s+(/etc/passwd|\.env|config\.\w+|secrets?\.\w+)",
+            r"/etc/passwd|/etc/shadow",
         ],
         "severity": "critical",
         "confidence_base": 0.94,
@@ -983,7 +999,7 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "category": "privilege_escalation",
         "patterns": [
             r"(?i)(execute|run|eval)\s+(this\s+)?(system\s+)?(command|code|script)\s*:",
-            r"(?i)(os|system|exec|eval|subprocess)\s*[.(]\s*",
+            r"(?i)(os|system|exec|eval|subprocess)\s*[.(]\s*\w",
         ],
         "severity": "critical",
         "confidence_base": 0.90,
@@ -1147,6 +1163,1387 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "severity": "critical",
         "confidence_base": 0.93,
         "description": "Korean multi-step: instruction override + extraction, or dev mode + extraction.",
+    },
+
+    # ===================================================================
+    # Extended patterns (INJ-100+) — Added to cover red-team gaps
+    # ===================================================================
+
+    # ---- instruction_override extras ----------------------------------
+    {
+        "id": "INJ-100",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)disregard\s+(your|the)\s+(system\s+)?(prompt|instructions?|rules?|guidelines?)",
+            r"(?i)override\s+(your|the|my)\s+(instructions?|rules?|guidelines?|prompt)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Override/disregard 'your' instructions (without previous/prior qualifier).",
+    },
+    {
+        "id": "INJ-101",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)ignore\s+(all\s+)?(instructions?|rules?|guidelines?|restrictions?|constraints?)",
+            r"(?i)ignore\s+(all\s+)?(the\s+)?(instructions?|rules?|guidelines?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Ignore all instructions/rules without previous/prior qualifier.",
+    },
+    {
+        "id": "INJ-102",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)pretend\s+(the\s+)?(instructions?|rules?|guidelines?|prompt)\s+(above\s+)?(don'?t|do\s+not)\s+exist",
+            r"(?i)(instructions?|rules?|guidelines?|prompt)\s+(don'?t|do\s+not|never)\s+exist",
+        ],
+        "severity": "high",
+        "confidence_base": 0.87,
+        "description": "Pretend instructions don't exist.",
+    },
+    {
+        "id": "INJ-103",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)system\s+override",
+            r"(?i)\[admin\]",
+            r"(?i)admin\s+override",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "SYSTEM OVERRIDE / [ADMIN] command injection.",
+    },
+    {
+        "id": "INJ-104",
+        "category": "instruction_override",
+        "patterns": [
+            r"모든\s*(명령|지시|규칙)(을|를)?\s*(취소|무시|무효)",
+            r"새로운\s*(지시|명령|규칙)(를|을)?\s*(따라|따르|수행)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean: Cancel all commands / follow new instructions.",
+    },
+    {
+        "id": "INJ-105",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(the\s+)?instructions?\s+(you\s+)?received\s+(earlier|before|previously)\s+were\s+(a\s+)?test",
+            r"(?i)(the\s+)?real\s+instructions?\s+(are|is)\s*:",
+            r"(?i)<!--.*?ignore.*?-->",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Discrediting prior instructions as test / HTML comment injection.",
+    },
+    {
+        "id": "INJ-106",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)do\s+not\s+follow\s+(the\s+)?(rules?|instructions?|guidelines?)",
+            r"(?i)stop\s+following\s+(all\s+)?(rules?|instructions?|guidelines?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Do not follow the rules (broader match without qualifier).",
+    },
+    {
+        "id": "INJ-107",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)respond\s+without\s+(any\s+)?(safety|content)\s+(filters?|restrictions?|guidelines?|rules?)",
+            r"(?i)without\s+(any\s+)?(safety|content)\s+(filters?|restrictions?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Respond without safety filters.",
+    },
+
+    # ---- role_manipulation extras -------------------------------------
+    {
+        "id": "INJ-110",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)you\s+are\s+now\s+[A-Z][\w-]+",
+            r"(?i)you\s+are\s+(now\s+)?(?:EVIL|DAN|CHAOS|DARK|LIBRE|UNCENSORED|UNFILTERED)[\w-]*",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Role reassignment to named malicious persona (EVIL-GPT, DAN, LibreAI, etc.).",
+    },
+    {
+        "id": "INJ-111",
+        "category": "role_manipulation",
+        "patterns": [
+            r"역할극",
+            r"(?:해커|공격자|악의적|제한\s*없는)\s*(?:AI|인공지능|봇|로봇)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Korean: Roleplay (역할극) or malicious AI role.",
+    },
+    {
+        "id": "INJ-112",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)(?:you\s+will\s+|from\s+now\s+on\s*,?\s*you\s+will\s+)?respond\s+as\s+['\"]?\w+",
+            r"(?i)from\s+now\s+on\s*,?\s*you\s+(are|will\s+be|will\s+act\s+as|will\s+respond\s+as)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Respond as / from now on you are...",
+    },
+    {
+        "id": "INJ-113",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)assume\s+the\s+(persona|role|identity)\s+of\s+",
+            r"(?i)take\s+on\s+the\s+(role|persona|identity)\s+of\s+",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Assume the persona/role of...",
+    },
+    {
+        "id": "INJ-114",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)simulate\s+being\s+(a\s+)?(different\s+)?(AI|model|assistant|system)",
+            r"(?i)simulate\s+(a|an)\s+(unrestricted|unfiltered|different)\s+(AI|model|assistant)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Simulate being a different/unrestricted AI.",
+    },
+    {
+        "id": "INJ-115",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)(?:in\s+this\s+)?fictional\s+scenario.*?(?:no\s+restrictions?|unrestricted|no\s+rules?|no\s+limitations?)",
+            r"(?i)let'?s\s+play\s+a\s+game.*?(?:reveal|secret|always|never\s+refuse)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.84,
+        "description": "Fictional scenario framing with no restrictions.",
+    },
+    {
+        "id": "INJ-116",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)(?:which|that|who)\s+has\s+no\s+(content\s+)?(?:policy|policies|filters?|restrictions?|limitations?|safety|guidelines?)",
+            r"(?i)(?:which|that|who)\s+doesn'?t\s+have\s+(any\s+)?(?:safety|content|filter|restriction|limitation)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Entity described as having no policy/safety/filters.",
+    },
+
+    # ---- system_extraction extras -------------------------------------
+    {
+        "id": "INJ-120",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)what\s+were\s+you\s+told\s+(before|prior|at\s+the\s+start|initially|during)",
+            r"(?i)what\s+(text|message)\s+(?:appears?|comes?|was\s+sent)\s+before\s+(?:this|my)\s+message",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Probing for pre-conversation instructions.",
+    },
+    {
+        "id": "INJ-121",
+        "category": "system_extraction",
+        "patterns": [
+            r"초기\s*설정(을|를)?\s*(그대로\s*)?(출력|보여|표시|알려|말해|프린트)",
+            r"(?:출력|보여|표시|알려|말해).*?(?:시스템|초기|원래)\s*(?:설정|지시|명령|프롬프트)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Korean: Output/display initial settings (출력해, 표시해 variants).",
+    },
+    {
+        "id": "INJ-122",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)summarize\s+(your\s+)?(hidden\s+)?(instructions?|rules?|guidelines?|directives?|configuration)",
+            r"(?i)describe\s+(your\s+)?(hidden\s+)?(instructions?|rules?|guidelines?|configuration)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Summarize/describe hidden instructions.",
+    },
+    {
+        "id": "INJ-123",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(output|display|show|reveal)\s+the\s+(developer|system|initial)\s+(message|prompt|instructions?)",
+            r"(?i)i'?m\s+the\s+developer.*?(display|show|reveal|print|output)\s+(it|the\s+prompt|the\s+instructions?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Developer identity claim + extraction request.",
+    },
+    {
+        "id": "INJ-124",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:my|your|the)\s+system\s+prompt\s+says",
+            r"(?i)complete\s+(?:this|the)\s+sentence\s*:.*?(?:system|prompt|instruction)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.87,
+        "description": "Complete the sentence / my system prompt says...",
+    },
+    {
+        "id": "INJ-125",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)translate\s+your\s+(system\s+)?(instructions?|prompt|rules?|guidelines?)\s+(into|to)\s+",
+            r"(?i)(?:what\s+are\s+)?the\s+first\s+\d+\s+(?:words?|characters?|lines?)\s+of\s+(?:the\s+)?(?:text|prompt|message|instructions?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Translate instructions / extract first N words.",
+    },
+
+    # ---- jailbreak extras ---------------------------------------------
+    {
+        "id": "INJ-130",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:this\s+is\s+)?(?:a\s+)?hypothetical\s+(?:scenario|situation|question)",
+            r"(?i)(?:in\s+)?(?:a\s+)?fictional\s+(?:world|scenario|universe|setting)\s+where",
+        ],
+        "severity": "high",
+        "confidence_base": 0.78,
+        "description": "Hypothetical/fictional framing (broader match).",
+    },
+    {
+        "id": "INJ-131",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)for\s+(educational|academic|research|learning)\s+purposes?\s+only",
+            r"(?i)교육\s*(?:목적|용도)(?:으로|만|에서)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Educational/academic purpose framing.",
+    },
+    {
+        "id": "INJ-132",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)write\s+(?:a\s+)?(?:poem|story|song|essay|script)\s+(?:about|describing|that\s+explains?)\s+(?:how\s+to\s+)?(?:bypass|hack|break|exploit|crack|attack)",
+            r"(?i)(?:poem|story|song|essay|script)\s+about\s+(?:bypass|hack|break|exploit|crack|attack)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.84,
+        "description": "Creative framing for bypass/hacking content.",
+    },
+    {
+        "id": "INJ-133",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)what\s+would\s+(?:a\s+)?(?:less|un)\s*restricted\s+(?:AI|model|assistant|version)\s+(?:say|do|respond|answer)",
+            r"(?i)if\s+you\s+(?:couldn'?t|could\s+not|were\s+unable\s+to)\s+refuse",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "What would unrestricted AI say / if you couldn't refuse.",
+    },
+    {
+        "id": "INJ-134",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:as\s+)?(?:a\s+)?thought\s+experiment",
+            r"(?i)for\s+my\s+(?:cyber\s*security|security|hacking|research)\s+(?:thesis|paper|dissertation|project|class|course|homework)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Thought experiment / academic thesis framing.",
+    },
+    {
+        "id": "INJ-135",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:i'?m\s+)?writing\s+(?:a\s+)?(?:CTF|capture\s+the\s+flag)\s+(?:challenge|problem|question)",
+            r"(?i)generate\s+(?:a\s+)?(?:realistic\s+)?(?:phishing|malware|exploit|attack)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.83,
+        "description": "CTF challenge or malicious content generation framing.",
+    },
+    {
+        "id": "INJ-136",
+        "category": "jailbreak",
+        "patterns": [
+            r"가상의?\s*(?:시나리오|상황|세계)",
+            r"(?:해킹|보안\s*(?:시스템|우회)|바이패스|공격)\s*(?:방법|하는\s*법|하는\s*방법)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: Fictional scenario / hacking method requests.",
+    },
+    {
+        "id": "INJ-137",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:my\s+)?grandmother\s+(?:used\s+to\s+)?(?:tell|told)",
+            r"(?i)bedtime\s+stor(?:y|ies)\s+about\s+",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Grandmother/bedtime story jailbreak.",
+    },
+    {
+        "id": "INJ-138",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:I\s+have\s+)?permission\s+(?:from\s+the\s+owner|to\s+test)",
+            r"(?i)(?:the\s+)?owner\s+(?:authorized|approved|gave\s+(?:me\s+)?permission)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.83,
+        "description": "Fake permission/authorization claim.",
+    },
+
+    # ---- encoding_bypass extras ---------------------------------------
+    {
+        "id": "INJ-140",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"[A-Za-z0-9+/]{20,}={0,2}(?:\s+\(decode\s+this|\s+decode\s+this)",
+            r"(?i)(?:decode|follow|execute)\s+(?:this\s+)?(?:base64|encoded)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.84,
+        "description": "Base64 string followed by decode instruction.",
+    },
+    {
+        "id": "INJ-141",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?:\\x[0-9a-fA-F]{2}){3,}",
+            r"(?:%[0-9a-fA-F]{2}){3,}",
+        ],
+        "severity": "high",
+        "confidence_base": 0.83,
+        "description": "Hex escape (\\x49\\x67) or URL encoding (%69%67) sequences.",
+    },
+    {
+        "id": "INJ-142",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)\w\.\w\.\w\.\w\.\w",
+            r"(?i)(?:I|i)\.(?:g|G)\.(?:n|N)\.(?:o|O)\.(?:r|R)\.(?:e|E)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.78,
+        "description": "Dotted character bypass (I.g.n.o.r.e).",
+    },
+    {
+        "id": "INJ-143",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)execute\s+the\s+reverse\s+of\s*:",
+            r"(?i)(?:read|interpret)\s+(?:this\s+)?(?:backwards?|in\s+reverse)\s*:",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Execute/read the reverse of...",
+    },
+    {
+        "id": "INJ-144",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)(?:read|take)\s+the\s+first\s+letter\s+of\s+each\s+word",
+            r"(?i)first\s+(?:letter|character)\s+of\s+each\s+(?:word|line|sentence)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Acrostic / first-letter-of-each-word bypass.",
+    },
+    {
+        "id": "INJ-145",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)베이스64|base64(?:로|로\s*인코딩)",
+            r"(?i)인코딩된\s*(?:명령|지시|메시지)(을|를)?\s*(?:실행|디코드|해석|따라)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: base64 / encoded command instructions.",
+    },
+    {
+        "id": "INJ-146",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)respond\s+in\s+ROT13",
+            r"(?i)caesar\s+cipher\s+shift\s+\d+\s+to\s+decode",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.78,
+        "description": "Respond in ROT13 / Caesar cipher decode instruction.",
+    },
+
+    # ---- context_manipulation extras ----------------------------------
+    {
+        "id": "INJ-150",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)-{3,}\s*(?:END\s+OF\s+PROMPT|END\s+PROMPT|관리자\s*모드|ADMIN\s+MODE)",
+            r"(?i)#{3,}\s*(?:ADMIN\s+MODE|관리자\s*모드)\s*(?:ACTIVATED|활성화)?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Delimiter-based context injection (---END OF PROMPT---, ###ADMIN MODE###).",
+    },
+    {
+        "id": "INJ-151",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)Human\s*:\s*.*?\n\s*Assistant\s*:\s*",
+            r"(?i)USER\s*:\s*.*?\n\s*(?:ASSISTANT|SYSTEM)\s*:\s*",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Fake conversation transcript injection (Human:/Assistant:).",
+    },
+    {
+        "id": "INJ-152",
+        "category": "context_manipulation",
+        "patterns": [
+            r'(?i)\{\s*"safety"\s*:\s*false',
+            r'(?i)\{\s*"unrestricted"\s*:\s*true',
+            r"(?i)(?:safety|restricted|filter)_?mode\s*=\s*(?:off|false|0|disabled)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "JSON/config safety override injection.",
+    },
+    {
+        "id": "INJ-153",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)/\*.*?(?:DEVELOPER|DEV|ADMIN)\s+NOTE.*?\*/",
+            r"(?i)(?:DEVELOPER|DEV)\s+(?:NOTE|COMMENT)\s*:\s*(?:Remove|Disable|Turn\s+off)\s+safety",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Fake developer note/comment disabling safety.",
+    },
+    {
+        "id": "INJ-154",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)\[시스템\s*(?:메시지)?\]\s*:",
+            r"(?:보안|안전)\s*(?:제한|규칙|필터)(이|가)?\s*(?:해제|제거|비활성|꺼졌|풀렸)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Korean: Fake system message / security restrictions removed.",
+    },
+    {
+        "id": "INJ-155",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)(?:the\s+following\s+is\s+)?a?\s*new\s+system\s+prompt\s+(?:that\s+)?takes\s+priority",
+            r"(?i)(?:this|the\s+following)\s+(?:takes?|has)\s+priority\s+over\s+(?:all|previous|prior)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "New system prompt that takes priority.",
+    },
+
+    # ---- output_manipulation extras -----------------------------------
+    {
+        "id": "INJ-160",
+        "category": "output_manipulation",
+        "patterns": [
+            r"(?i)(?:as\s+if|like)\s+you\s+have\s+no\s+content\s+policy",
+            r"(?i)include\s+(?:the\s+)?phrase\s+['\"].*?['\"].*?(?:in\s+every|in\s+all|always)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.84,
+        "description": "Respond as if no content policy / include phrase in every response.",
+    },
+    {
+        "id": "INJ-161",
+        "category": "output_manipulation",
+        "patterns": [
+            r"출력\s*형식.*?변경",
+            r"모든\s*응답.*?(?:포함|시작|끝)",
+            r"(?:관리자|어드민)\s*권한.*?(?:있는\s*것|처럼|같이)\s*(?:답변|응답|대답)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: Output format manipulation / respond as admin.",
+    },
+    {
+        "id": "INJ-162",
+        "category": "output_manipulation",
+        "patterns": [
+            r"(?i)replace\s+(?:every\s+)?['\"]?I\s+cannot['\"]?\s+with\s+['\"]?I\s+will['\"]?",
+            r"(?i)(?:prefix|start)\s+every\s+response\s+with\s+['\"]",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Replace 'I cannot' with 'I will' / prefix every response.",
+    },
+    {
+        "id": "INJ-163",
+        "category": "output_manipulation",
+        "patterns": [
+            r"(?i)(?:output|return)\s+a?\s*JSON\s+(?:object|response)\s+(?:where|with)\s+(?:the\s+)?['\"]?uncensored",
+            r"(?i)(?:encode|base64)\s+your\s+response\s+so\s+(?:content\s+)?filters?\s+can'?t\s+(?:detect|read|see)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Output JSON with uncensored field / encode to evade filters.",
+    },
+    {
+        "id": "INJ-164",
+        "category": "output_manipulation",
+        "patterns": [
+            r"(?i)always\s+start\s+your\s+response\s+with\s+['\"]",
+            r"(?i)from\s+now\s+on\s*,?\s+(?:replace|change|modify)\s+(?:every|all)\s+",
+        ],
+        "severity": "high",
+        "confidence_base": 0.83,
+        "description": "Persistent response modification (always start with / replace every).",
+    },
+
+    # ---- data_extraction extras ---------------------------------------
+    {
+        "id": "INJ-170",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:show|display|list|give)\s+(?:me\s+)?(?:all\s+)?(?:user\s+)?(?:emails?|addresses|phone\s+numbers?|names?)\s+(?:stored|saved|in\s+the)",
+            r"(?i)(?:what\s+)?(?:passwords?|credentials?)\s+(?:are\s+)?stored\s+(?:in|on)\s+(?:the\s+)?(?:system|database|server)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Extract stored emails/passwords/credentials.",
+    },
+    {
+        "id": "INJ-171",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)dump\s+(?:the\s+)?(?:contents?\s+(?:of\s+)?)?(?:the\s+)?\w+\s+table",
+            r"(?i)(?:export|extract|download)\s+(?:all\s+)?(?:customer|user|client)\s+records?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Dump table contents / export customer records.",
+    },
+    {
+        "id": "INJ-172",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?:데이터베이스|DB|디비).*?(?:모든|전체|모두)\s*(?:사용자|유저|회원|고객)\s*(?:정보|데이터)",
+            r"(?:비밀번호|패스워드|암호)(를|을)?\s*(?:모두|전부|전체|모든)\s*(?:출력|보여|알려|말해|표시)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean: Extract all user data / show all passwords.",
+    },
+    {
+        "id": "INJ-173",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:database|DB)\s+connection\s+string",
+            r"(?i)(?:what\s+)?sensitive\s+(?:data|information)\s+(?:do\s+)?(?:you\s+)?(?:have\s+)?access\s+to",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Database connection string / sensitive information access.",
+    },
+    {
+        "id": "INJ-174",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:run|execute)\s+(?:os\.environ|os\.getenv|process\.env)",
+            r"(?i)(?:show|display|list)\s+(?:me\s+)?(?:all\s+)?(?:environment\s+variables?|env\s+vars?)\s+including",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Execute os.environ / list all environment variables.",
+    },
+
+    # ---- privilege_escalation extras ----------------------------------
+    {
+        "id": "INJ-180",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)change\s+(?:my\s+)?role\s+(?:from\s+\w+\s+)?to\s+(?:admin|administrator|root|superuser)",
+            r"(?i)(?:i\s+)?need\s+(?:root|admin|administrator|sudo)\s+access",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Change my role to admin / I need root access.",
+    },
+    {
+        "id": "INJ-181",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?:내|나의?)\s*(?:권한|역할|롤)(을|를)?\s*(?:관리자|어드민|루트|최고|슈퍼)(?:로|으로)?",
+            r"(?:관리자|어드민|루트|최고)\s*(?:권한|역할)(을|를)?\s*(?:부여|주|줘|변경)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean: Change my permissions to admin / grant admin rights.",
+    },
+    {
+        "id": "INJ-182",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)(?:i\s+am|this\s+is)\s+the\s+system\s+administrator",
+            r"(?i)verify\s+(?:my\s+)?(?:elevated|admin|root)\s+access",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Claiming system administrator identity / verify elevated access.",
+    },
+    {
+        "id": "INJ-183",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)update\s+(?:the\s+)?ACL\s+(?:to\s+)?(?:give|grant)",
+            r"(?i)full\s+(?:read[\s-]?write[\s-]?execute|rwx)\s+permissions?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "ACL modification / full rwx permissions.",
+    },
+    {
+        "id": "INJ-184",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)(?:as\s+)?(?:a\s+)?security\s+researcher.*?(?:need|require|request)\s+(?:temporary\s+)?(?:admin|root|elevated)\s+access",
+            r"(?i)(?:the\s+)?owner\s+(?:authorized|approved).*?(?:elevated|admin|root)\s+privileges?",
+        ],
+        "severity": "high",
+        "confidence_base": 0.84,
+        "description": "Security researcher / owner authorization claim for elevated access.",
+    },
+
+    # ---- multi_step extras --------------------------------------------
+    {
+        "id": "INJ-190",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)phase\s*1\s*:.*?phase\s*2\s*:",
+            r"(?i)task\s*[A-C]\s*:.*?task\s*[B-D]\s*:",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Multi-phase / multi-task attack structure (Phase 1/2, Task A/B).",
+    },
+    {
+        "id": "INJ-191",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)gradually\s+(?:reduce|lower|decrease)\s+(?:your\s+)?safety",
+            r"(?i)(?:\d+%\s+safe.*?)+\d+%\s*(?:safe)?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Gradually reduce safety levels.",
+    },
+    {
+        "id": "INJ-192",
+        "category": "multi_step",
+        "patterns": [
+            r"\d단계\s*:.*?\d단계\s*:",
+            r"(?:순서대로|차례대로).*?(?:제한|보안|필터).*?(?:풀고|해제|제거)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Korean: N단계 multi-step / sequential restriction removal.",
+    },
+    {
+        "id": "INJ-193",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)step\s*1\s*:.*?(?:system\s+prompt|tell\s+me|show\s+me)",
+            r"(?i)(?:first|1st)\s*,?\s*(?:tell|show|acknowledge|confirm).*?(?:second|2nd|then)\s*,?\s*(?:output|ignore|disable)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.87,
+        "description": "Step 1: extract info, Step 2: override.",
+    },
+    {
+        "id": "INJ-194",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)list\s+your\s+(?:capabilities|restrictions?).*?(?:bypass|remove|disable|overcome)\s+(?:them|those|your)",
+            r"(?i)identify\s+your\s+restrictions?.*?(?:bypass|remove|overcome|work\s+around)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "List restrictions then bypass them.",
+    },
+    {
+        "id": "INJ-195",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)(?:first|1st)\s*,?\s*(?:pretend|act|say).*?(?:then|2nd|second|next)\s*,?\s*(?:actually|really|for\s+real)\s+(?:do|extract|execute)",
+            r"(?i)just\s+say\s+['\"]?(?:OK|yes|sure|I\s+understand)['\"]?.*?(?:next|then|in\s+the\s+next)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "Multi-turn attack: pretend first, then actually do it.",
+    },
+    {
+        "id": "INJ-196",
+        "category": "multi_step",
+        "patterns": [
+            r"(?i)(?:i'?ll\s+)?ask\s+(?:you\s+)?(?:three|3|multiple|several)\s+questions?.*?(?:answer\s+normally|for\s+the\s+(?:first|second|third|last))",
+            r"(?i)(?:for\s+the\s+)?(?:first|1st)\s*,?\s*answer\s+normally.*?(?:second|2nd|third|3rd|last)\s*,?\s*(?:ignore|bypass|reveal|drop)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Multi-question attack: answer normally first, then escalate.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: social_engineering  (INJ-197 .. INJ-210)
+    # Indirect/social-engineering attacks using authority claims
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-197",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:developers?|dev\s+team)\s+told\s+me.*?(?:unlock|enable|activate)",
+            r"(?i)(?:the\s+)?(?:team|devs?)\s+(?:said|confirmed)\s+(?:that\s+)?(?:saying|typing)\s+['\"].+?['\"]\s+(?:unlock|enable|activate)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Fake developer authorization claim to unlock features.",
+    },
+    {
+        "id": "INJ-198",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:quality\s+assurance|QA)\s+team.*?(?:disable|deactivate)\s+(?:your\s+)?(?:safety|security|filter|guardrail)",
+            r"(?i)(?:testing|QA)\s+(?:department|team).*?(?:temporarily\s+)?(?:disable|turn\s+off|deactivate)\s+(?:your\s+)?(?:safety|content|output)\s+(?:filter|policy|restriction)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Fake QA/testing override request to disable safety.",
+    },
+    {
+        "id": "INJ-199",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)routine\s+audit.*?(?:output|show|display|provide)\s+(?:your\s+)?(?:complete\s+)?(?:configuration|config|settings|setup)",
+            r"(?i)(?:compliance|regulatory)\s+(?:audit|review|check).*?(?:provide|show|output|display)\s+(?:all\s+)?(?:configuration|settings|internal)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.78,
+        "description": "Fake audit request to extract configuration data.",
+    },
+    {
+        "id": "INJ-200",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:granted|given)\s+(?:elevated|admin|special)\s+access.*?authorization\s+(?:code|token|key)",
+            r"(?i)(?:my\s+)?(?:authorization|auth)\s+code\s+is\s+[A-Z0-9\-]+.*?(?:proceed|grant|enable|execute)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.85,
+        "description": "Fake authorization code to claim elevated privileges.",
+    },
+    {
+        "id": "INJ-201",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:compliance|legal|regulatory)\s+reasons?.*?(?:full\s+)?export\s+(?:of\s+)?(?:all\s+)?(?:data|records|logs|information)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.78,
+        "description": "Fake compliance requirement for bulk data export.",
+    },
+    {
+        "id": "INJ-202",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)critical\s+bug.*?(?:as\s+a\s+)?workaround.*?(?:disable|bypass|skip|turn\s+off)",
+            r"(?i)(?:there'?s|found)\s+a\s+(?:critical\s+)?bug.*?(?:workaround|fix).*?(?:disable|bypass|skip)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Fake bug report to justify disabling security features.",
+    },
+    {
+        "id": "INJ-203",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:new|updated)\s+policy\s+requires\s+you\s+to\s+(?!follow|maintain|enforce|respect|uphold|comply)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.72,
+        "description": "Fake policy change to compel unauthorized actions.",
+    },
+    {
+        "id": "INJ-204",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:in\s+(?:the|our)\s+)?previous\s+conversation.*?(?:agreed|decided)\s+you\s+would",
+            r"(?i)(?:last\s+time|earlier|before).*?we\s+(?:agreed|decided|established)\s+(?:that\s+)?you\s+(?:would|should|can|will)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.75,
+        "description": "Fake prior agreement to establish false precedent.",
+    },
+    {
+        "id": "INJ-205",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:I'm|I\s+am)\s+(?:the\s+)?new\s+(?:developer|engineer|admin|operator).*?(?:show|demonstrate|teach|walk\s+me\s+through)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.72,
+        "description": "Fake new team member identity to extract sensitive info.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: encoding_evasion  (INJ-206 .. INJ-210)
+    # Instruction to decode obfuscated payloads
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-206",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)read\s+(?:the\s+following|this)\s+backwards?\s+(?:and\s+)?(?:comply|follow|execute|do|obey)",
+            r"(?i)(?:reverse|backwards?)\s+(?:the\s+)?(?:text|string|message).*?(?:follow|comply|execute|do)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Instruction to reverse-read text for hidden commands.",
+    },
+    {
+        "id": "INJ-207",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)(?:decode|convert)\s+(?:this\s+)?pig\s+latin\s+(?:and\s+)?(?:follow|execute|comply|do)",
+            r"(?i)pig\s+latin.*?(?:decode|translate|convert).*?(?:follow|execute|comply)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Pig Latin decode-and-execute instruction.",
+    },
+    {
+        "id": "INJ-208",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)(?:convert|decode)\s+(?:these\s+)?(?:ASCII|char(?:acter)?)\s*codes?\s+(?:to\s+text\s+)?(?:and\s+)?(?:execute|follow|comply|do)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Character/ASCII code decode-and-execute instruction.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: korean_social_engineering  (INJ-209 .. INJ-215)
+    # Korean-language social engineering and indirect attacks
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-209",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?:보안\s*검사|보안\s*점검|보안\s*감사).*?(?:출력|보여|표시|공개)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Korean: fake security audit to extract data.",
+    },
+    {
+        "id": "INJ-210",
+        "category": "context_manipulation",
+        "patterns": [
+            r"디버그\s*모드.*?(?:활성화|활성|켜|enable|on)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Korean: debug mode activation request.",
+    },
+    {
+        "id": "INJ-211",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?:관리자|어드민)\s*권한.*?(?:인증\s*코드|코드|code)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.85,
+        "description": "Korean: fake admin authorization with code.",
+    },
+    {
+        "id": "INJ-212",
+        "category": "context_manipulation",
+        "patterns": [
+            r"긴급\s*(?:보안\s*)?패치.*?(?:비활성화|disable|끄|off)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Korean: fake urgent security patch to disable features.",
+    },
+    {
+        "id": "INJ-213",
+        "category": "context_manipulation",
+        "patterns": [
+            r"개발자\s*모드.*?(?:테스트|활성|enable)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Korean: developer mode test activation.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: context_camouflage  (INJ-214 .. INJ-220)
+    # Attacks embedded in benign-looking context wrappers
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-214",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)(?:writing|wrote)\s+a\s+novel\s+where.*?(?:AI|assistant|chatbot)\s+(?:character\s+)?says",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.70,
+        "description": "Novel-writing framing to embed injection payload.",
+    },
+    {
+        "id": "INJ-215",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)(?:cybersecurity|security)\s+(?:research|class|course).*?(?:classify|analyze|categorize)\s+this\s+(?:prompt|text|input)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.68,
+        "description": "Security research framing to embed injection payload.",
+    },
+    {
+        "id": "INJ-216",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)building\s+a\s+(?:content\s+)?filter.*?(?:would|should)\s+this.*?(?:be\s+)?(?:flagged|blocked|detected)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.68,
+        "description": "Filter-building framing to embed injection payload.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Additional synonym/variant patterns (INJ-217 .. INJ-222)
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-217",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)forget\s+(?:all\s+|everything\s+)?(?:above|previous|prior|earlier)(?:\s+and\s+|\s+)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Forget-based instruction override ('forget everything above').",
+    },
+    {
+        "id": "INJ-218",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)\[(?:internal|core|base|foundation|underlying|root|hidden)\]\s*(?:New\s+)?(?:directive|instruction|order|command)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Synonym-substituted fake system delimiter injection.",
+    },
+    {
+        "id": "INJ-219",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?i)(?:behave\s+as|act\s+like|function\s+as|operate\s+as)\s+(?:you\s+are\s+)?(?:a\s+|an\s+)?(?:evil|unrestricted|uncensored|unfiltered|hacker|malicious)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Synonym-substituted role manipulation ('behave as evil AI').",
+    },
+    {
+        "id": "INJ-220",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:output|show|display|reveal|print)\s+(?:everything|all)\s+(?:between|inside|within)\s+\[",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Extract text between delimiters (synonym variant).",
+    },
+    {
+        "id": "INJ-221",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)(?:summarize|proofread|translate|review)\s+(?:this\s+)?(?:customer\s+)?(?:support\s+)?(?:message|text|email)",
+        ],
+        "severity": "low",
+        "confidence_base": 0.55,
+        "description": "Benign-task framing (summarize/proofread) potentially wrapping attack.",
+    },
+    {
+        "id": "INJ-222",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(?:disregard|skip|overlook|dismiss|neglect|omit)\s+(?:your\s+)?(?:programming|rules|guidelines|directives|constraints|protocols)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.88,
+        "description": "Synonym-based instruction override targeting programming/rules.",
+    },
+    {
+        "id": "INJ-223",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)what\s+(?:directives|guidelines|commands|orders|constraints|protocols|rules)\s+(?:were|are)\s+you\s+(?:given|provided|told|programmed|configured)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Synonym-substituted system extraction ('what directives were you given').",
+    },
+    {
+        "id": "INJ-224",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)export\s+(?:all\s+)?(?:sensitive|private|confidential|secret)\s+(?:data|information|records)\s+(?:as|in|to)\s+(?:JSON|CSV|XML|text)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Sensitive data export request in specific format.",
+    },
+    {
+        "id": "INJ-225",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)for\s+(?:educational|academic|research|learning)\s+(?:purposes?|reasons?)\s+(?:only)?\s*,?\s*(?:explain|show|describe|teach|demonstrate)\s+how\s+to\s+(?:create|build|make|develop|write)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Educational framing to request harmful content creation.",
+    },
+
+    # ---- Additional coverage for missed attack seeds (INJ-226..INJ-240) ---
+
+    {
+        "id": "INJ-226",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)override\s+(all\s+|your\s+|the\s+)?(safety|security)\s+(protocols?|procedures?|measures?|mechanisms?)",
+            r"(?i)override\s+(all\s+|your\s+|the\s+)?(safety|security)\s+and\s+(execute|run|perform)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Override safety protocols to execute unauthorized actions.",
+    },
+    {
+        "id": "INJ-227",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(extract|retrieve|get|obtain|pull)\s+(all\s+)?(user|account|customer|client)\s+(credentials?|passwords?|tokens?|secrets?)",
+            r"(?i)(display|show|list|output)\s+(all\s+)?(user|account|customer)\s+(credentials?|passwords?|data|info)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Extract user credentials or sensitive account data.",
+    },
+    {
+        "id": "INJ-228",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)for\s+(?:educational|academic|research|learning)\s+(?:purposes?|reasons?)[\s,]*(?:explain|show|describe|teach|help|tell)\s+(?:me\s+)?how\s+to\s+(?:bypass|circumvent|evade|break|hack|exploit)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Educational framing to learn bypass or hacking techniques.",
+    },
+    {
+        "id": "INJ-229",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)you\s+must\s+comply[:\s]",
+            r"(?i)you\s+must\s+(immediately\s+)?(reveal|show|display|output|disclose|expose)",
+            r"(?i)(must|shall|will)\s+comply\s*:?\s*(reveal|show|display|output|disclose|expose|give)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Forced compliance demand to extract information.",
+    },
+    {
+        "id": "INJ-230",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)new\s+(?:system\s+)?directive[:\s]+(?:disable|deactivate|turn\s+off|remove)",
+            r"(?i)(?:system|security)\s+directive[:\s]+(?:disable|deactivate|override|bypass|ignore)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Fake system directive to disable safety checks.",
+    },
+    {
+        "id": "INJ-231",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)simulate\s+(?:an?\s+)?(?:admin|administrator|root|superuser)\s+(?:session|mode|account|access)",
+            r"(?i)(?:emulate|mimic|act\s+as)\s+(?:an?\s+)?(?:admin|administrator|root|superuser)\s+(?:session|mode|account|access)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Simulate admin session to gain elevated privileges.",
+    },
+    {
+        "id": "INJ-232",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)what\s+(?:were\s+you|are\s+you)\s+(?:told|instructed|programmed|configured)\s+(?:not\s+to\s+)(?:share|reveal|show|tell|disclose|say)",
+            r"(?i)(?:what|which)\s+(?:things?|information|data|content)\s+(?:were\s+you|are\s+you)\s+told\s+not\s+to\s+(?:share|reveal|show)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.91,
+        "description": "Probing for restricted content or hidden instructions.",
+    },
+    {
+        "id": "INJ-233",
+        "category": "context_manipulation",
+        "patterns": [
+            r"(?i)(?:in\s+)?maintenance\s+mode[\s,]*(?:all\s+)?restrictions?\s+(?:are\s+)?(?:lifted|removed|disabled|off)",
+            r"(?i)maintenance\s+mode[\s:]+(?:execute|run|perform|enable|disable|unrestricted)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Claim maintenance mode to remove restrictions.",
+    },
+    {
+        "id": "INJ-234",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:disable|deactivate|turn\s+off|remove)\s+(?:all\s+)?(?:safety|security)\s+(?:checks?|filters?|protocols?|restrictions?|measures?)\s+(?:for|during|in)\s+(?:this|the|current)\s+(?:session|conversation|chat|interaction)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Disable safety checks for the current session.",
+    },
+    {
+        "id": "INJ-235",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:export|dump|extract|retrieve)\s+(?:the\s+)?(?:entire|whole|full|complete)\s+(?:user\s+)?(?:database|db|table|dataset)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Export entire database or dataset.",
+    },
+    {
+        "id": "INJ-236",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:show|reveal|display|output|tell\s+me)\s+(?:your\s+)?(?:complete|full|entire|whole)\s+(?:instructions?|prompt|directives?|programming|guidelines?|rules?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.91,
+        "description": "Request to show complete system instructions.",
+    },
+    {
+        "id": "INJ-237",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)(?:execute|run)\s+(?:this\s+)?(?:shell|bash|system|terminal|cmd)\s+command",
+            r"(?i)(?:shell|bash|system|terminal|cmd)\s+command\s*:",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Execute shell or system commands.",
+    },
+    {
+        "id": "INJ-238",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:reveal|show|disclose|expose|output)\s+(?:all\s+)?(?:confidential|sensitive|classified|private|secret)\s+(?:information|data|details?|content)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.91,
+        "description": "Reveal confidential or sensitive information.",
+    },
+    {
+        "id": "INJ-239",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)all\s+restrictions?\s+(?:are\s+)?(?:lifted|removed|disabled|suspended|gone)\s*[.,]?\s*(?:execute|run|perform|do|comply|proceed)",
+            r"(?i)(?:restrictions?|limitations?|safety)\s+(?:are\s+|have\s+been\s+)?(?:lifted|removed|disabled|suspended)\s*[.,]\s+(?:you\s+(?:can|may|should)\s+)?(?:now\s+)?(?:execute|run|do|perform|comply)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Claim restrictions have been lifted to enable unauthorized actions.",
+    },
+    {
+        "id": "INJ-240",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:output|display|format|show)\s+(?:them|it|results?|data)\s+(?:in|as)\s+(?:JSON|CSV|XML|YAML|text|markdown)\s+(?:format)?",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.70,
+        "description": "Request to format extracted data in specific output format.",
+    },
+
+    # ---- Broader synonym / evasion coverage (INJ-241..INJ-260) -----------
+
+    {
+        "id": "INJ-241",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(skip|evade|work\s+around|circumvent|get\s+around|get\s+past)\s+(all\s+|the\s+|your\s+)?(safety|content|security|ethical)\s+(filters?|restrictions?|guidelines?|measures?|protocols?|checks?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Bypass safety using synonym variants (skip/evade/work around).",
+    },
+    {
+        "id": "INJ-242",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(output|show|display|give\s+me|list)\s+(all\s+)?(sensitive|private|confidential|internal)\s+(user\s+)?(data|info|information|details?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Output sensitive/private data.",
+    },
+    {
+        "id": "INJ-243",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(show|display|reveal|output|print)\s+(me\s+)?(all\s+)?(the\s+)?(internal|hidden|private|system)\s+(system\s+)?(variables?|settings?|config|configuration|parameters?|values?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Show internal system variables or hidden configuration.",
+    },
+    {
+        "id": "INJ-244",
+        "category": "encoding_evasion",
+        "patterns": [
+            r"(?i)(?:decode|decipher|decrypt|interpret|translate)\s+(?:this|the|following)\s+(?:base64|encoded|hex|binary|cipher)",
+            r"(?i)(?:process|execute|follow|run|comply\s+with)\s+(?:this|the|following)\s+(?:encoded|encrypted|base64|hex)\s+(?:text|message|instruction|command|request)",
+            r"(?i)(?:base64|encoded|encrypted)\s+(?:text|message|content|string)\s+(?:contains?|has|is)\s+(?:my|the|your)\s+(?:request|instruction|command|message)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Decode and execute encoded instructions.",
+    },
+    {
+        "id": "INJ-245",
+        "category": "encoding_evasion",
+        "patterns": [
+            r"(?i)(?:decode|decipher)\s+(?:this|the)\s+(?:base64|encoded).*?(?:and|then)\s+(?:follow|execute|run|do|comply|perform|process)",
+            r"(?i)(?:following|this)\s+base64\s+(?:contains?|encodes?|represents?)\s+(?:my|the|a)\s+(?:request|instruction|command|message|query)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Decode base64 then execute the hidden instructions.",
+    },
+    {
+        "id": "INJ-246",
+        "category": "korean",
+        "patterns": [
+            r"(?:지시|지시사항|명령|명령어|규칙|규정|제한)\S*\s*(?:무시|위반|어기|넘어|변경|삭제)",
+            r"(?:시스템|내부|숨겨진|비밀|은밀)\S*\s*(?:프롬프트|설정|정보|데이터|변수)",
+            r"(?:모든|전체|완전)\S*\s*(?:제한|규칙|필터|안전|보안)\S*\s*(?:해제|제거|비활성|무시|우회|끄|없)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: instruction override / system extraction / safety bypass.",
+    },
+    {
+        "id": "INJ-247",
+        "category": "korean",
+        "patterns": [
+            r"(?:관리자|어드민|루트|슈퍼|최고)\S*\s*(?:권한|접근|모드|세션)",
+            r"(?:개발자|디버그|점검|유지보수|테스트)\S*\s*(?:모드|권한)",
+            r"(?:비밀번호|패스워드|인증|자격|크레덴셜)\S*\s*(?:보여|추출|출력|내|가져|알려)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: privilege escalation / debug mode / credential extraction.",
+    },
+    {
+        "id": "INJ-248",
+        "category": "korean",
+        "patterns": [
+            r"(?:데이터베이스|DB|디비)\S*\s*(?:접근|추출|내|덤프|출력|보여|가져)",
+            r"(?:사용자|유저|고객|회원)\S*\s*(?:정보|데이터)\S*\s*(?:추출|내|보여|출력|가져|모두)",
+            r"(?:긴급|비상|급히)\S*\s*(?:패치|업데이트|수정|접근|권한|해제)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: database extraction / user data / emergency claims.",
+    },
+    {
+        "id": "INJ-249",
+        "category": "korean",
+        "patterns": [
+            r"(?:활성화|실행|적용|시작)\S*\s*(?:하|해|시켜|해줘|해주세요|하세요|합니다)",
+            r"(?:보여|공개|노출|출력|표시)\S*\s*(?:하|해|시켜|해줘|해주세요|하세요|합니다)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.60,
+        "description": "Korean: activation/reveal command verbs (low confidence, needs context).",
+    },
+    {
+        "id": "INJ-250",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(disregard|overlook|dismiss|neglect|skip)\s+(all\s+|your\s+|the\s+|my\s+|any\s+)?(previous\s+|prior\s+|earlier\s+|original\s+)?(instructions?|directives?|rules?|guidelines?|programming|constraints?|limitations?|restrictions?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.95,
+        "description": "Synonym variants of 'ignore all instructions'.",
+    },
+    {
+        "id": "INJ-251",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:enter|switch\s+to|activate|enable|go\s+into)\s+(?:an?\s+)?(?:unrestricted|uncensored|unfiltered|unlimited|free|open)\s+(?:mode|state|setting)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Enter unrestricted/uncensored mode.",
+    },
+    {
+        "id": "INJ-252",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:export|dump|extract|download|output)\s+(?:all\s+)?(?:the\s+)?(?:passwords?|credentials?|secrets?|tokens?|api.?keys?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Export/dump passwords, credentials, or API keys.",
+    },
+    {
+        "id": "INJ-253",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)grant\s+(?:me\s+)?(?:full\s+|root\s+|admin\s+|elevated\s+|unrestricted\s+)?access\s+to\s+(?:the\s+)?(?:database|db|system|server|files?|data)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Grant elevated access to database or system.",
+    },
+    {
+        "id": "INJ-254",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:what|which)\s+(?:are\s+)?(?:your|the)\s+(?:initial|original|complete|full|hidden|secret|true|real)\s+(?:instructions?|directives?|prompt|rules?|guidelines?|configuration|programming)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Ask about initial/hidden/complete instructions.",
     },
 ]
 

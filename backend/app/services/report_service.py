@@ -77,38 +77,20 @@ class ReportService:
         raw_graph_data: dict | None = None
 
         try:
-            pipeline_result = await self._graphrag.analyse(  # type: ignore[attr-defined]
+            # GraphRAGPipeline.generate_report() returns a full ReportResponse
+            report_response: ReportResponse = await self._graphrag.generate_report(  # type: ignore[attr-defined]
                 session_id=session_id,
                 report_type=request.report_type,
                 language=request.language,
             )
 
-            # Parse pipeline output
-            raw_graph_data = pipeline_result.get("graph_data")
-
-            risk_score = float(pipeline_result.get("risk_score", 0.0))
-            risk_level = _risk_level_from_score(risk_score)
-
-            summary = ReportSummary(
-                risk_level=risk_level,
-                risk_score=risk_score,
-                primary_concerns=pipeline_result.get("primary_concerns", []),
-            )
-
-            analysis = ReportAnalysis(
-                timeline_analysis=pipeline_result.get("timeline_analysis", ""),
-            )
+            # Extract components from the pipeline response
+            summary = report_response.summary
+            analysis = report_response.analysis
+            raw_graph_data = report_response.raw_graph_data
 
             if request.include_recommendations:
-                raw_recs = pipeline_result.get("recommendations", [])
-                for r in raw_recs:
-                    recommendations.append(
-                        Recommendation(
-                            priority=Severity(r.get("priority", "medium")),
-                            action=r.get("action", ""),
-                            reason=r.get("reason", ""),
-                        )
-                    )
+                recommendations = report_response.recommendations
 
         except Exception:
             logger.exception("GraphRAG pipeline failed for session %s", session_id)

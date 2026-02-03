@@ -54,7 +54,7 @@ export default function APIKeysPage() {
         name,
         permissions: selectedPerms,
       });
-      setCreatedKey(res.key);
+      setCreatedKey(res.key ?? '');
       setKeys((prev) => [res, ...prev]);
       setName('');
       setSelectedPerms([]);
@@ -176,7 +176,7 @@ export default function APIKeysPage() {
                     {formatDate(key.created_at)}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {key.last_used ? formatDate(key.last_used) : 'Never'}
+                    {key.last_used_at ? formatDate(key.last_used_at) : 'Never'}
                   </TableCell>
                   <TableCell>
                     <Badge variant={key.is_active ? 'low' : 'critical'}>

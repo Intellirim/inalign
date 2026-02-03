@@ -2,14 +2,18 @@
 Scan service for input (injection) and output (PII) detection.
 
 Orchestrates the detection pipeline, computes risk scores, and returns
-structured responses with latency metrics.
+structured responses with latency metrics.  Integrates Graph RAG for
+adaptive threat detection that improves over time.
 """
 
 from __future__ import annotations
 
 import logging
 import time
+from typing import Optional
 from uuid import uuid4
+
+from neo4j import AsyncSession
 
 from app.schemas.common import RiskLevel
 from app.schemas.scan import (
@@ -49,15 +53,22 @@ def _recommendation_from_score(score: float) -> str:
 
 
 class ScanService:
-    """Stateless service that scans agent inputs and outputs for threats."""
+    """Stateless service that scans agent inputs and outputs for threats.
+
+    When a Neo4j session is provided, the service additionally:
+    - Queries the attack knowledge graph for similar known attacks (Graph RAG)
+    - Stores every scan result in the knowledge graph for future learning
+    """
 
     def __init__(
         self,
         injection_detector: object,
         pii_detector: object,
+        neo4j_session: Optional[AsyncSession] = None,
     ) -> None:
         self._injection_detector = injection_detector
         self._pii_detector = pii_detector
+        self._neo4j = neo4j_session
 
     # ------------------------------------------------------------------
     # Input scanning (prompt injection / jailbreak detection)
@@ -96,6 +107,41 @@ class ScanService:
             logger.exception("Injection detection failed for request %s", request_id)
             threats = []
 
+        # Run Graph RAG detection (if Neo4j available) ----------------------
+        graph_threats: list[dict] = []
+        if self._neo4j is not None and not threats:
+            # Only query graph if regex didn't catch anything —
+            # this is where Graph RAG shines: catching what regex misses
+            try:
+                from app.detectors.injection.graph_detector import GraphDetector
+                graph_det = GraphDetector(self._neo4j)
+                graph_threats = await graph_det.detect(request.text)
+                if graph_threats:
+                    threats.extend(graph_threats)
+                    logger.info(
+                        "GraphRAG found %d additional threat(s) for request %s",
+                        len(graph_threats), request_id,
+                    )
+            except Exception:
+                logger.warning("GraphRAG detection failed for request %s", request_id, exc_info=True)
+
+        # Run LLM classifier (only if regex + Graph RAG both missed) ----------
+        llm_threats: list[dict] = []
+        if not threats:
+            try:
+                from app.detectors.injection.llm_classifier import LLMClassifier
+                llm_clf = LLMClassifier()
+                if llm_clf.enabled:
+                    llm_threats = await llm_clf.classify(request.text)
+                    if llm_threats:
+                        threats.extend(llm_threats)
+                        logger.info(
+                            "LLM classifier found %d threat(s) for request %s",
+                            len(llm_threats), request_id,
+                        )
+            except Exception:
+                logger.warning("LLM classifier failed for request %s", request_id, exc_info=True)
+
         # Compute aggregate risk score ----------------------------------------
         if threats:
             risk_score = round(max(t.get("confidence", 0.0) for t in threats), 4)
@@ -129,13 +175,38 @@ class ScanService:
 
         action_taken = "blocked" if recommendation == "block" else "logged"
 
+        # Store result in attack knowledge graph (async, non-blocking) ------
+        if self._neo4j is not None:
+            try:
+                from app.services.attack_knowledge_service import AttackKnowledgeService
+                from app.detectors.injection.normalizer import normalise
+                knowledge = AttackKnowledgeService(self._neo4j)
+                text_normalized = normalise(request.text)
+                metadata = getattr(request, "metadata", {}) or {}
+                await knowledge.store_scan_result(
+                    text=request.text,
+                    text_normalized=text_normalized,
+                    detected=not is_safe,
+                    risk_score=risk_score,
+                    risk_level=risk_level.value,
+                    threats=[t for t in threats],
+                    recommendation=recommendation,
+                    category=metadata.get("category", ""),
+                    mutation_type=metadata.get("mutation", ""),
+                    source=metadata.get("source", "api"),
+                )
+            except Exception:
+                logger.warning("Failed to store scan result in knowledge graph", exc_info=True)
+
         logger.info(
-            "scan_input  request_id=%s  risk=%.4f  level=%s  rec=%s  latency=%.1fms",
+            "scan_input  request_id=%s  risk=%.4f  level=%s  rec=%s  latency=%.1fms  graph_threats=%d  llm_threats=%d",
             request_id,
             risk_score,
             risk_level.value,
             recommendation,
             latency_ms,
+            len(graph_threats),
+            len(llm_threats),
         )
 
         return ScanInputResponse(

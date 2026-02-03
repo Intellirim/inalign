@@ -13,7 +13,7 @@ from agentshield import AgentShield
 
 # Initialize the client
 client = AgentShield(
-    api_key=os.environ.get("AGENTSHIELD_API_KEY", "your-api-key"),
+    api_key=os.environ.get("AGENTSHIELD_API_KEY", "ask_your-api-key"),
     base_url=os.environ.get("AGENTSHIELD_BASE_URL", "https://api.agentshield.io"),
 )
 
@@ -35,24 +35,15 @@ def main() -> None:
         metadata={"channel": "web", "user_tier": "premium"},
     )
 
-    print(f"    Safe: {scan_result.is_safe}")
+    print(f"    Safe: {scan_result.safe}")
     print(f"    Risk Level: {scan_result.risk_level}")
     print(f"    Risk Score: {scan_result.risk_score}")
+    print(f"    Recommendation: {scan_result.recommendation}")
 
     if scan_result.threats:
         print("    Threats detected:")
         for threat in scan_result.threats:
             print(f"      - {threat.type} (severity: {threat.severity}, confidence: {threat.confidence})")
-
-    if scan_result.pii_detected:
-        print("    PII detected:")
-        for pii in scan_result.pii_detected:
-            print(f"      - {pii.type}: {pii.value}")
-
-    if scan_result.recommendations:
-        print("    Recommendations:")
-        for rec in scan_result.recommendations:
-            print(f"      - {rec}")
 
     # ----------------------------------------------------------------
     # Step 2: Log agent actions
@@ -71,13 +62,17 @@ def main() -> None:
     )
 
     print(f"    Action ID: {action_result.action_id}")
-    print(f"    Status: {action_result.status}")
-    print(f"    Anomalous: {action_result.is_anomalous}")
+    print(f"    Logged: {action_result.logged}")
+    print(f"    Anomaly Detected: {action_result.anomaly_detected}")
+    print(f"    Session Risk Score: {action_result.session_risk_score}")
 
     if action_result.anomalies:
         print("    Anomalies detected:")
         for anomaly in action_result.anomalies:
             print(f"      - {anomaly.type}: {anomaly.description}")
+
+    if action_result.alerts_triggered:
+        print(f"    Alerts triggered: {action_result.alerts_triggered}")
 
     # ----------------------------------------------------------------
     # Step 3: Scan agent output before sending to user
@@ -95,8 +90,8 @@ def main() -> None:
         auto_sanitize=True,
     )
 
-    print(f"    Safe: {output_result.is_safe}")
-    print(f"    Data Leakage Risk: {output_result.data_leakage_risk}")
+    print(f"    Safe: {output_result.safe}")
+    print(f"    Recommendation: {output_result.recommendation}")
 
     if output_result.pii_detected:
         print("    PII in output:")
@@ -114,8 +109,8 @@ def main() -> None:
     print(f"    Session ID: {session.session_id}")
     print(f"    Status: {session.status}")
     print(f"    Risk Level: {session.risk_level}")
-    print(f"    Total Actions: {session.total_actions}")
-    print(f"    Threats Detected: {session.threats_detected}")
+    print(f"    Total Actions: {session.stats.total_actions}")
+    print(f"    Threats Detected: {session.stats.threats_detected}")
 
     # ----------------------------------------------------------------
     # Step 5: Generate a security report
@@ -128,23 +123,25 @@ def main() -> None:
     )
 
     print(f"    Report ID: {report.report_id}")
-    print(f"    Title: {report.title}")
-    print(f"    Summary: {report.summary}")
-    print(f"    Risk Level: {report.risk_level}")
+    print(f"    Status: {report.status}")
+    if report.summary:
+        print(f"    Risk Level: {report.summary.risk_level}")
+        print(f"    Risk Score: {report.summary.risk_score}")
+        print(f"    Primary Concerns: {report.summary.primary_concerns}")
 
     if report.recommendations:
         print("    Recommendations:")
         for rec in report.recommendations:
-            print(f"      [{rec.priority}] {rec.title}: {rec.description}")
+            print(f"      [{rec.priority}] {rec.action}: {rec.reason}")
 
     # ----------------------------------------------------------------
     # Step 6: Check alerts
     # ----------------------------------------------------------------
     print("\n[6] Checking security alerts...")
-    alerts = client.get_alerts(severity="high", page=1, size=5)
-    print(f"    Total alerts: {alerts.get('total', 0)}")
-    for alert in alerts.get("items", []):
-        print(f"      - [{alert['severity']}] {alert['title']}")
+    alerts_response = client.get_alerts(severity="high", page=1, size=5)
+    print(f"    Total alerts: {alerts_response.total}")
+    for alert in alerts_response.items:
+        print(f"      - [{alert.severity}] {alert.title} (acknowledged: {alert.is_acknowledged})")
 
     # Clean up
     client.close()
