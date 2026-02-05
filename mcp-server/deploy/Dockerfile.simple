@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy only what we need
+COPY src/inalign_mcp/ ./inalign_mcp/
+COPY pyproject.toml .
+COPY landing/ ./landing/
+
+# Install minimal dependencies
+RUN pip install --no-cache-dir \
+    mcp \
+    fastapi \
+    uvicorn \
+    starlette \
+    python-dotenv \
+    neo4j
+
+# Environment
+ENV PYTHONPATH=/app
+ENV PORT=8080
+
+EXPOSE 8080
+
+# Run dashboard (includes API)
+CMD ["python", "-m", "uvicorn", "inalign_mcp.dashboard:app", "--host", "0.0.0.0", "--port", "8080"]
