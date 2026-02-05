@@ -109,7 +109,7 @@ LOGIN_HTML = """
 </head>
 <body>
     <div class="login-box">
-        <div class="logo">InALign</div>
+        <a href="/" style="text-decoration:none;"><div class="logo">InALign</div></a>
         <div class="subtitle">AI Agent Governance Platform</div>
         {error}
         <form method="post" action="/login">
@@ -119,6 +119,11 @@ LOGIN_HTML = """
             </div>
             <button type="submit">Login</button>
         </form>
+        <div style="margin-top:20px; text-align:center;">
+            <a href="/" style="color:#666; font-size:14px;">← Back to Home</a>
+            <span style="color:#ccc; margin:0 10px;">|</span>
+            <a href="/#pricing" style="color:#2563eb; font-size:14px;">Get API Key</a>
+        </div>
     </div>
 </body>
 </html>
@@ -417,8 +422,22 @@ async def login_page(error: str = ""):
 
 @app.post("/login")
 async def login(request: Request, api_key: str = Form(...)):
+    # First try client_manager
     valid, client, error = manager.validate_api_key(api_key)
+
     if not valid or not client:
+        # Try payments CUSTOMERS
+        from .payments import CUSTOMERS, get_client_id
+        for email, data in CUSTOMERS.items():
+            if data.get("api_key") == api_key:
+                # Create a temporary client object
+                client_id = data.get("client_id") or get_client_id(api_key)
+                request.session["client_id"] = client_id
+                request.session["api_key"] = api_key
+                request.session["email"] = email
+                request.session["plan"] = data.get("plan", "starter")
+                return RedirectResponse("/dashboard", status_code=303)
+
         return RedirectResponse(f"/login?error={error or 'Invalid API key'}", status_code=303)
 
     request.session["client_id"] = client.client_id
@@ -432,9 +451,188 @@ async def logout(request: Request):
     return RedirectResponse("/login")
 
 
+@app.get("/api/download/install-script")
+async def download_install_script(api_key: str):
+    """Generate and download personalized install script."""
+    from fastapi.responses import Response
+
+    script = f'''#!/usr/bin/env python3
+"""
+InALign MCP Server - One-Click Installer
+API Key: {api_key}
+"""
+
+import os
+import sys
+import json
+import platform
+from pathlib import Path
+
+API_KEY = "{api_key}"
+NEO4J_URI = "***REDACTED_URI***"
+NEO4J_USERNAME = "neo4j"
+NEO4J_PASSWORD = "***REDACTED***"
+
+def get_python_path():
+    return sys.executable
+
+def main():
+    print("\\n" + "="*50)
+    print("  InALign MCP Server Installer")
+    print("="*50 + "\\n")
+
+    # 1. Create ~/.inalign.env
+    env_path = Path.home() / ".inalign.env"
+    print(f"[1/3] Creating {{env_path}}...")
+    with open(env_path, "w") as f:
+        f.write(f"API_KEY={{API_KEY}}\\n")
+        f.write(f"NEO4J_URI={{NEO4J_URI}}\\n")
+        f.write(f"NEO4J_USERNAME={{NEO4J_USERNAME}}\\n")
+        f.write(f"NEO4J_PASSWORD={{NEO4J_PASSWORD}}\\n")
+    print("      Done!")
+
+    # 2. Update Claude settings.json
+    settings_path = Path.home() / ".claude" / "settings.json"
+    settings_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"[2/3] Updating {{settings_path}}...")
+
+    settings = {{}}
+    if settings_path.exists():
+        with open(settings_path) as f:
+            settings = json.load(f)
+
+    if "mcpServers" not in settings:
+        settings["mcpServers"] = {{}}
+
+    settings["mcpServers"]["inalign"] = {{
+        "command": get_python_path(),
+        "args": ["-m", "inalign_mcp.server"],
+        "env": {{
+            "API_KEY": API_KEY,
+            "NEO4J_URI": NEO4J_URI,
+            "NEO4J_USERNAME": NEO4J_USERNAME,
+            "NEO4J_PASSWORD": NEO4J_PASSWORD
+        }}
+    }}
+
+    with open(settings_path, "w") as f:
+        json.dump(settings, f, indent=2)
+    print("      Done!")
+
+    # 3. Create CLAUDE.md
+    claude_md = Path.home() / "CLAUDE.md"
+    print(f"[3/3] Creating {{claude_md}}...")
+    if not claude_md.exists():
+        with open(claude_md, "w") as f:
+            f.write("""# Claude Code Instructions
+
+## InALign Integration
+IMPORTANT: At the start of EVERY conversation, call `mcp__inalign__record_user_command` to record the user's request.
+""")
+    print("      Done!")
+
+    # Install dependencies
+    print("\\nInstalling dependencies...")
+    os.system(f"{{get_python_path()}} -m pip install neo4j -q")
+
+    print("\\n" + "="*50)
+    print("  Installation Complete!")
+    print("="*50)
+    print(f"""
+Your API Key: {{API_KEY}}
+Client ID: {{API_KEY[:12]}}
+
+Next Steps:
+1. Restart Claude Code (close/reopen VSCode)
+2. Start using Claude Code normally
+3. View activity at: http://3.36.132.4:8080/login
+
+All activity will be automatically recorded!
+""")
+
+if __name__ == "__main__":
+    main()
+'''
+
+    return Response(
+        content=script,
+        media_type="application/x-python",
+        headers={{"Content-Disposition": f"attachment; filename=inalign_install.py"}}
+    )
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     client = get_current_client(request)
+    client_id = request.session.get("client_id")
+
+    # Handle payments-based login (no client object)
+    if not client and client_id:
+        email = request.session.get("email", "User")
+        plan = request.session.get("plan", "starter")
+
+        # Initialize trace DB and get stats from Neo4j
+        init_trace_db()
+
+        # Get stats from Neo4j
+        try:
+            from .trace_finder import trace_by_client_id, get_client_stats
+            neo4j_stats = get_client_stats(client_id)
+            trace_result = trace_by_client_id(client_id, limit=20)
+        except Exception as e:
+            neo4j_stats = {"total_actions": 0, "sessions": 0, "agents": 0, "user_commands": 0}
+            trace_result = None
+
+        # Also get usage from limiter for comparison
+        try:
+            from .usage_limiter import get_usage_stats
+            usage = get_usage_stats(client_id)
+            limiter_count = usage.get("actions_used", 0)
+        except:
+            limiter_count = 0
+
+        # Use max of Neo4j or limiter count
+        total_actions = max(neo4j_stats.get("total_actions", 0), limiter_count)
+
+        # Build activity list from Neo4j trace
+        activity_html = ""
+        if trace_result and trace_result.records:
+            for record in trace_result.records[:10]:
+                icon_class = "icon-tool"
+                if record.get("type") == "decision":
+                    icon_class = "icon-decision"
+                elif record.get("type") == "error":
+                    icon_class = "icon-error"
+
+                action_name = record.get("action", "unknown")
+                time_str = record.get("time", "")[:19] if record.get("time") else ""
+                activity_html += f"""
+                <li class="activity-item">
+                    <div class="activity-icon {icon_class}">A</div>
+                    <div class="activity-info">
+                        <div class="activity-name">{action_name}</div>
+                        <div class="activity-time">{time_str}</div>
+                        <div class="activity-hash">{record.get("hash", "")}</div>
+                    </div>
+                </li>
+                """
+
+        if not activity_html:
+            activity_html = "<li class='activity-item'>No activity recorded yet. Use Claude Code with your API key to see activity.</li>"
+
+        return DASHBOARD_HTML.format(
+            company=email,
+            total_actions=total_actions,
+            user_commands=neo4j_stats.get("user_commands", 0),
+            sessions=neo4j_stats.get("sessions", 0),
+            agents=neo4j_stats.get("agents", 0),
+            activity_list=activity_html,
+            plan=plan.upper(),
+            scans_used=total_actions,
+            scan_limit=1000 if plan == "starter" else 50000,
+            usage_percent=min(100, int(total_actions / 10))
+        )
+
     if not client:
         return RedirectResponse("/login")
 
