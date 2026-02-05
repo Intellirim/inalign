@@ -27,7 +27,15 @@ router = APIRouter()
 
 # In-memory storage (replace with database in production)
 # Format: {email: {api_key, plan, created_at, stripe_customer_id}}
-CUSTOMERS = {}
+CUSTOMERS = {
+    # Pre-registered test user
+    "test@inalign.ai": {
+        "api_key": "ial_EBSooXgFz6FJ-hdmf3yAntE3xlWAPIAKwI9PfwdCres",
+        "client_id": "ial_EBSooXgF",
+        "plan": "starter",
+        "created_at": "2026-02-05"
+    }
+}
 
 # Pricing
 PLANS = {
@@ -70,6 +78,15 @@ def get_client_id(api_key: str) -> str:
     return hashlib.sha256(api_key.encode()).hexdigest()[:12]
 
 
+def sync_usage_limiter(client_id: str, plan: str):
+    """Sync plan to usage limiter."""
+    try:
+        from .usage_limiter import set_plan
+        set_plan(client_id, plan)
+    except ImportError:
+        pass
+
+
 @router.post("/api/signup/starter")
 async def signup_starter(request: Request):
     """Sign up for free Starter plan."""
@@ -89,13 +106,17 @@ async def signup_starter(request: Request):
 
         api_key = generate_api_key()
 
+        client_id = get_client_id(api_key)
         CUSTOMERS[email] = {
             "api_key": api_key,
-            "client_id": get_client_id(api_key),
+            "client_id": client_id,
             "plan": "starter",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "stripe_customer_id": None,
         }
+
+        # Sync to usage limiter
+        sync_usage_limiter(client_id, "starter")
 
         return JSONResponse({
             "success": True,
@@ -278,3 +299,30 @@ async def verify_api_key(api_key: str):
             })
 
     raise HTTPException(status_code=404, detail="Invalid API key")
+
+
+@router.get("/api/usage/{api_key}")
+async def get_usage(api_key: str):
+    """Get usage statistics for an API key."""
+    # Find customer
+    customer = None
+    for email, data in CUSTOMERS.items():
+        if data["api_key"] == api_key:
+            customer = data
+            break
+
+    if not customer:
+        raise HTTPException(status_code=404, detail="Invalid API key")
+
+    # Get usage from limiter
+    try:
+        from .usage_limiter import get_usage_stats
+        stats = get_usage_stats(customer["client_id"])
+        return JSONResponse(stats)
+    except ImportError:
+        plan = PLANS.get(customer["plan"], PLANS["starter"])
+        return JSONResponse({
+            "plan": customer["plan"],
+            "actions_limit": plan["actions_per_month"],
+            "message": "Usage tracking not available"
+        })
