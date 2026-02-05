@@ -93,9 +93,16 @@ async def signup_starter(request: Request):
     try:
         data = await request.json()
         email = data.get("email")
+        company_name = data.get("company_name", "")
+        contact_name = data.get("contact_name", "")
+        use_case = data.get("use_case", "")
+        team_size = data.get("team_size", "")
 
         if not email:
             raise HTTPException(status_code=400, detail="Email required")
+
+        if not company_name:
+            raise HTTPException(status_code=400, detail="Company name required")
 
         if email in CUSTOMERS:
             return JSONResponse({
@@ -113,6 +120,11 @@ async def signup_starter(request: Request):
             "plan": "starter",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "stripe_customer_id": None,
+            # Company info
+            "company_name": company_name,
+            "contact_name": contact_name,
+            "use_case": use_case,
+            "team_size": team_size,
         }
 
         # Sync to usage limiter
@@ -122,6 +134,7 @@ async def signup_starter(request: Request):
             "success": True,
             "api_key": api_key,
             "plan": "starter",
+            "company": company_name,
             "message": "Welcome to InALign! Add this to your Claude Code settings."
         })
 
