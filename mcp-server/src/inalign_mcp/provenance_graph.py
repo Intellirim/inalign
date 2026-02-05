@@ -77,6 +77,129 @@ def is_neo4j_available() -> bool:
 
 
 # ============================================
+# Content Storage (Full Prompt/Response)
+# ============================================
+
+import zlib
+import base64
+import hashlib
+
+
+def store_content(content: str, content_type: str = "prompt",
+                  record_id: str = None, client_id: str = None) -> Optional[str]:
+    """
+    Store full content (prompt/response) compressed in Neo4j.
+
+    Args:
+        content: Full text content to store
+        content_type: "prompt", "response", "code", etc.
+        record_id: Link to ProvenanceRecord
+        client_id: Client identifier for isolation
+
+    Returns:
+        content_hash if successful, None otherwise
+    """
+    if not _neo4j_driver or not content:
+        return None
+
+    try:
+        # Compute hash of original content
+        content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+        # Compress content
+        compressed = zlib.compress(content.encode(), level=9)
+        compressed_b64 = base64.b64encode(compressed).decode()
+
+        with _neo4j_driver.session() as session:
+            # Store content node
+            session.run("""
+                MERGE (c:ContentStore {content_hash: $hash})
+                ON CREATE SET
+                    c.compressed_content = $content,
+                    c.content_type = $type,
+                    c.original_size = $orig_size,
+                    c.compressed_size = $comp_size,
+                    c.client_id = $client_id,
+                    c.created_at = datetime()
+                WITH c
+                MATCH (r:ProvenanceRecord {record_id: $record_id})
+                MERGE (r)-[:HAS_CONTENT]->(c)
+            """, hash=content_hash, content=compressed_b64, type=content_type,
+                orig_size=len(content.encode()), comp_size=len(compressed_b64),
+                client_id=client_id, record_id=record_id)
+
+            logger.info(f"Stored content: {content_hash[:16]}... ({len(content)} -> {len(compressed_b64)} bytes)")
+            return content_hash
+
+    except Exception as e:
+        logger.error(f"Failed to store content: {e}")
+        return None
+
+
+def get_content(content_hash: str) -> Optional[str]:
+    """
+    Retrieve and decompress content by hash.
+
+    Args:
+        content_hash: SHA256 hash of original content
+
+    Returns:
+        Original content string or None
+    """
+    if not _neo4j_driver:
+        return None
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (c:ContentStore {content_hash: $hash})
+                RETURN c.compressed_content as content
+            """, hash=content_hash)
+
+            row = result.single()
+            if row and row['content']:
+                compressed = base64.b64decode(row['content'])
+                return zlib.decompress(compressed).decode()
+            return None
+
+    except Exception as e:
+        logger.error(f"Failed to get content: {e}")
+        return None
+
+
+def get_record_content(record_id: str) -> dict:
+    """
+    Get all content associated with a provenance record.
+
+    Returns:
+        Dict with prompt, response, etc.
+    """
+    if not _neo4j_driver:
+        return {}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord {record_id: $record_id})-[:HAS_CONTENT]->(c:ContentStore)
+                RETURN c.content_type as type, c.compressed_content as content, c.content_hash as hash
+            """, record_id=record_id)
+
+            contents = {}
+            for row in result:
+                content_type = row['type']
+                compressed = base64.b64decode(row['content'])
+                contents[content_type] = {
+                    'content': zlib.decompress(compressed).decode(),
+                    'hash': row['hash']
+                }
+            return contents
+
+    except Exception as e:
+        logger.error(f"Failed to get record content: {e}")
+        return {}
+
+
+# ============================================
 # Graph Storage Operations
 # ============================================
 
@@ -122,10 +245,10 @@ def store_record(record: ProvenanceRecord) -> bool:
 
             # Create/link session with client_id for data isolation
             if record.session_id:
-                # Get client_id from record attributes or default
-                client_id = None
-                if record.activity_attributes:
-                    client_id = record.activity_attributes.get("client_id")
+                # Get client_id from record field or activity_attributes as fallback
+                client_id = getattr(record, 'client_id', None) or (
+                    record.activity_attributes.get("client_id") if record.activity_attributes else None
+                )
 
                 session.run("""
                     MERGE (s:Session {session_id: $session_id})

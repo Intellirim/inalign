@@ -105,6 +105,7 @@ class ProvenanceRecord:
 
     # Session context
     session_id: str = ""
+    client_id: str = ""  # Links session to customer account
 
     # Computed hash (set after creation)
     record_hash: str = ""
@@ -162,9 +163,10 @@ class ProvenanceChain:
     - Export to various formats
     """
 
-    def __init__(self, session_id: str, agent: Agent):
+    def __init__(self, session_id: str, agent: Agent, client_id: str = ""):
         self.session_id = session_id
         self.agent = agent
+        self.client_id = client_id  # Links to customer account
         self.records: list[ProvenanceRecord] = []
         self._sequence = 0
 
@@ -220,6 +222,7 @@ class ProvenanceChain:
             previous_hash=self.latest_hash,
             sequence_number=self._sequence,
             session_id=self.session_id,
+            client_id=self.client_id,
         )
 
         # Compute and set hash
@@ -350,7 +353,7 @@ class ProvenanceChain:
 _session_chains: dict[str, ProvenanceChain] = {}
 
 
-def get_or_create_chain(session_id: str, agent_name: str = "claude") -> ProvenanceChain:
+def get_or_create_chain(session_id: str, agent_name: str = "claude", client_id: str = "") -> ProvenanceChain:
     """Get or create a provenance chain for a session."""
     if session_id not in _session_chains:
         agent = Agent(
@@ -358,7 +361,10 @@ def get_or_create_chain(session_id: str, agent_name: str = "claude") -> Provenan
             type="ai_agent",
             name=agent_name,
         )
-        _session_chains[session_id] = ProvenanceChain(session_id, agent)
+        _session_chains[session_id] = ProvenanceChain(session_id, agent, client_id)
+    elif client_id and not _session_chains[session_id].client_id:
+        # Update client_id if it was missing
+        _session_chains[session_id].client_id = client_id
     return _session_chains[session_id]
 
 

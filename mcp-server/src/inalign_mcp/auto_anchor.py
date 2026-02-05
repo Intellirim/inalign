@@ -185,9 +185,47 @@ def compute_merkle_root(chain: ProvenanceChain) -> str:
     return hashes[0]
 
 
+def _get_anchor_from_neo4j(client_id: str) -> Optional[dict]:
+    """Get blockchain anchor info from Neo4j."""
+    try:
+        from .graph_store import get_graph_store
+        store = get_graph_store()
+        if not store:
+            return None
+
+        with store.session() as session:
+            result = session.run("""
+                MATCH (a:BlockchainAnchor {client_id: $client_id})
+                RETURN a.transaction_hash as tx_hash,
+                       a.block_number as block_number,
+                       a.block_timestamp as block_timestamp,
+                       a.explorer_url as explorer_url,
+                       a.merkle_root as merkle_root,
+                       a.mock as mock
+                ORDER BY a.created_at DESC
+                LIMIT 1
+            """, client_id=client_id)
+
+            row = result.single()
+            if row:
+                return {
+                    "chain_type": "polygon",
+                    "transaction_hash": row["tx_hash"],
+                    "block_number": row["block_number"],
+                    "block_timestamp": str(row["block_timestamp"]) if row["block_timestamp"] else None,
+                    "verification_url": row["explorer_url"],
+                    "mock": row.get("mock", False),
+                }
+            return None
+    except Exception as e:
+        logger.warning(f"Failed to get anchor from Neo4j: {e}")
+        return None
+
+
 def generate_certificate(
     session_id: str,
     anchor_proof: Optional[dict] = None,
+    client_id: str = None,
 ) -> ProofCertificate:
     """
     Generate a proof certificate for a session.
@@ -195,6 +233,7 @@ def generate_certificate(
     Args:
         session_id: The session to certify
         anchor_proof: Optional blockchain anchor proof
+        client_id: Optional client_id to look up anchor from Neo4j
 
     Returns:
         ProofCertificate ready for download
@@ -216,6 +255,10 @@ def generate_certificate(
         chain_integrity=is_valid,
     )
 
+    # Try to get anchor from Neo4j if client_id provided
+    if not anchor_proof and client_id:
+        anchor_proof = _get_anchor_from_neo4j(client_id)
+
     # Add anchor info if available
     if anchor_proof:
         cert.anchored = True
@@ -225,7 +268,9 @@ def generate_certificate(
         cert.block_timestamp = anchor_proof.get("block_timestamp")
 
         # Generate verification URL
-        if cert.chain_type == "polygon":
+        if anchor_proof.get("verification_url"):
+            cert.verification_url = anchor_proof["verification_url"]
+        elif cert.chain_type == "polygon":
             cert.verification_url = f"https://polygonscan.com/tx/{cert.transaction_hash}"
         elif cert.chain_type == "ethereum_mainnet":
             cert.verification_url = f"https://etherscan.io/tx/{cert.transaction_hash}"

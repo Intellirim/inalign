@@ -24,6 +24,7 @@ from .trace_finder import init_trace_db, trace_agent, trace_decision, trace_sess
 from .audit_export import export_session_json, export_session_summary
 from .auto_anchor import generate_certificate
 from .payments import router as payments_router
+from .polygon_anchor import anchor_to_polygon, get_anchor_status, verify_anchor, setup_instructions
 
 app = FastAPI(title="InALign Dashboard")
 
@@ -312,6 +313,28 @@ DASHBOARD_HTML = """
 
             <div>
                 <div class="card">
+                    <div class="card-header">Blockchain Anchor</div>
+                    <div class="card-body">
+                        <div id="anchorStatus" style="margin-bottom:15px; padding:12px; background:#f0fdf4; border-radius:8px; display:none;">
+                            <div style="color:#16a34a; font-weight:600;">Anchored to Polygon</div>
+                            <div style="font-size:12px; color:#666; margin-top:4px;">
+                                <span id="anchorTx"></span>
+                            </div>
+                            <a id="anchorLink" href="#" target="_blank" style="font-size:12px; color:#2563eb;">View on PolygonScan</a>
+                        </div>
+                        <div id="anchorPending" style="margin-bottom:15px; padding:12px; background:#fef3c7; border-radius:8px;">
+                            <div style="color:#d97706; font-weight:600;">Not Anchored</div>
+                            <div style="font-size:12px; color:#666; margin-top:4px;">
+                                Anchor to Polygon for legal validity
+                            </div>
+                        </div>
+                        <button onclick="anchorToBlockchain()" id="anchorBtn" class="btn btn-primary" style="width:100%; background:#8b5cf6;">
+                            Anchor to Polygon (~$0.01)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
                     <div class="card-header">Quick Actions</div>
                     <div class="card-body">
                         <a href="/export/json" class="btn btn-primary" style="width:100%; margin-bottom:10px; text-align:center;">
@@ -340,6 +363,54 @@ DASHBOARD_HTML = """
     </div>
 
     <script>
+        // Check anchor status on load
+        document.addEventListener('DOMContentLoaded', checkAnchorStatus);
+
+        async function checkAnchorStatus() {{
+            try {{
+                const res = await fetch('/api/anchor/status');
+                const data = await res.json();
+                if (data.anchored) {{
+                    document.getElementById('anchorStatus').style.display = 'block';
+                    document.getElementById('anchorPending').style.display = 'none';
+                    document.getElementById('anchorTx').textContent = data.transaction_hash.substring(0, 20) + '...';
+                    document.getElementById('anchorLink').href = data.explorer_url;
+                    document.getElementById('anchorBtn').textContent = 'Re-anchor (new records)';
+                    document.getElementById('anchorBtn').style.background = '#6b7280';
+                    if (data.mock) {{
+                        document.getElementById('anchorStatus').style.background = '#fef3c7';
+                        document.getElementById('anchorStatus').querySelector('div').textContent = 'Mock Anchor (Test)';
+                        document.getElementById('anchorStatus').querySelector('div').style.color = '#d97706';
+                    }}
+                }}
+            }} catch (e) {{
+                console.error('Failed to check anchor status:', e);
+            }}
+        }}
+
+        async function anchorToBlockchain() {{
+            const btn = document.getElementById('anchorBtn');
+            btn.disabled = true;
+            btn.textContent = 'Anchoring...';
+
+            try {{
+                const res = await fetch('/api/anchor', {{ method: 'POST' }});
+                const data = await res.json();
+
+                if (data.success) {{
+                    alert('Successfully anchored to Polygon!\\n\\nTransaction: ' + data.transaction_hash + '\\n\\nView at: ' + data.explorer_url);
+                    checkAnchorStatus();
+                }} else {{
+                    alert('Anchor failed: ' + data.error);
+                }}
+            }} catch (e) {{
+                alert('Error: ' + e.message);
+            }}
+
+            btn.disabled = false;
+            btn.textContent = 'Anchor to Polygon (~$0.01)';
+        }}
+
         async function search() {{
             const query = document.getElementById('searchQuery').value;
             const res = await fetch('/api/search?q=' + encodeURIComponent(query));
@@ -377,12 +448,31 @@ DASHBOARD_HTML = """
 # Auth Helpers
 # ============================================
 
+class SimpleClient:
+    """Simple client object for payments-based users."""
+    def __init__(self, client_id: str, api_key: str = "", email: str = "", plan: str = "starter"):
+        self.client_id = client_id
+        self.api_key = api_key
+        self.email = email
+        self.plan = plan
+
+
 def get_current_client(request: Request) -> Optional[Client]:
     """Get client from session."""
     client_id = request.session.get("client_id")
     if not client_id:
         return None
-    return manager.get_client(client_id)
+
+    # First try client_manager
+    client = manager.get_client(client_id)
+    if client:
+        return client
+
+    # Fallback for payments-based users (session has client_id but manager doesn't know about it)
+    api_key = request.session.get("api_key", "")
+    email = request.session.get("email", "")
+    plan = request.session.get("plan", "starter")
+    return SimpleClient(client_id, api_key, email, plan)
 
 
 # ============================================
@@ -422,14 +512,20 @@ async def login_page(error: str = ""):
 
 @app.post("/login")
 async def login(request: Request, api_key: str = Form(...)):
+    # Debug logging
+    print(f"[LOGIN] Received API key: '{api_key}' (length: {len(api_key)})")
+
     # First try client_manager
     valid, client, error = manager.validate_api_key(api_key)
 
     if not valid or not client:
         # Try payments CUSTOMERS
         from .payments import CUSTOMERS, get_client_id
+        print(f"[LOGIN] Checking against {len(CUSTOMERS)} customers")
         for email, data in CUSTOMERS.items():
-            if data.get("api_key") == api_key:
+            stored_key = data.get("api_key")
+            print(f"[LOGIN] Comparing with {email}: '{stored_key}' == '{api_key}' ? {stored_key == api_key}")
+            if stored_key == api_key:
                 # Create a temporary client object
                 client_id = data.get("client_id") or get_client_id(api_key)
                 request.session["client_id"] = client_id
@@ -566,10 +662,13 @@ async def dashboard(request: Request):
     client = get_current_client(request)
     client_id = request.session.get("client_id")
 
-    # Handle payments-based login (no client object)
-    if not client and client_id:
-        email = request.session.get("email", "User")
-        plan = request.session.get("plan", "starter")
+    # Handle payments-based login (SimpleClient or no client object)
+    # SimpleClient doesn't have monthly_scan_limit attribute
+    is_simple_client = isinstance(client, SimpleClient) if client else False
+    if (not client and client_id) or is_simple_client:
+        email = request.session.get("email") or (client.email if is_simple_client else "User")
+        plan = request.session.get("plan") or (client.plan if is_simple_client else "starter")
+        client_id = client_id or (client.client_id if is_simple_client else None)
 
         # Initialize trace DB and get stats from Neo4j
         init_trace_db()
@@ -701,30 +800,348 @@ async def api_search(request: Request, q: str = "", type: str = ""):
     return {"records": result.records, "summary": result.summary}
 
 
+def get_recent_neo4j_sessions(limit: int = 10, client_id: str = None) -> list:
+    """Get recent sessions from Neo4j ProvenanceRecords, optionally filtered by client_id."""
+    try:
+        from .graph_store import get_graph_store
+        store = get_graph_store()
+        if not store:
+            return []
+
+        with store.session() as session:
+            if client_id:
+                # Get unique sessions from ProvenanceRecords filtered by client_id
+                result = session.run("""
+                    MATCH (r:ProvenanceRecord)
+                    WHERE r.client_id = $client_id
+                    WITH r ORDER BY r.timestamp DESC
+                    WITH collect(r)[0] as latest, collect(r) as all_records
+                    UNWIND all_records as rec
+                    WITH latest.client_id as client_id,
+                         count(rec) as activity_count,
+                         max(rec.timestamp) as last_activity,
+                         min(rec.timestamp) as created_at
+                    RETURN 'session-' + client_id as session_id,
+                           'Claude Code' as agent_name,
+                           created_at, client_id, activity_count
+                    LIMIT $limit
+                """, limit=limit, client_id=client_id)
+            else:
+                # Get all recent records grouped by client_id
+                result = session.run("""
+                    MATCH (r:ProvenanceRecord)
+                    WHERE r.client_id IS NOT NULL
+                    WITH r.client_id as client_id, count(r) as activity_count,
+                         max(r.timestamp) as last_activity,
+                         min(r.timestamp) as created_at
+                    RETURN 'session-' + client_id as session_id,
+                           'Claude Code' as agent_name,
+                           created_at, client_id, activity_count
+                    ORDER BY last_activity DESC
+                    LIMIT $limit
+                """, limit=limit)
+            return [dict(row) for row in result]
+    except Exception as e:
+        print(f"Error getting Neo4j sessions: {e}")
+        return []
+
+
+def search_records(client_id: str, keyword: str = None, action_type: str = None,
+                   start_time: str = None, end_time: str = None, limit: int = 100) -> dict:
+    """Search provenance records with filters."""
+    try:
+        from .graph_store import get_graph_store
+        from datetime import datetime, timezone
+        store = get_graph_store()
+        if not store:
+            return {"error": "Neo4j not available"}
+
+        with store.session() as session:
+            # Build dynamic query
+            conditions = ["r.client_id = $client_id"]
+            params = {"client_id": client_id, "limit": limit}
+
+            if keyword:
+                conditions.append("(r.activity_name CONTAINS $keyword OR r.activity_attributes CONTAINS $keyword)")
+                params["keyword"] = keyword
+
+            if action_type:
+                conditions.append("r.activity_type = $action_type")
+                params["action_type"] = action_type
+
+            if start_time:
+                conditions.append("r.timestamp >= $start_time")
+                params["start_time"] = start_time
+
+            if end_time:
+                conditions.append("r.timestamp <= $end_time")
+                params["end_time"] = end_time
+
+            where_clause = " AND ".join(conditions)
+            query = f"""
+                MATCH (r:ProvenanceRecord)
+                WHERE {where_clause}
+                OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
+                OPTIONAL MATCH (r)-[:PERFORMED_BY]->(a:Agent)
+                RETURN r.record_id as id, r.timestamp as timestamp,
+                       r.activity_type as type, r.activity_name as action,
+                       r.record_hash as hash, r.activity_attributes as attributes,
+                       s.session_id as session, a.name as agent
+                ORDER BY r.timestamp DESC
+                LIMIT $limit
+            """
+
+            result = session.run(query, **params)
+            records = [dict(row) for row in result]
+
+            return {
+                "search_info": {
+                    "client_id": client_id,
+                    "keyword": keyword,
+                    "action_type": action_type,
+                    "time_range": f"{start_time or 'any'} ~ {end_time or 'any'}",
+                    "result_count": len(records),
+                },
+                "records": records
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def export_records_by_client_id(client_id: str) -> dict:
+    """Export all provenance records for a client_id from Neo4j."""
+    try:
+        from .graph_store import get_graph_store
+        from datetime import datetime, timezone
+        store = get_graph_store()
+        if not store:
+            return {"error": "Neo4j not available"}
+
+        with store.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord)
+                WHERE r.client_id = $client_id
+                RETURN r.record_id as id, r.timestamp as timestamp,
+                       r.activity_type as activity_type, r.activity_name as activity_name,
+                       r.record_hash as record_hash, r.previous_hash as previous_hash,
+                       r.sequence_number as sequence_number, r.activity_attributes as attributes
+                ORDER BY r.timestamp ASC
+            """, client_id=client_id)
+
+            records = [dict(row) for row in result]
+
+            return {
+                "export_info": {
+                    "client_id": client_id,
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "record_count": len(records),
+                },
+                "records": records
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/search")
+async def api_search(
+    request: Request,
+    keyword: str = None,
+    action: str = None,
+    start: str = None,
+    end: str = None,
+    limit: int = 100
+):
+    """Search provenance records with filters.
+
+    Query params:
+    - keyword: Search in action name or attributes
+    - action: Filter by action type (user_input, tool_call, decision, etc.)
+    - start: Start time (ISO format)
+    - end: End time (ISO format)
+    - limit: Max results (default 100)
+    """
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    result = search_records(
+        client_id=client.client_id,
+        keyword=keyword,
+        action_type=action,
+        start_time=start,
+        end_time=end,
+        limit=limit
+    )
+    return JSONResponse(result)
+
+
 @app.get("/export/json")
-async def export_json(request: Request):
+async def export_json(request: Request, session_id: str = None):
     client = get_current_client(request)
     if not client:
         return RedirectResponse("/login")
 
+    # If session_id provided, use it directly
+    if session_id:
+        try:
+            content = export_session_json(session_id)
+            return JSONResponse(json.loads(content))
+        except Exception as e:
+            return JSONResponse({"error": str(e)})
+
+    # Export by client_id directly from Neo4j
+    export_data = export_records_by_client_id(client.client_id)
+    if export_data.get("records"):
+        return JSONResponse(export_data)
+
+    # Try manager sessions as fallback
     sessions = manager.get_client_sessions(client.client_id)
     if sessions:
         content = export_session_json(sessions[0].session_id)
         return JSONResponse(json.loads(content))
-    return JSONResponse({"error": "No sessions found"})
+
+    return JSONResponse({"error": "No records found for your account", "client_id": client.client_id})
 
 
 @app.get("/export/certificate", response_class=HTMLResponse)
-async def export_certificate(request: Request):
+async def export_certificate(request: Request, session_id: str = None):
     client = get_current_client(request)
     if not client:
         return RedirectResponse("/login")
 
+    # If session_id provided, use it directly
+    if session_id:
+        try:
+            cert = generate_certificate(session_id, client_id=client.client_id)
+            return cert.to_html()
+        except Exception as e:
+            return f"<h1>Error: {e}</h1>"
+
+    # Try manager sessions first
     sessions = manager.get_client_sessions(client.client_id)
     if sessions:
-        cert = generate_certificate(sessions[0].session_id)
+        cert = generate_certificate(sessions[0].session_id, client_id=client.client_id)
         return cert.to_html()
+
+    # Try Neo4j sessions filtered by client_id
+    neo4j_sessions = get_recent_neo4j_sessions(5, client.client_id)
+    if neo4j_sessions:
+        # If only one session, show certificate directly
+        if len(neo4j_sessions) == 1:
+            cert = generate_certificate(neo4j_sessions[0]["session_id"], client_id=client.client_id)
+            return cert.to_html()
+        # Show list to select
+        session_list = "".join([
+            f'<li><a href="/export/certificate?session_id={s["session_id"]}">{s["session_id"]}</a> - {s.get("agent_name", "unknown")} ({s.get("activity_count", 0)} activities)</li>'
+            for s in neo4j_sessions
+        ])
+        return f"""
+        <html>
+        <head><title>Select Session</title></head>
+        <body style="font-family: sans-serif; padding: 20px;">
+            <h1>Select a Session</h1>
+            <p>Found {len(neo4j_sessions)} sessions for your account:</p>
+            <ul>{session_list}</ul>
+        </body>
+        </html>
+        """
+
+    # Fallback to all recent sessions
+    all_sessions = get_recent_neo4j_sessions(5)
+    if all_sessions:
+        session_list = "".join([
+            f'<li><a href="/export/certificate?session_id={s["session_id"]}">{s["session_id"]}</a> - {s.get("agent_name", "unknown")} ({s.get("activity_count", 0)} activities)</li>'
+            for s in all_sessions
+        ])
+        return f"""
+        <html>
+        <head><title>Select Session</title></head>
+        <body style="font-family: sans-serif; padding: 20px;">
+            <h1>Select a Session</h1>
+            <p>No sessions found for your account. Recent sessions:</p>
+            <ul>{session_list}</ul>
+        </body>
+        </html>
+        """
+
     return "<h1>No sessions found</h1>"
+
+
+# ============================================
+# Blockchain Anchoring API
+# ============================================
+
+@app.post("/api/anchor")
+async def api_anchor_session(request: Request):
+    """Anchor client's provenance chain to Polygon blockchain."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    result = anchor_to_polygon(client.client_id)
+
+    if result.success:
+        return JSONResponse({
+            "success": True,
+            "message": "Successfully anchored to Polygon",
+            "transaction_hash": result.transaction_hash,
+            "block_number": result.block_number,
+            "merkle_root": result.merkle_root,
+            "explorer_url": result.explorer_url,
+            "cost": {
+                "matic": result.cost_matic,
+                "usd": result.cost_usd,
+            },
+            "mock": result.mock,
+        })
+    else:
+        return JSONResponse({
+            "success": False,
+            "error": result.error,
+        }, status_code=400)
+
+
+@app.get("/api/anchor/status")
+async def api_anchor_status(request: Request):
+    """Get latest anchor status for client."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+
+    status = get_anchor_status(client.client_id)
+
+    if status:
+        return JSONResponse({
+            "anchored": True,
+            "merkle_root": status.get("merkle_root"),
+            "transaction_hash": status.get("tx_hash"),
+            "block_number": status.get("block_number"),
+            "timestamp": str(status.get("timestamp")) if status.get("timestamp") else None,
+            "explorer_url": status.get("explorer_url"),
+            "record_count": status.get("record_count"),
+            "mock": status.get("mock", False),
+        })
+    else:
+        return JSONResponse({
+            "anchored": False,
+            "message": "No blockchain anchor found. Click 'Anchor to Blockchain' to create one.",
+        })
+
+
+@app.get("/api/anchor/verify/{tx_hash}")
+async def api_verify_anchor(tx_hash: str):
+    """Verify an anchor transaction on Polygon."""
+    result = verify_anchor(tx_hash)
+    return JSONResponse(result)
+
+
+@app.get("/api/anchor/setup")
+async def api_anchor_setup():
+    """Get wallet setup instructions."""
+    return JSONResponse({
+        "instructions": setup_instructions(),
+        "wallet_configured": bool(os.getenv("POLYGON_PRIVATE_KEY")),
+    })
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 8080):

@@ -318,6 +318,113 @@ def format_trace_report(result: TraceResult) -> str:
 
 
 # Quick search function for API
+def trace_by_client_id(client_id: str, limit: int = 50) -> TraceResult:
+    """
+    Trace all actions for a specific client.
+
+    Used by dashboard to show client-specific activity.
+    """
+    if not _driver:
+        return TraceResult("client", client_id, False, [], [], summary="DB not connected")
+
+    records = []
+    with _driver.session() as session:
+        # Query records by client_id
+        result = session.run("""
+            MATCH (r:ProvenanceRecord)
+            WHERE r.client_id = $client_id
+            RETURN r.activity_name as action,
+                   r.activity_type as type,
+                   r.timestamp as time,
+                   r.record_hash as hash
+            ORDER BY r.timestamp DESC
+            LIMIT $limit
+        """, {"client_id": client_id, "limit": limit})
+
+        for rec in result:
+            records.append({
+                "action": rec["action"],
+                "type": rec["type"],
+                "time": rec["time"],
+                "hash": rec["hash"][:16] + "..." if rec["hash"] else None
+            })
+
+    # Also try via Session node
+    if not records:
+        with _driver.session() as session:
+            result = session.run("""
+                MATCH (s:Session {client_id: $client_id})<-[:BELONGS_TO]-(r:ProvenanceRecord)
+                RETURN r.activity_name as action,
+                       r.activity_type as type,
+                       r.timestamp as time,
+                       r.record_hash as hash
+                ORDER BY r.timestamp DESC
+                LIMIT $limit
+            """, {"client_id": client_id, "limit": limit})
+
+            for rec in result:
+                records.append({
+                    "action": rec["action"],
+                    "type": rec["type"],
+                    "time": rec["time"],
+                    "hash": rec["hash"][:16] + "..." if rec["hash"] else None
+                })
+
+    return TraceResult(
+        query_type="client",
+        query_value=client_id,
+        found=len(records) > 0,
+        records=records,
+        timeline=_build_timeline(records),
+        summary=f"Found {len(records)} actions for client"
+    )
+
+
+def get_client_stats(client_id: str) -> dict:
+    """
+    Get statistics for a client from Neo4j.
+    """
+    if not _driver:
+        return {"total_actions": 0, "sessions": 0, "agents": 0, "user_commands": 0}
+
+    stats = {"total_actions": 0, "sessions": 0, "agents": 0, "user_commands": 0}
+
+    with _driver.session() as session:
+        # Count total actions
+        result = session.run("""
+            MATCH (r:ProvenanceRecord)
+            WHERE r.client_id = $client_id
+            RETURN count(r) as total,
+                   count(CASE WHEN r.activity_name = 'user_command' THEN 1 END) as commands
+        """, {"client_id": client_id})
+        rec = result.single()
+        if rec:
+            stats["total_actions"] = rec["total"] or 0
+            stats["user_commands"] = rec["commands"] or 0
+
+        # Count sessions
+        result = session.run("""
+            MATCH (s:Session)
+            WHERE s.client_id = $client_id
+            RETURN count(s) as sessions
+        """, {"client_id": client_id})
+        rec = result.single()
+        if rec:
+            stats["sessions"] = rec["sessions"] or 0
+
+        # Count agents
+        result = session.run("""
+            MATCH (r:ProvenanceRecord)-[:PERFORMED_BY]->(a:Agent)
+            WHERE r.client_id = $client_id
+            RETURN count(DISTINCT a) as agents
+        """, {"client_id": client_id})
+        rec = result.single()
+        if rec:
+            stats["agents"] = rec["agents"] or 0
+
+    return stats
+
+
 def quick_search(query: str) -> TraceResult:
     """
     Natural language search.

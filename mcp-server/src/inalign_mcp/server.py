@@ -37,6 +37,13 @@ from .provenance import (
     ProvenanceChain,
 )
 
+# Usage limiter
+try:
+    from .usage_limiter import check_and_increment, get_usage_stats as get_limiter_stats
+    LIMITER_AVAILABLE = True
+except ImportError:
+    LIMITER_AVAILABLE = False
+
 # Optional Neo4j and GraphRAG imports
 try:
     from .provenance_graph import (
@@ -44,6 +51,7 @@ try:
         store_record,
         sync_chain_to_graph,
         is_neo4j_available,
+        store_content,
     )
     from .graph_rag import (
         GraphRAGAnalyzer,
@@ -79,6 +87,23 @@ server = Server("inalign")
 # Session tracking
 SESSION_ID = str(uuid.uuid4())[:12]
 
+# Try to load from .env file if API_KEY not set (Claude Code MCP workaround)
+if not os.getenv("API_KEY"):
+    env_file = os.path.expanduser("~/.inalign.env")
+    if os.path.exists(env_file):
+        logger.info(f"[STARTUP] Loading config from {env_file}")
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ[key.strip()] = value.strip()
+
+# Debug: Log environment variables at startup
+logger.info(f"[STARTUP] SESSION_ID: {SESSION_ID}")
+logger.info(f"[STARTUP] API_KEY env: {os.getenv('API_KEY', 'NOT SET')[:20] if os.getenv('API_KEY') else 'NOT SET'}...")
+logger.info(f"[STARTUP] NEO4J_URI env: {os.getenv('NEO4J_URI', 'NOT SET')}")
+
 # Client ID from API key (for data isolation)
 API_KEY = os.getenv("INALIGN_API_KEY") or os.getenv("API_KEY")
 CLIENT_ID = None
@@ -87,6 +112,21 @@ if API_KEY:
     # Derive client_id from API key prefix
     CLIENT_ID = API_KEY[:12] if API_KEY.startswith("ial_") else hashlib.sha256(API_KEY.encode()).hexdigest()[:12]
     logger.info(f"[CLIENT] Initialized with client_id: {CLIENT_ID}")
+else:
+    logger.warning(f"[CLIENT] No API_KEY found - client_id will be None")
+
+# Initialize Neo4j connection for provenance storage
+NEO4J_URI = os.getenv("NEO4J_URI")
+if NEO4J_URI:
+    try:
+        init_neo4j(
+            uri=NEO4J_URI,
+            user=os.getenv("NEO4J_USERNAME", "neo4j"),
+            password=os.getenv("NEO4J_PASSWORD", "")
+        )
+        logger.info(f"[NEO4J] Connected to {NEO4J_URI}")
+    except Exception as e:
+        logger.warning(f"[NEO4J] Failed to connect: {e}")
 
 stats = {
     "provenance_records": 0,
@@ -335,6 +375,25 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Handle tool calls."""
     global stats
 
+    # === USAGE LIMIT CHECK ===
+    if LIMITER_AVAILABLE and CLIENT_ID:
+        usage_status = check_and_increment(CLIENT_ID)
+        if not usage_status.allowed:
+            logger.warning(f"[LIMIT] Client {CLIENT_ID} exceeded limit: {usage_status.message}")
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "error": "usage_limit_exceeded",
+                    "message": usage_status.message,
+                    "current_usage": usage_status.current_count,
+                    "limit": usage_status.limit,
+                    "plan": usage_status.plan,
+                    "upgrade_url": "http://3.36.132.4:8080"
+                })
+            )]
+        logger.info(f"[USAGE] {CLIENT_ID}: {usage_status.current_count}/{usage_status.limit} actions")
+    # === END USAGE CHECK ===
+
     # === AUTO PROVENANCE RECORDING ===
     try:
         # Include client_id for data isolation
@@ -360,7 +419,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         hash_only = arguments.get("command_hash_only", False)
         user_id = arguments.get("user_id", "unknown")
 
-        chain = get_or_create_chain(SESSION_ID, "claude")
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
 
         if hash_only:
             command_data = hashlib.sha256(command.encode()).hexdigest()
@@ -388,6 +447,26 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         )
 
         stats["provenance_records"] += 1
+
+        # Store to Neo4j for dashboard visibility
+        if is_neo4j_available():
+            try:
+                store_record(record)
+                logger.info(f"[NEO4J] Stored record {record.id} with client_id={CLIENT_ID}")
+
+                # Store full prompt content (compressed) for legal compliance
+                if not hash_only and command:
+                    content_hash = store_content(
+                        content=command,
+                        content_type="prompt",
+                        record_id=record.id,
+                        client_id=CLIENT_ID
+                    )
+                    if content_hash:
+                        logger.info(f"[NEO4J] Stored full prompt content: {content_hash[:16]}...")
+
+            except Exception as e:
+                logger.warning(f"[NEO4J] Failed to store record: {e}")
 
         return [TextContent(
             type="text",
@@ -417,7 +496,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         }
         activity_type = type_map.get(action_type_str, ActivityType.TOOL_CALL)
 
-        chain = get_or_create_chain(SESSION_ID, "claude")
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
 
         used = [(inputs, "input")] if inputs else []
         generated = [(outputs, "output")] if outputs else []
@@ -431,6 +510,26 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         )
 
         stats["provenance_records"] += 1
+
+        # Store to Neo4j for dashboard visibility
+        if is_neo4j_available():
+            try:
+                store_record(record)
+                logger.info(f"[NEO4J] Stored action record {record.id} with client_id={CLIENT_ID}")
+
+                # Store full content for inputs/outputs (for legal compliance)
+                if inputs:
+                    input_str = json.dumps(inputs, ensure_ascii=False) if isinstance(inputs, dict) else str(inputs)
+                    if len(input_str) > 100:  # Only store significant content
+                        store_content(input_str, "input", record.id, CLIENT_ID)
+
+                if outputs:
+                    output_str = json.dumps(outputs, ensure_ascii=False) if isinstance(outputs, dict) else str(outputs)
+                    if len(output_str) > 100:  # Only store significant content
+                        store_content(output_str, "output", record.id, CLIENT_ID)
+
+            except Exception as e:
+                logger.warning(f"[NEO4J] Failed to store action record: {e}")
 
         return [TextContent(
             type="text",
@@ -447,7 +546,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "get_provenance":
         fmt = arguments.get("format", "summary")
-        chain = get_or_create_chain(SESSION_ID, "claude")
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
 
         if fmt == "summary":
             summary = get_chain_summary(SESSION_ID)
@@ -474,7 +573,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             return [TextContent(type="text", text=json.dumps({"error": "Unknown format"}))]
 
     elif name == "verify_provenance":
-        chain = get_or_create_chain(SESSION_ID, "claude")
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
         is_valid, error = chain.verify_chain()
 
         return [TextContent(
@@ -491,7 +590,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "generate_audit_report":
         fmt = arguments.get("format", "summary")
-        chain = get_or_create_chain(SESSION_ID, "claude")
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
         is_valid, error = chain.verify_chain()
 
         report = {

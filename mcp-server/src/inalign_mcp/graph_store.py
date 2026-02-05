@@ -109,6 +109,7 @@ class ProvenanceGraphStore:
     CREATE INDEX activity_hash IF NOT EXISTS FOR (a:Activity) ON (a.record_hash);
     CREATE INDEX entity_hash IF NOT EXISTS FOR (e:Entity) ON (e.value_hash);
     CREATE INDEX session_created IF NOT EXISTS FOR (s:Session) ON (s.created_at);
+    CREATE INDEX session_client IF NOT EXISTS FOR (s:Session) ON (s.client_id);
     """
 
     UPSERT_SESSION = """
@@ -116,11 +117,13 @@ class ProvenanceGraphStore:
     ON CREATE SET
         s.created_at = datetime(),
         s.agent_name = $agent_name,
+        s.client_id = $client_id,
         s.record_count = 0,
         s.merkle_root = ''
     ON MATCH SET
         s.last_activity = datetime(),
-        s.record_count = s.record_count + 1
+        s.record_count = s.record_count + 1,
+        s.client_id = COALESCE(s.client_id, $client_id)
     RETURN s
     """
 
@@ -374,6 +377,7 @@ class ProvenanceGraphStore:
                     self.UPSERT_SESSION,
                     session_id=record.session_id,
                     agent_name=record.agent.name if record.agent else "unknown",
+                    client_id=getattr(record, 'client_id', '') or '',
                 )
 
                 # Upsert agent if present
