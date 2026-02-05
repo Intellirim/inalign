@@ -23,8 +23,12 @@ from .client_manager import get_client_manager, Client
 from .trace_finder import init_trace_db, trace_agent, trace_decision, trace_session, quick_search
 from .audit_export import export_session_json, export_session_summary
 from .auto_anchor import generate_certificate
+from .payments import router as payments_router
 
 app = FastAPI(title="InALign Dashboard")
+
+# Include payment routes
+app.include_router(payments_router)
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "inalign-secret-key-change-me"))
 
 # Initialize
@@ -380,11 +384,28 @@ def get_current_client(request: Request) -> Optional[Client]:
 # Routes
 # ============================================
 
+@app.get("/health")
+async def health():
+    """Health check endpoint."""
+    return {"status": "healthy", "service": "inalign"}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
+    """Serve landing page or redirect to dashboard."""
     client = get_current_client(request)
     if client:
         return RedirectResponse("/dashboard")
+
+    # Try to serve landing page
+    landing_path = os.path.join(os.path.dirname(__file__), "..", "..", "landing", "index.html")
+    if not os.path.exists(landing_path):
+        landing_path = "/app/landing/index.html"
+
+    if os.path.exists(landing_path):
+        with open(landing_path, "r") as f:
+            return HTMLResponse(f.read())
+
     return RedirectResponse("/login")
 
 

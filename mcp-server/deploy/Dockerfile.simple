@@ -16,7 +16,8 @@ RUN pip install --no-cache-dir \
     python-dotenv \
     neo4j \
     itsdangerous \
-    jinja2
+    jinja2 \
+    stripe
 
 # Environment
 ENV PYTHONPATH=/app
