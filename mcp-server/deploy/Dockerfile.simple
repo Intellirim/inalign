@@ -14,7 +14,9 @@ RUN pip install --no-cache-dir \
     uvicorn \
     starlette \
     python-dotenv \
-    neo4j
+    neo4j \
+    itsdangerous \
+    jinja2
 
 # Environment
 ENV PYTHONPATH=/app
