@@ -557,7 +557,7 @@ if __name__ == "__main__":
     return Response(
         content=script,
         media_type="application/x-python",
-        headers={{"Content-Disposition": f"attachment; filename=inalign_install.py"}}
+        headers={"Content-Disposition": "attachment; filename=inalign_install.py"}
     )
 
 
