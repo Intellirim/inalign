@@ -1,7 +1,7 @@
 {
-  "name": "@agentshield/sdk",
+  "name": "@inalign/sdk",
   "version": "0.1.0",
-  "description": "Official JavaScript/TypeScript SDK for AgentShield - AI Agent Security Platform",
+  "description": "Official JavaScript/TypeScript SDK for InALign - AI Agent Security Platform",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -20,7 +20,7 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "agentshield",
+    "inalign",
     "ai-security",
     "agent-security",
     "llm-security",
@@ -28,13 +28,13 @@
     "pii-detection",
     "ai-agent"
   ],
-  "author": "AgentShield Team <team@agentshield.io>",
+  "author": "InALign Team <team@inalign.io>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/agentshield/agentshield-js"
+    "url": "https://github.com/inalign/inalign-js"
   },
-  "homepage": "https://agentshield.io",
+  "homepage": "https://inalign.io",
   "engines": {
     "node": ">=18.0.0"
   },

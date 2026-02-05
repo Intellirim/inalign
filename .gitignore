@@ -137,3 +137,4 @@ service-account.json
 # Test results
 test-results.xml
 junit.xml
+backend/app/ml/models/

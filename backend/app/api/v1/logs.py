@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.dependencies import CurrentUser, Neo4jSession
 from app.schemas.log import LogActionRequest, LogActionResponse
 
-logger = logging.getLogger("agentshield.api.logs")
+logger = logging.getLogger("inalign.api.logs")
 
 router = APIRouter()
 

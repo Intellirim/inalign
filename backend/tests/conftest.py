@@ -1,5 +1,5 @@
 """
-Shared test fixtures for AgentShield backend tests.
+Shared test fixtures for InALign backend tests.
 
 Provides async HTTP client, mock database sessions, mock Neo4j/Redis
 connections, and sample data fixtures for use across unit, integration,
@@ -143,7 +143,7 @@ def sample_user_data() -> dict[str, Any]:
     """Sample user data for testing."""
     return {
         "id": str(uuid.uuid4()),
-        "email": "testuser@agentshield.io",
+        "email": "testuser@inalign.io",
         "name": "Test User",
         "role": "user",
         "is_active": True,

@@ -1,5 +1,5 @@
 """
-AgentShield Backend Application.
+InALign Backend Application.
 
 A real-time security layer for AI agent interactions, providing prompt
 injection detection, PII scanning, anomaly detection, and comprehensive

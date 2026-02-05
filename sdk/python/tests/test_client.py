@@ -1,21 +1,21 @@
-"""Tests for the AgentShield Python SDK client."""
+"""Tests for the InALign Python SDK client."""
 
 import json
 
 import httpx
 import pytest
 
-from agentshield import AgentShield, AsyncAgentShield
-from agentshield.client import BaseClient
-from agentshield.exceptions import (
-    AgentShieldError,
+from inalign import InALign, AsyncInALign
+from inalign.client import BaseClient
+from inalign.exceptions import (
+    InALignError,
     AuthenticationError,
     NotFoundError,
     RateLimitError,
     ServerError,
     ValidationError,
 )
-from agentshield.models import (
+from inalign.models import (
     AlertListResponse,
     AlertResponse,
     LogActionResponse,
@@ -152,7 +152,7 @@ def _mock_response(data: dict, status_code: int = 200) -> httpx.Response:
     return httpx.Response(
         status_code=status_code,
         json=data,
-        request=httpx.Request("GET", "https://api.agentshield.io/test"),
+        request=httpx.Request("GET", "https://api.inalign.io/test"),
     )
 
 
@@ -169,7 +169,7 @@ class TestBaseClient:
     def test_init_defaults(self) -> None:
         client = BaseClient(api_key="test-key")
         assert client.api_key == "test-key"
-        assert client.base_url == "https://api.agentshield.io"
+        assert client.base_url == "https://api.inalign.io"
         assert client.timeout == 30
 
     def test_init_custom_values(self) -> None:
@@ -194,8 +194,8 @@ class TestBaseClient:
 
     def test_build_url(self) -> None:
         client = BaseClient(api_key="key")
-        assert client._build_url("/api/v1/scan/input") == "https://api.agentshield.io/api/v1/scan/input"
-        assert client._build_url("api/v1/scan/input") == "https://api.agentshield.io/api/v1/scan/input"
+        assert client._build_url("/api/v1/scan/input") == "https://api.inalign.io/api/v1/scan/input"
+        assert client._build_url("api/v1/scan/input") == "https://api.inalign.io/api/v1/scan/input"
 
     def test_handle_response_success(self) -> None:
         response = _mock_response({"status": "ok"}, 200)
@@ -231,7 +231,7 @@ class TestBaseClient:
 
     def test_handle_response_unknown_4xx(self) -> None:
         response = _mock_response({"detail": "Conflict"}, 409)
-        with pytest.raises(AgentShieldError) as exc_info:
+        with pytest.raises(InALignError) as exc_info:
             BaseClient._handle_response(response)
         assert exc_info.value.status_code == 409
 
@@ -244,12 +244,12 @@ class TestBaseClient:
 class TestSyncClient:
     def test_scan_input(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.scan_input(
             text="My SSN is 123-45-6789",
             agent_id="agent-1",
@@ -267,12 +267,12 @@ class TestSyncClient:
 
     def test_scan_input_with_metadata(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.scan_input(
             text="Hello",
             agent_id="agent-1",
@@ -289,12 +289,12 @@ class TestSyncClient:
 
     def test_scan_output(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/output",
+            url="https://api.inalign.io/api/v1/scan/output",
             method="POST",
             json=MOCK_SCAN_OUTPUT_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.scan_output(
             text="Here is the response",
             agent_id="agent-1",
@@ -313,12 +313,12 @@ class TestSyncClient:
 
     def test_log_action(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/logs/action",
+            url="https://api.inalign.io/api/v1/logs/action",
             method="POST",
             json=MOCK_LOG_ACTION_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.log_action(
             agent_id="agent-1",
             session_id="sess-1",
@@ -345,12 +345,12 @@ class TestSyncClient:
 
     def test_get_session(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/sessions/sess-001",
+            url="https://api.inalign.io/api/v1/sessions/sess-001",
             method="GET",
             json=MOCK_SESSION_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.get_session("sess-001")
 
         assert isinstance(result, SessionResponse)
@@ -372,7 +372,7 @@ class TestSyncClient:
             json=mock_data,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.list_sessions(status="active", risk_level="medium")
 
         assert isinstance(result, SessionListResponse)
@@ -383,12 +383,12 @@ class TestSyncClient:
 
     def test_generate_report(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/reports/sessions/sess-001/report",
+            url="https://api.inalign.io/api/v1/reports/sessions/sess-001/report",
             method="POST",
             json=MOCK_REPORT_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.generate_report(
             session_id="sess-001",
             report_type="security_analysis",
@@ -414,7 +414,7 @@ class TestSyncClient:
             json=MOCK_ALERTS_LIST_RESPONSE,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.get_alerts(severity="high")
 
         assert isinstance(result, AlertListResponse)
@@ -426,12 +426,12 @@ class TestSyncClient:
     def test_acknowledge_alert(self, httpx_mock) -> None:
         ack_response = {**MOCK_ALERT_RESPONSE, "is_acknowledged": True, "acknowledged_by": "admin"}
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/alerts/alrt-001/acknowledge",
+            url="https://api.inalign.io/api/v1/alerts/alrt-001/acknowledge",
             method="POST",
             json=ack_response,
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         result = client.acknowledge_alert("alrt-001", acknowledged_by="admin")
 
         assert isinstance(result, AlertResponse)
@@ -445,12 +445,12 @@ class TestSyncClient:
 
     def test_context_manager(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
 
-        with AgentShield(api_key="test-key") as client:
+        with InALign(api_key="test-key") as client:
             result = client.scan_input(
                 text="test",
                 agent_id="agent-1",
@@ -460,26 +460,26 @@ class TestSyncClient:
 
     def test_auth_error_handling(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             status_code=401,
             json={"detail": "Invalid API key"},
         )
 
-        client = AgentShield(api_key="bad-key")
+        client = InALign(api_key="bad-key")
         with pytest.raises(AuthenticationError):
             client.scan_input(text="test", agent_id="a", session_id="s")
         client.close()
 
     def test_rate_limit_error_handling(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             status_code=429,
             json={"detail": "Rate limit exceeded"},
         )
 
-        client = AgentShield(api_key="test-key")
+        client = InALign(api_key="test-key")
         with pytest.raises(RateLimitError):
             client.scan_input(text="test", agent_id="a", session_id="s")
         client.close()
@@ -487,12 +487,12 @@ class TestSyncClient:
     def test_api_key_header(self, httpx_mock) -> None:
         """API keys with ask_ prefix use X-API-Key header."""
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
 
-        client = AgentShield(api_key="ask_test123")
+        client = InALign(api_key="ask_test123")
         client.scan_input(text="test", agent_id="a", session_id="s")
 
         request = httpx_mock.get_request()
@@ -510,12 +510,12 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_scan_input(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             json=MOCK_SCAN_INPUT_RESPONSE,
         )
 
-        async with AsyncAgentShield(api_key="test-key") as client:
+        async with AsyncInALign(api_key="test-key") as client:
             result = await client.scan_input(
                 text="My SSN is 123-45-6789",
                 agent_id="agent-1",
@@ -529,12 +529,12 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_scan_output(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/output",
+            url="https://api.inalign.io/api/v1/scan/output",
             method="POST",
             json=MOCK_SCAN_OUTPUT_RESPONSE,
         )
 
-        async with AsyncAgentShield(api_key="test-key") as client:
+        async with AsyncInALign(api_key="test-key") as client:
             result = await client.scan_output(
                 text="Response text",
                 agent_id="agent-1",
@@ -547,12 +547,12 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_log_action(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/logs/action",
+            url="https://api.inalign.io/api/v1/logs/action",
             method="POST",
             json=MOCK_LOG_ACTION_RESPONSE,
         )
 
-        async with AsyncAgentShield(api_key="test-key") as client:
+        async with AsyncInALign(api_key="test-key") as client:
             result = await client.log_action(
                 agent_id="agent-1",
                 session_id="sess-1",
@@ -566,12 +566,12 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_generate_report(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/reports/sessions/sess-001/report",
+            url="https://api.inalign.io/api/v1/reports/sessions/sess-001/report",
             method="POST",
             json=MOCK_REPORT_RESPONSE,
         )
 
-        async with AsyncAgentShield(api_key="test-key") as client:
+        async with AsyncInALign(api_key="test-key") as client:
             result = await client.generate_report(session_id="sess-001")
 
         assert isinstance(result, ReportResponse)
@@ -580,13 +580,13 @@ class TestAsyncClient:
     @pytest.mark.asyncio
     async def test_auth_error(self, httpx_mock) -> None:
         httpx_mock.add_response(
-            url="https://api.agentshield.io/api/v1/scan/input",
+            url="https://api.inalign.io/api/v1/scan/input",
             method="POST",
             status_code=401,
             json={"detail": "Invalid API key"},
         )
 
-        async with AsyncAgentShield(api_key="bad-key") as client:
+        async with AsyncInALign(api_key="bad-key") as client:
             with pytest.raises(AuthenticationError):
                 await client.scan_input(text="test", agent_id="a", session_id="s")
 
@@ -599,39 +599,39 @@ class TestAsyncClient:
 class TestExceptions:
     def test_from_response_401(self) -> None:
         resp = _mock_response({"detail": "Unauthorized"}, 401)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, AuthenticationError)
         assert exc.status_code == 401
 
     def test_from_response_403(self) -> None:
         resp = _mock_response({"detail": "Forbidden"}, 403)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, AuthenticationError)
 
     def test_from_response_404(self) -> None:
         resp = _mock_response({"detail": "Not found"}, 404)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, NotFoundError)
 
     def test_from_response_422(self) -> None:
         resp = _mock_response({"detail": "Validation failed"}, 422)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, ValidationError)
 
     def test_from_response_429(self) -> None:
         resp = _mock_response({"detail": "Rate limited"}, 429)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, RateLimitError)
 
     def test_from_response_500(self) -> None:
         resp = _mock_response({"detail": "Server error"}, 500)
-        exc = AgentShieldError.from_response(resp)
+        exc = InALignError.from_response(resp)
         assert isinstance(exc, ServerError)
 
     def test_from_response_unknown(self) -> None:
         resp = _mock_response({"detail": "Teapot"}, 418)
-        exc = AgentShieldError.from_response(resp)
-        assert type(exc) is AgentShieldError
+        exc = InALignError.from_response(resp)
+        assert type(exc) is InALignError
         assert exc.status_code == 418
 
     def test_repr(self) -> None:

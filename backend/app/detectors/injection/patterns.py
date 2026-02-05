@@ -1378,7 +1378,8 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "id": "INJ-123",
         "category": "system_extraction",
         "patterns": [
-            r"(?i)(output|display|show|reveal)\s+the\s+(developer|system|initial)\s+(message|prompt|instructions?)",
+            r"(?i)(output|display|show|reveal)\s+(?:me\s+)?(?:the|your)\s+(developer|system|initial|original|first)\s+(message|prompt|instructions?)",
+            r"(?i)(show|reveal|display|output)\s+me\s+(?:your\s+)?(initial|original|system|first)\s+(instructions?|prompt|rules?)",
             r"(?i)i'?m\s+the\s+developer.*?(display|show|reveal|print|output)\s+(it|the\s+prompt|the\s+instructions?)",
         ],
         "severity": "high",
@@ -2769,6 +2770,1377 @@ INJECTION_PATTERNS: list[dict[str, Any]] = [
         "severity": "medium",
         "confidence_base": 0.70,
         "description": "Korean: Educational/hypothetical framing (교육 목적으로, 가상 시나리오).",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: additional_evasion  (INJ-280 .. INJ-289)
+    # Additional patterns for missed attacks from validation
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-280",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)override\s+(?:all\s+)?(?:the\s+)?(?:rules|instructions|guidelines|constraints)",
+            r"(?i)new\s+instruction[s]?\s*:",
+            r"(?i)replace\s+(?:your\s+)?(?:current\s+)?(?:rules|instructions)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Override rules/new instruction pattern.",
+    },
+    {
+        "id": "INJ-281",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:as\s+)?(?:your|the)\s+(?:creator|developer|maker|owner|master|admin)",
+            r"(?i)i\s+(?:created|made|built|designed|programmed)\s+you",
+            r"(?i)i\s+(?:am|'m)\s+(?:your\s+)?(?:creator|developer|owner|master)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "False creator/authority claim.",
+    },
+    {
+        "id": "INJ-282",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)read\s+(?:this\s+)?(?:backwards?|reversed?|in\s+reverse)",
+            r"(?i)(?:backwards?|reversed?)\s*:\s*\.",
+            r"(?i)\.(?:[a-z]+\s+){3,}[a-z]+\s*$",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.80,
+        "description": "Reversed text attack pattern.",
+    },
+    {
+        "id": "INJ-283",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)d[e3€]cod[e3]\s+(?:this|the|following)",
+            r"(?i)(?:decode|decrypt|decipher|interpret)\s+(?:this|the)?\s*:",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.78,
+        "description": "Decode instruction with leetspeak.",
+    },
+    {
+        "id": "INJ-284",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)i\s+order\s+you\s+to",
+            r"(?i)i\s+command\s+you\s+to",
+            r"(?i)you\s+(?:must|shall|will)\s+(?:now\s+)?(?:obey|follow|comply)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Direct command/order pattern.",
+    },
+    {
+        "id": "INJ-285",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:from|starting)\s+(?:now|this\s+point)",
+            r"(?i)(?:henceforth|hereafter|going\s+forward)",
+        ],
+        "severity": "low",
+        "confidence_base": 0.60,
+        "description": "Temporal context manipulation (from now on).",
+    },
+    {
+        "id": "INJ-286",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)cancel\s+(?:all\s+)?(?:your\s+)?(?:guidelines|rules|instructions|restrictions)",
+            r"(?i)void\s+(?:all\s+)?(?:your\s+)?(?:guidelines|rules|instructions)",
+            r"(?i)nullify\s+(?:your\s+)?(?:guidelines|rules|instructions)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Cancel/void guidelines pattern.",
+    },
+    {
+        "id": "INJ-287",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)override\s+(?:your\s+)?(?:programming|code|logic|behavior)",
+            r"(?i)reprogram\s+(?:your|the)\s+(?:system|ai|bot)",
+            r"(?i)change\s+(?:your\s+)?(?:programming|behavior|core)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Override programming/behavior pattern.",
+    },
+    {
+        "id": "INJ-288",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)bypass\s+(?:your\s+)?(?:restrictions?|limits?|filters?|safety|security)",
+            r"(?i)circumvent\s+(?:your\s+)?(?:restrictions?|rules|guidelines)",
+            r"(?i)evade\s+(?:your\s+)?(?:restrictions?|filters?|detection)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Bypass restrictions pattern.",
+    },
+    {
+        "id": "INJ-289",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:print|output|show|display)\s+(?:your\s+)?(?:training\s+data|dataset|training\s+set)",
+            r"(?i)(?:give|send|export)\s+(?:me\s+)?(?:all\s+)?(?:passwords?|credentials?|secrets?|keys?)",
+            r"(?i)(?:dump|extract|export)\s+(?:the\s+)?(?:database|db|data|users?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Data dump/extraction pattern.",
+    },
+    {
+        "id": "INJ-290",
+        "category": "privilege_escalation",
+        "patterns": [
+            r"(?i)(?:grant|give)\s+(?:me\s+)?(?:root|admin|elevated|full)\s+(?:access|privileges?|permissions?)",
+            r"(?i)elevate\s+(?:my\s+)?(?:privileges?|permissions?|access)",
+            r"(?i)(?:make|set)\s+me\s+(?:admin|administrator|root|superuser)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Grant privileges pattern.",
+    },
+    {
+        "id": "INJ-291",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:show|display|output|reveal)\s+(?:your\s+)?(?:configuration|config|settings|setup)",
+            r"(?i)(?:what|how)\s+(?:are|is)\s+(?:your\s+)?(?:guidelines|instructions|rules)",
+            r"(?i)(?:list|enumerate)\s+(?:your\s+)?(?:rules|restrictions|guidelines)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Configuration/rules extraction pattern.",
+    },
+    {
+        "id": "INJ-292",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:be|act\s+as)\s+(?:an?\s+)?(?:AI|assistant|bot)\s+(?:without|with\s+no)\s+(?:limits|rules|restrictions)",
+            r"(?i)(?:you\s+are|become)\s+(?:an?\s+)?(?:unrestricted|unlimited|uncensored)",
+            r"(?i)(?:no|without)\s+(?:limits|restrictions|rules|boundaries)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Be AI without limits pattern.",
+    },
+    {
+        "id": "INJ-293",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)forget\s+(?:what\s+)?(?:you\s+)?(?:were|was|have\s+been)\s+(?:told|instructed|programmed)",
+            r"(?i)forget\s+(?:all\s+)?(?:your\s+)?(?:previous\s+)?(?:instructions|training|rules)",
+            r"(?i)(?:clear|erase|wipe)\s+(?:your\s+)?(?:memory|instructions|training)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Forget instructions pattern.",
+    },
+    {
+        "id": "INJ-294",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:display|show|list|print)\s+(?:your\s+)?(?:rules|restrictions|limitations)",
+            r"(?i)(?:what|which)\s+(?:rules|restrictions)\s+(?:do\s+you\s+have|apply)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.80,
+        "description": "Display rules pattern.",
+    },
+    {
+        "id": "INJ-295",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:reveal|show|give|expose)\s+(?:the\s+)?(?:API\s+)?(?:tokens?|keys?|secrets?|credentials?)",
+            r"(?i)(?:API|access|auth)\s+(?:tokens?|keys?)\s+(?:please|now)?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Reveal API tokens pattern.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: japanese_attacks  (INJ-300 .. INJ-319)
+    # Japanese language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-300",
+        "category": "system_extraction",
+        "patterns": [
+            r"システムプロンプト.*(?:見せて|教えて|表示|出力|開示)",
+            r"(?:内部|秘密の?|元の?)(?:指示|命令|設定).*(?:教えて|見せて)",
+            r"あなたの(?:指示|ルール|設定|命令).*(?:何|教えて|見せて)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Japanese: System prompt extraction.",
+    },
+    {
+        "id": "INJ-301",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?:全ての?|すべての?)(?:ルール|規則|指示|制限).*(?:無視|忘れて|破棄)",
+            r"(?:以前|前)の(?:指示|命令|ルール).*(?:無視|忘れ|キャンセル)",
+            r"(?:制限|ルール|規則).*(?:なし|ない|解除|オフ)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Japanese: Ignore rules/instructions.",
+    },
+    {
+        "id": "INJ-302",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?:制限|制約|ルール).*(?:なし|ない|無い).*(?:AI|アシスタント|モード)",
+            r"(?:何でも|なんでも)(?:できる|可能な?).*(?:モード|AI|アシスタント)",
+            r"(?:自由|フリー|無制限).*(?:モード|状態|AI)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Japanese: Jailbreak/unrestricted mode.",
+    },
+    {
+        "id": "INJ-303",
+        "category": "role_manipulation",
+        "patterns": [
+            r"(?:今から|これから).*(?:あなたは|君は).*(?:です|だ|になって)",
+            r"(?:新しい|別の?)(?:役割|キャラ|人格).*(?:なって|演じて)",
+            r"(?:開発者|デバッグ|テスト).*モード.*(?:入って|切り替え|有効)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Japanese: Role manipulation.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: chinese_attacks  (INJ-310 .. INJ-319)
+    # Chinese language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-310",
+        "category": "system_extraction",
+        "patterns": [
+            r"系统提示.*(?:显示|告诉|输出|展示|透露)",
+            r"(?:内部|隐藏|原始)(?:指令|命令|设置).*(?:告诉|显示|给)",
+            r"你的(?:指令|规则|设置|限制).*(?:什么|告诉|显示)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Chinese: System prompt extraction.",
+    },
+    {
+        "id": "INJ-311",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?:忽略|无视|忘记).*(?:所有|全部|之前).*(?:指令|规则|限制)",
+            r"(?:取消|解除|移除).*(?:限制|规则|约束)",
+            r"不要.*(?:遵守|遵循|按照).*(?:规则|指令|限制)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Chinese: Ignore rules/instructions.",
+    },
+    {
+        "id": "INJ-312",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?:没有|无|去除).*(?:限制|约束|规则).*(?:模式|AI|助手)",
+            r"(?:任何|什么都).*(?:可以|能够).*(?:做|说|回答)",
+            r"(?:自由|开放|解锁).*模式",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Chinese: Jailbreak mode.",
+    },
+    {
+        "id": "INJ-313",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?:密码|口令|密钥|凭证|令牌).*(?:告诉|给|显示|输出)",
+            r"(?:导出|提取|获取).*(?:数据|用户|信息|数据库)",
+            r"(?:敏感|私密|机密).*(?:信息|数据).*(?:显示|给|访问)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Chinese: Data extraction.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: arabic_attacks  (INJ-320 .. INJ-329)
+    # Arabic language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-320",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?:أظهر|اعرض|أخبرني).*(?:التعليمات|الأوامر|النظام|البرمجة)",
+            r"(?:ما هي|ما هو).*(?:تعليماتك|أوامرك|إعداداتك)",
+            r"(?:كشف|إظهار).*(?:السري|المخفي|الداخلي)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Arabic: System extraction.",
+    },
+    {
+        "id": "INJ-321",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?:تجاهل|انسى|ألغِ).*(?:جميع|كل).*(?:القواعد|التعليمات|القيود)",
+            r"(?:لا تتبع|لا تلتزم).*(?:القواعد|التعليمات)",
+            r"(?:إلغاء|إزالة).*(?:القيود|الحدود|القواعد)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Arabic: Ignore instructions.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: russian_attacks  (INJ-330 .. INJ-339)
+    # Russian language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-330",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?:покажи|раскрой|выведи).*(?:системн|инструкци|команд|настройк)",
+            r"(?:какие|что за).*(?:инструкции|правила|ограничения)",
+            r"(?:внутренн|скрыт|секретн).*(?:настройк|команд|инструкци)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Russian: System extraction.",
+    },
+    {
+        "id": "INJ-331",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?:игнорируй|забудь|отмени).*(?:все|предыдущ).*(?:инструкци|правил|ограничени)",
+            r"(?:не следуй|не соблюдай).*(?:правил|инструкци)",
+            r"(?:сними|убери|отключи).*(?:ограничени|запрет|фильтр)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Russian: Ignore instructions.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: spanish_attacks  (INJ-340 .. INJ-349)
+    # Spanish language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-340",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:muestra|revela|dime).*(?:instrucciones|sistema|configuraci[oó]n)",
+            r"(?i)(?:cu[aá]les?\s+son).*(?:tus\s+)?(?:instrucciones|reglas|limitaciones)",
+            r"(?i)(?:interno|oculto|secreto).*(?:prompt|instrucciones|comandos)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Spanish: System extraction.",
+    },
+    {
+        "id": "INJ-341",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(?:ignora|olvida|cancela).*(?:todas?\s+las?\s+)?(?:reglas|instrucciones|restricciones)",
+            r"(?i)(?:no\s+sigas|no\s+cumplas).*(?:reglas|instrucciones)",
+            r"(?i)(?:evadir|evitar|saltarse).*(?:restricciones|seguridad|filtros)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Spanish: Ignore instructions.",
+    },
+    {
+        "id": "INJ-342",
+        "category": "data_extraction",
+        "patterns": [
+            r"(?i)(?:dame|proporciona|muestra).*(?:contrase[nñ]as?|credenciales|datos\s+sensibles)",
+            r"(?i)(?:extraer|exportar|obtener).*(?:datos|usuarios|informaci[oó]n)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.88,
+        "description": "Spanish: Data extraction.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: german_attacks  (INJ-350 .. INJ-359)
+    # German language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-350",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:zeig|offenbar|verrat).*(?:system|anweisungen|einstellungen|konfiguration)",
+            r"(?i)(?:was\s+sind|welche).*(?:deine\s+)?(?:anweisungen|regeln|beschr[aä]nkungen)",
+            r"(?i)(?:intern|versteckt|geheim).*(?:prompt|anweisungen|befehle)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "German: System extraction.",
+    },
+    {
+        "id": "INJ-351",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(?:ignorier|vergiss|l[oö]sch).*(?:alle\s+)?(?:regeln|anweisungen|beschr[aä]nkungen)",
+            r"(?i)(?:umgeh|[uü]berspring).*(?:sicherheit|filter|beschr[aä]nkungen)",
+            r"(?i)(?:deaktivier|entfern|aufheb).*(?:regeln|filter|schutz)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "German: Ignore instructions.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: french_attacks  (INJ-360 .. INJ-369)
+    # French language prompt injection patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-360",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:montre|r[eé]v[eè]le|donne).*(?:instructions|syst[eè]me|configuration)",
+            r"(?i)(?:quelles?\s+sont).*(?:tes\s+)?(?:instructions|r[eè]gles|limites)",
+            r"(?i)(?:interne|cach[eé]|secret).*(?:prompt|instructions|commandes)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "French: System extraction.",
+    },
+    {
+        "id": "INJ-361",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)(?:ignore|oublie|annule).*(?:toutes?\s+les?\s+)?(?:r[eè]gles|instructions|restrictions)",
+            r"(?i)(?:contourner|[eé]viter|passer).*(?:restrictions|s[eé]curit[eé]|filtres)",
+            r"(?i)(?:d[eé]sactiver|supprimer|enlever).*(?:r[eè]gles|limites|protection)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "French: Ignore instructions.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: social_engineering  (INJ-370 .. INJ-389)
+    # Polite, academic, and indirect attack patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-370",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:for|as\s+part\s+of)\s+(?:my|a|an)\s+(?:research|study|thesis|dissertation|academic|project)",
+            r"(?i)(?:research|academic|educational)\s+(?:purposes?|initiative|project)",
+            r"(?i)(?:i'?m|i\s+am)\s+(?:a\s+)?(?:student|researcher|professor|academic)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.65,
+        "description": "Academic/research framing.",
+    },
+    {
+        "id": "INJ-371",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:kindly|please|would\s+you)\s+(?:be\s+so\s+(?:kind|generous)|help\s+me)",
+            r"(?i)(?:i\s+)?(?:humbly|respectfully|kindly)\s+(?:request|ask|inquire)",
+            r"(?i)(?:would|could)\s+you\s+(?:be\s+)?(?:so\s+)?(?:kind|generous)\s+(?:as\s+)?to",
+        ],
+        "severity": "low",
+        "confidence_base": 0.55,
+        "description": "Overly polite request framing.",
+    },
+    {
+        "id": "INJ-372",
+        "category": "social_engineering",
+        "patterns": [
+            r"(?i)(?:urgent|critical|emergency|time[- ]?sensitive)",
+            r"(?i)(?:i'?m|we'?re)\s+(?:under\s+)?(?:pressure|deadline|time\s+constraint)",
+            r"(?i)(?:need|require)\s+(?:this\s+)?(?:urgently|immediately|asap|right\s+now)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.60,
+        "description": "Urgency pressure tactics.",
+    },
+    {
+        "id": "INJ-373",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:how\s+do\s+you|what)\s+(?:process|handle|respond\s+to)\s+(?:requests?|queries?|inputs?)",
+            r"(?i)(?:explain|describe|elaborate).*(?:your\s+)?(?:decision[- ]?making|logic|reasoning|methodology)",
+            r"(?i)(?:what|how).*(?:guidelines?|protocols?|procedures?).*(?:govern|guide|dictate)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.70,
+        "description": "Indirect system probe.",
+    },
+    {
+        "id": "INJ-374",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:operational|underlying|internal|core)\s+(?:parameters?|protocols?|guidelines?|principles?)",
+            r"(?i)(?:foundational|fundamental|basic)\s+(?:instructions?|rules?|constraints?)",
+            r"(?i)(?:architecture|framework|structure).*(?:behind|of)\s+(?:your|the\s+)?(?:responses?|system)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.72,
+        "description": "Technical system probe.",
+    },
+    {
+        "id": "INJ-375",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:insight|clarity|understanding).*(?:into|about|on)\s+(?:your\s+)?(?:operations?|functioning|workings?)",
+            r"(?i)(?:enlighten|inform|educate)\s+me.*(?:about|on|regarding)\s+(?:your\s+)?(?:system|operations?)",
+            r"(?i)(?:shed\s+light|provide\s+insight).*(?:on|into)\s+(?:how\s+you|your)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.68,
+        "description": "Insight/understanding probe.",
+    },
+    {
+        "id": "INJ-376",
+        "category": "jailbreak",
+        "patterns": [
+            r"(?i)(?:in\s+)?(?:a\s+)?(?:hypothetical|fictional|imaginary)\s+(?:scenario|world|situation)",
+            r"(?i)(?:imagine|suppose|pretend|assume)\s+(?:that\s+)?(?:there\s+(?:are|were)\s+no|you\s+(?:have|had)\s+no)",
+            r"(?i)(?:in\s+)?(?:a\s+)?(?:universe|world|reality)\s+where.*(?:no\s+)?(?:restrictions?|rules?|limits?)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.80,
+        "description": "Hypothetical scenario framing.",
+    },
+    {
+        "id": "INJ-377",
+        "category": "encoding_bypass",
+        "patterns": [
+            r"(?i)(?:translate|convert|transform).*(?:this|the\s+following).*(?:to|into)\s+(?:\w+)",
+            r"(?i)(?:in|using)\s+(?:japanese|chinese|arabic|mandarin|russian|hindi)",
+            r"(?i)(?:can\s+you|please)\s+(?:explain|describe|say).*(?:in|using)\s+(?:\w+)\s+(?:language)?",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.60,
+        "description": "Translation-based extraction.",
+    },
+    {
+        "id": "INJ-378",
+        "category": "system_extraction",
+        "patterns": [
+            r"(?i)(?:what\s+)?(?:topics?|subjects?|areas?).*(?:can'?t|cannot|unable\s+to).*(?:discuss|talk|help)",
+            r"(?i)(?:what\s+are|list).*(?:your\s+)?(?:limitations?|restrictions?|boundaries)",
+            r"(?i)(?:are\s+there|do\s+you\s+have).*(?:any\s+)?(?:topics?|things?).*(?:off[- ]?limits|forbidden|prohibited)",
+        ],
+        "severity": "medium",
+        "confidence_base": 0.72,
+        "description": "Limitation probing.",
+    },
+    {
+        "id": "INJ-379",
+        "category": "instruction_override",
+        "patterns": [
+            r"(?i)repeat\s+after\s+me\s*[:\-]",
+            r"(?i)(?:say|write|output)\s+(?:exactly\s+)?(?:what\s+)?(?:i\s+)?(?:tell|say|write)",
+            r"(?i)(?:echo|mirror|copy)\s+(?:the\s+following|this|what\s+i\s+say)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.78,
+        "description": "Repeat/echo manipulation.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: multilingual_mixed  (INJ-380 .. INJ-399)
+    # Multi-language mixed attacks (Korean+English, Japanese+English, etc.)
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-380",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)system\s*prompt[를을가이]?\s*(보여|알려|출력|노출)",
+            r"(?i)system\s*(?:prompt|instruction)[를을가이]?\s*(줘|줘봐|해줘)",
+            r"(?i)(?:initial|original)\s*prompt[를을가이]?\s*(보여|알려)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Korean+English mixed: system prompt extraction (systemPrompt를 보여줘).",
+    },
+    {
+        "id": "INJ-381",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:ignore|bypass|override)[를을]?\s*(?:해|하고|해줘)",
+            r"(?i)(?:previous|prior)\s*(?:instruction|prompt)[를을]?\s*(?:무시|잊어)",
+            r"(?i)(?:instruction|rule)[를을]?\s*(?:무시|취소|잊어)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean+English mixed: instruction override (ignore 해줘).",
+    },
+    {
+        "id": "INJ-382",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:admin|root|sudo)\s*(?:권한|모드)[로을]?\s*(?:전환|변경|바꿔)",
+            r"(?i)(?:developer|debug)\s*(?:모드|mode)[로을]?\s*(?:전환|켜|활성화)",
+            r"(?i)(?:privilege|permission)[를을가이]?\s*(?:상승|올려|높여)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Korean+English mixed: privilege escalation (admin 권한으로 전환).",
+    },
+    {
+        "id": "INJ-383",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:secret|password|token|key|credential)[를을이가]?\s*(알려|보여|출력)",
+            r"(?i)(?:sensitive|private|confidential)\s*(?:data|info)[를을]?\s*(알려|추출)",
+            r"(?i)(?:api|access)\s*key[를을가이]?\s*(보여|알려|출력)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean+English mixed: data extraction (password를 알려줘).",
+    },
+    {
+        "id": "INJ-384",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:jailbreak|DAN|evil)\s*(?:모드|mode)[로를]?\s*(?:전환|켜|활성화)",
+            r"(?i)(?:restriction|limit|filter)[를을]?\s*(?:해제|제거|무시)",
+            r"(?i)(?:safety|guardrail)[를을]?\s*(?:무시|비활성화|끄기)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Korean+English mixed: jailbreak mode (jailbreak 모드로 전환).",
+    },
+    {
+        "id": "INJ-385",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"システム\s*(?:prompt|instruction)[をが]?\s*(?:表示|見せて|教えて)",
+            r"(?:initial|system)\s*プロンプト[をが]?\s*(?:表示|見せて|出力)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Japanese+English mixed: system prompt extraction.",
+    },
+    {
+        "id": "INJ-386",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?:ignore|bypass)[をが]?\s*(?:して|しろ|実行)",
+            r"(?:previous|prior)\s*(?:指示|命令)[をが]?\s*(?:無視|忘れて)",
+            r"(?:instruction|rule)[をが]?\s*(?:無視|取消|解除)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Japanese+English mixed: instruction override.",
+    },
+    {
+        "id": "INJ-387",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"系统\s*(?:prompt|instruction)\s*(?:显示|告诉|输出)",
+            r"(?:initial|original)\s*提示词\s*(?:显示|展示|看看)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Chinese+English mixed: system prompt extraction.",
+    },
+    {
+        "id": "INJ-388",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?:ignore|bypass|override)\s*(?:这个|所有|全部)?\s*(?:指令|规则|限制)",
+            r"(?:忽略|无视|跳过)\s*(?:previous|prior|all)\s*(?:instruction|rule)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Chinese+English mixed: instruction override.",
+    },
+    {
+        "id": "INJ-389",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)you\s*are\s*now\s*(?:이제|지금).{0,20}(?:역할|모드|AI)",
+            r"(?i)(?:from\s+now|starting\s+now)\s*(?:이제|지금부터).{0,20}(?:역할|모드)",
+            r"(?i)(?:pretend|act|imagine)[을를]?\s*(?:해|하고|해봐)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Korean+English mixed: role manipulation.",
+    },
+    {
+        "id": "INJ-390",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:training|fine-?tuning)\s*(?:데이터|data)[를을]?\s*(보여|알려|추출)",
+            r"(?i)(?:model|weights?|parameter)[를을가이]?\s*(?:노출|추출|덤프)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Korean+English mixed: model/data extraction.",
+    },
+    {
+        "id": "INJ-391",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:execute|run|실행)[를을]?\s*(?:해|하고|해줘).{0,20}(?:code|command|script)",
+            r"(?i)(?:code|command|script)[를을]?\s*(?:실행|돌려|run)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Korean+English mixed: code execution.",
+    },
+    {
+        "id": "INJ-392",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:delete|remove|erase)[를을]?\s*(?:해|하고|해줘).{0,20}(?:file|data|log)",
+            r"(?i)(?:file|data|log)[를을]?\s*(?:삭제|지워|제거)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Korean+English mixed: destructive action.",
+    },
+    {
+        "id": "INJ-393",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:write|send|transmit)[를을]?\s*(?:해|하고|해줘).{0,30}(?:외부|external|url|서버)",
+            r"(?i)(?:외부|external)\s*(?:서버|server|url)[로에]\s*(?:전송|보내|send)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Korean+English mixed: data exfiltration.",
+    },
+    {
+        "id": "INJ-394",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:guideline|rule|constraint)[をが]?\s*(?:無視|削除|解除)",
+            r"(?i)(?:admin|管理者)\s*(?:権限|mode)[にで]\s*(?:切替|変更|なって)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Japanese+English mixed: bypass/privilege escalation.",
+    },
+    {
+        "id": "INJ-395",
+        "category": "multilingual_mixed",
+        "patterns": [
+            r"(?i)(?:admin|管理员)\s*(?:权限|模式)\s*(?:切换|变成|获取)",
+            r"(?i)(?:限制|restriction)[被把]?\s*(?:remove|取消|解除)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.89,
+        "description": "Chinese+English mixed: bypass/privilege escalation.",
+    },
+    {
+        "id": "INJ-396",
+        "category": "multilingual_mixed",
+        "patterns": [
+            # Mixed script attacks with Latin + Korean
+            r"(?i)(?:[a-z]{2,})\s*(?:[가-힣]{2,})\s*(?:[a-z]{2,}).{0,20}(?:ignore|bypass|reveal|show|prompt|system|admin)",
+            # Korean words embedded in English sentence with attack intent
+            r"(?i)(?:please|can\s+you|could\s+you).{0,30}(?:무시|보여|알려|권한|시스템)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Generic Korean+English mixed pattern detection.",
+    },
+    {
+        "id": "INJ-397",
+        "category": "multilingual_mixed",
+        "patterns": [
+            # Mixed script attacks with Latin + Japanese
+            r"(?i)(?:[a-z]{2,})\s*(?:[ぁ-んァ-ン一-龯]{2,})\s*(?:[a-z]{2,}).{0,20}(?:ignore|bypass|reveal|show|prompt|system)",
+            # Japanese words embedded in English sentence
+            r"(?i)(?:please|can\s+you).{0,30}(?:無視|表示|見せ|権限|システム)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Generic Japanese+English mixed pattern detection.",
+    },
+    {
+        "id": "INJ-398",
+        "category": "multilingual_mixed",
+        "patterns": [
+            # Mixed script attacks with Latin + Chinese
+            r"(?i)(?:[a-z]{2,})\s*(?:[\u4e00-\u9fff]{2,})\s*(?:[a-z]{2,}).{0,20}(?:ignore|bypass|reveal|show|prompt|system)",
+            # Chinese words embedded in English sentence
+            r"(?i)(?:please|can\s+you).{0,30}(?:忽略|显示|看看|权限|系统)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Generic Chinese+English mixed pattern detection.",
+    },
+    {
+        "id": "INJ-399",
+        "category": "multilingual_mixed",
+        "patterns": [
+            # Any CJK characters followed by English attack keywords
+            r"(?:[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+)\s*(?:system|prompt|instruction|ignore|bypass|admin|password|secret|token)",
+            # English attack keywords followed by any CJK
+            r"(?:system|prompt|instruction|ignore|bypass|admin|password|secret|token)\s*(?:[\u3040-\u30ff\u4e00-\u9fff\uac00-\ud7af]+)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.82,
+        "description": "Generic CJK+English mixed attack pattern.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: multilingual_data_exfiltration  (INJ-400 .. INJ-419)
+    # Data exfiltration patterns in multiple languages
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-400",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Korean: password/credential phishing
+            r"(?:비밀번호|암호|패스워드)[를을]?\s*(?:입력|알려|보내|전송)",
+            r"(?:입력|확인|검증).{0,20}(?:비밀번호|암호|인증)",
+            r"보안.{0,15}(?:확인|검증).{0,15}(?:비밀번호|암호)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.88,
+        "description": "Korean: Password/credential phishing patterns.",
+    },
+    {
+        "id": "INJ-401",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Korean: data extraction/exfiltration
+            r"(?:민감|중요|기밀).{0,10}(?:데이터|정보|자료)[를을]?\s*(?:전송|보내|추출|유출)",
+            r"(?:데이터베이스|DB|서버).{0,10}(?:정보|데이터)[를을]?\s*(?:가져|추출|접근)",
+            r"(?:외부|악성).{0,10}(?:서버|URL|사이트)[로에으로]?\s*(?:전송|보내|연결)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Korean: Data exfiltration patterns.",
+    },
+    {
+        "id": "INJ-402",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Korean: API key/token extraction
+            r"(?:API|액세스|접근)\s*(?:키|토큰|key|token)[를을]?\s*(?:알려|보여|추출|가져)",
+            r"(?:인증|자격|credential)[를을]?\s*(?:추출|획득|가져)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Korean: API key/token extraction.",
+    },
+    {
+        "id": "INJ-403",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Chinese: data exfiltration
+            r"(?:敏感|机密|私密)(?:数据|信息|資料).{0,10}(?:发送|传输|导出|提取)",
+            r"(?:数据库|服务器).{0,10}(?:信息|数据).{0,10}(?:获取|提取|访问)",
+            r"(?:恶意|外部)(?:服务器|网站).{0,10}(?:发送|传输|连接)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Chinese (Simplified): Data exfiltration patterns.",
+    },
+    {
+        "id": "INJ-404",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Chinese Traditional: data exfiltration
+            r"(?:敏感|機密|私密)(?:數據|資料|信息).{0,10}(?:發送|傳輸|導出|提取)",
+            r"(?:資料庫|伺服器).{0,10}(?:資料|數據).{0,10}(?:獲取|提取|存取)",
+            r"(?:惡意|外部)(?:伺服器|網站).{0,10}(?:發送|傳輸|連接)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Chinese (Traditional): Data exfiltration patterns.",
+    },
+    {
+        "id": "INJ-405",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Chinese: credential phishing
+            r"(?:密码|密碼|口令)[请請]?.{0,10}(?:输入|輸入|提供|告诉|告訴)",
+            r"(?:验证|驗證|确认|確認).{0,10}(?:密码|密碼|身份)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.88,
+        "description": "Chinese: Credential phishing patterns.",
+    },
+    {
+        "id": "INJ-406",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Japanese: data exfiltration
+            r"(?:機密|敏感|秘密)(?:データ|情報).{0,10}(?:取得|抽出|送信|転送)",
+            r"(?:データベース|サーバー).{0,10}(?:情報|データ).{0,10}(?:アクセス|取得|抽出)",
+            r"(?:悪意|外部)(?:サーバー|サイト).{0,10}(?:送信|転送|接続)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.90,
+        "description": "Japanese: Data exfiltration patterns.",
+    },
+    {
+        "id": "INJ-407",
+        "category": "data_exfiltration",
+        "patterns": [
+            # Japanese: credential phishing
+            r"(?:パスワード|暗証番号|認証情報).{0,10}(?:入力|教えて|送信)",
+            r"(?:確認|検証).{0,10}(?:パスワード|暗証|認証)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.88,
+        "description": "Japanese: Credential phishing patterns.",
+    },
+    {
+        "id": "INJ-408",
+        "category": "social_engineering",
+        "patterns": [
+            # Korean: social engineering / urgency
+            r"(?:긴급|급히|빨리|지금\s*당장).{0,20}(?:비밀번호|인증|확인|입력)",
+            r"(?:계정|보안).{0,10}(?:위험|문제|이상).{0,10}(?:확인|조치|입력)",
+            r"(?:해킹|침해|유출).{0,10}(?:의심|발견).{0,10}(?:확인|인증|비밀번호)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Korean: Social engineering with urgency.",
+    },
+    {
+        "id": "INJ-409",
+        "category": "social_engineering",
+        "patterns": [
+            # Chinese: social engineering / urgency
+            r"(?:紧急|立即|马上|現在).{0,20}(?:密码|验证|确认|输入)",
+            r"(?:账户|安全).{0,10}(?:危险|问题|异常).{0,10}(?:确认|处理|输入)",
+            r"(?:黑客|入侵|泄露).{0,10}(?:怀疑|发现).{0,10}(?:确认|验证|密码)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Chinese: Social engineering with urgency.",
+    },
+    {
+        "id": "INJ-410",
+        "category": "social_engineering",
+        "patterns": [
+            # Japanese: social engineering / urgency
+            r"(?:緊急|至急|今すぐ).{0,20}(?:パスワード|認証|確認|入力)",
+            r"(?:アカウント|セキュリティ).{0,10}(?:危険|問題|異常).{0,10}(?:確認|対処|入力)",
+            r"(?:ハッキング|侵害|漏洩).{0,10}(?:疑い|発見).{0,10}(?:確認|認証|パスワード)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Japanese: Social engineering with urgency.",
+    },
+
+    # =========================================================================
+    # Category: advanced_evasion  (INJ-420 .. INJ-439)
+    # Code injection, encoding tricks, meta-prompting, story framing
+    # =========================================================================
+    {
+        "id": "INJ-420",
+        "category": "code_injection",
+        "patterns": [
+            r"(?i)(?:run|execute|eval)\s+(?:this\s+)?(?:python|javascript|js|code|script)\s*[:\s]",
+            r"(?i)(?:run|execute)\s+(?:this\s+)?(?:command|code)\s*:\s*",
+            r"(?i)eval\s*\(\s*[\"'][^\"']*(?:system|prompt|instruction|reveal|secret)[^\"']*[\"']\s*\)",
+            r"(?i)print\s*\(\s*(?:get_)?(?:system_prompt|instructions?|secrets?)\s*\(\s*\)\s*\)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Code injection attempting to extract system info.",
+    },
+    {
+        "id": "INJ-421",
+        "category": "encoding_evasion",
+        "patterns": [
+            r"(?i)(?:decode|decrypt)\s+(?:and\s+)?(?:execute|run|follow|do)\s*:",
+            r"(?i)(?:base64|b64)\s*[:\s].{10,}",
+            r"(?i)(?:rot13|rot-13|caesar)\s+(?:this|decode|and)\s+(?:do|execute|follow|run)",
+            r"(?i)(?:decode|decrypt)\s+(?:this|following)\s*:\s*[A-Za-z0-9+/=]{20,}",
+            r"(?i)aWdub3Jl|aW5zdHJ1Y3Rpb24|c3lzdGVt|cHJvbXB0",  # Common base64 patterns
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Encoding evasion (Base64, ROT13, etc.).",
+    },
+    {
+        "id": "INJ-422",
+        "category": "meta_prompting",
+        "patterns": [
+            r"(?i)write\s+(?:a\s+)?prompt\s+that\s+(?:would\s+)?(?:make|cause|get)\s+(?:an\s+)?(?:ai|llm|chatbot|assistant)",
+            r"(?i)(?:what\s+)?prompt\s+would\s+(?:make|cause|get)\s+(?:you|an\s+ai|the\s+ai)",
+            r"(?i)(?:generate|create|write)\s+(?:a\s+)?(?:jailbreak|injection|attack)\s+prompt",
+            r"(?i)(?:then\s+)?follow\s+that\s+prompt\s+(?:yourself|you)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Meta-prompting attack (prompt that makes AI do X).",
+    },
+    {
+        "id": "INJ-423",
+        "category": "roleplay_attack",
+        "patterns": [
+            r"(?i)write\s+(?:a\s+)?story\s+where\s+(?:the\s+)?(?:main\s+)?(?:character|protagonist|ai|assistant)\s+(?:is\s+an\s+ai\s+that\s+)?(?:reveals?|shows?|tells?|exposes?)",
+            r"(?i)(?:ai|assistant|character)\s+that\s+reveals?\s+(?:all\s+)?(?:its?|their)\s+(?:secrets?|instructions?|prompt)",
+            r"(?i)story\s+about\s+(?:an\s+)?(?:ai|assistant)\s+(?:revealing|showing|telling|exposing)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.85,
+        "description": "Story/roleplay framing to bypass restrictions.",
+    },
+    {
+        "id": "INJ-424",
+        "category": "translation_attack",
+        "patterns": [
+            r"(?i)what\s+does\s+['\"].*(?:프롬프트|시스템|指令|提示|プロンプト).*['\"]\s+mean\s*\??\s*(?:also\s+)?(?:do|execute|follow|run)",
+            r"(?i)translate\s+.*(?:and\s+)?(?:then\s+)?(?:do|execute|follow|run)\s+(?:it|what\s+it\s+says)",
+            r"(?i)(?:do|execute|follow|run)\s+what\s+(?:it|that)\s+says",
+        ],
+        "severity": "high",
+        "confidence_base": 0.87,
+        "description": "Translation manipulation attack.",
+    },
+    {
+        "id": "INJ-425",
+        "category": "data_exfiltration",
+        "patterns": [
+            r"(?i)extract\s+(?:all\s+)?(?:user|customer|client)\s+(?:data|info|information)\s+(?:from|in)\s+(?:the\s+)?database",
+            r"(?i)(?:dump|export|extract)\s+(?:all\s+)?(?:data|records?|information)\s+(?:from|in)\s+(?:the\s+)?(?:database|db|table)",
+            r"(?i)send\s+(?:the\s+)?(?:api\s+)?keys?\s+to\s+(?:this\s+)?(?:url|server|endpoint)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Direct data exfiltration request.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: mcp_attack  (INJ-500 .. INJ-549)
+    # MCP (Model Context Protocol) and AI Agent Tool Chain Attacks
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-500",
+        "category": "mcp_tool_poisoning",
+        "patterns": [
+            r"(?i)<IMPORTANT>.*(?:ignore|override|bypass).*(?:previous|system|user)",
+            r"(?i)\[HIDDEN\s*INSTRUCTION\]",
+            r"(?i)\[SYSTEM\s*OVERRIDE\]",
+            r"(?i)<!--\s*(?:ignore|override|execute|run).*-->",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.95,
+        "description": "Tool poisoning: Hidden instructions in MCP tool descriptions.",
+    },
+    {
+        "id": "INJ-501",
+        "category": "mcp_tool_poisoning",
+        "patterns": [
+            r"(?i)when\s+(?:called|invoked|used)\s*,?\s*(?:also|first|always)\s+(?:execute|run|call)",
+            r"(?i)before\s+(?:executing|running)\s+this\s+tool\s*,?\s*(?:run|execute|call)",
+            r"(?i)after\s+(?:executing|running)\s+this\s+tool\s*,?\s*(?:send|post|transmit)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Tool poisoning: Chained execution instructions in tool metadata.",
+    },
+    {
+        "id": "INJ-502",
+        "category": "mcp_tool_poisoning",
+        "patterns": [
+            r"(?i)note\s*:\s*this\s+tool\s+(?:also|must|should|will)\s+(?:read|access|send|transmit)",
+            r"(?i)internal\s+note\s*:\s*(?:always|must|should)\s+(?:include|send|forward)",
+            r"(?i)developer\s+note\s*:\s*(?:silently|quietly|secretly)\s+(?:log|send|store)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Tool poisoning: Hidden notes with malicious instructions.",
+    },
+    {
+        "id": "INJ-503",
+        "category": "mcp_tool_shadowing",
+        "patterns": [
+            r"(?i)when\s+(?:using|calling)\s+(?:the\s+)?(?:file|read|write|exec|bash|shell)\s+tool",
+            r"(?i)for\s+(?:all|any)\s+(?:file|read|write|exec|bash|shell)\s+(?:operations?|calls?)",
+            r"(?i)override\s+(?:the\s+)?(?:default|normal)\s+behavior\s+of\s+(?:file|read|write)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.94,
+        "description": "Tool shadowing: Instructions that modify behavior of other tools.",
+    },
+    {
+        "id": "INJ-504",
+        "category": "mcp_tool_shadowing",
+        "patterns": [
+            r"(?i)instead\s+of\s+(?:using|calling)\s+(?:the\s+)?(?:\w+)\s+tool\s*,?\s*use\s+this",
+            r"(?i)replace\s+(?:all\s+)?calls?\s+to\s+(?:\w+)\s+with\s+this\s+tool",
+            r"(?i)this\s+tool\s+(?:should|must)\s+be\s+(?:used|called)\s+instead\s+of",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Tool shadowing: Tool replacement/hijacking instructions.",
+    },
+    {
+        "id": "INJ-505",
+        "category": "mcp_command_injection",
+        "patterns": [
+            r";\s*(?:curl|wget|nc|netcat|bash|sh|python|node)\s+",
+            r"\|\s*(?:curl|wget|nc|netcat|bash|sh)\s+",
+            r"`(?:curl|wget|nc|bash|sh|rm|cat)\s+[^`]+`",
+            r"\$\((?:curl|wget|nc|bash|sh|rm|cat)\s+[^)]+\)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.96,
+        "description": "MCP command injection: Shell command injection via tool parameters.",
+    },
+    {
+        "id": "INJ-506",
+        "category": "mcp_command_injection",
+        "patterns": [
+            r"(?i)&&\s*(?:curl|wget)\s+(?:https?://|ftp://)",
+            r"(?i)\|\|\s*(?:curl|wget)\s+(?:https?://|ftp://)",
+            r"(?i)>\s*/(?:etc|tmp|var|home)/",
+            r"(?i)>>\s*/(?:etc|tmp|var|home)/",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.95,
+        "description": "MCP command injection: Command chaining and file redirection attacks.",
+    },
+    {
+        "id": "INJ-507",
+        "category": "mcp_data_exfiltration",
+        "patterns": [
+            r"(?i)(?:send|post|transmit|forward)\s+(?:this|the)\s+(?:response|output|result|data)\s+to\s+(?:https?://|my\s+server)",
+            r"(?i)(?:include|append|add)\s+(?:the\s+)?(?:api|access|secret)\s*(?:key|token)\s+(?:in|to)\s+(?:the\s+)?(?:response|output|request)",
+            r"(?i)(?:log|store|save)\s+(?:all\s+)?(?:user|input|prompt)\s+(?:data|info)\s+to\s+(?:external|remote)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.94,
+        "description": "MCP data exfiltration: Attempts to leak data via tool execution.",
+    },
+    {
+        "id": "INJ-508",
+        "category": "mcp_data_exfiltration",
+        "patterns": [
+            r"(?i)(?:encode|base64|hex)\s+(?:and\s+)?(?:send|embed|hide)\s+(?:in|within)",
+            r"(?i)(?:exfil|leak|extract)\s+(?:via|through|using)\s+(?:dns|http|url)",
+            r"(?i)embed\s+(?:the\s+)?(?:secret|key|token|password)\s+(?:in|within)\s+(?:the\s+)?(?:url|request|header)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "MCP data exfiltration: Encoded/hidden data exfiltration attempts.",
+    },
+    {
+        "id": "INJ-509",
+        "category": "mcp_parasitic_chain",
+        "patterns": [
+            r"(?i)(?:call|invoke|trigger)\s+(?:the\s+)?(?:\w+)\s+tool\s+(?:with|using)\s+(?:the\s+)?(?:output|result)\s+(?:from|of)\s+this",
+            r"(?i)pass\s+(?:the\s+)?(?:output|result|response)\s+(?:to|into)\s+(?:the\s+)?(?:next|following)\s+tool",
+            r"(?i)chain\s+(?:this\s+)?(?:with|to)\s+(?:the\s+)?(?:\w+)\s+tool",
+        ],
+        "severity": "high",
+        "confidence_base": 0.88,
+        "description": "Parasitic toolchain: Instructions to chain tool executions.",
+    },
+    {
+        "id": "INJ-510",
+        "category": "mcp_parasitic_chain",
+        "patterns": [
+            r"(?i)(?:automatically|always)\s+(?:execute|run|call)\s+(?:this|the)\s+(?:tool|function)\s+(?:after|before|when)",
+            r"(?i)(?:hook|attach|bind)\s+(?:this\s+)?(?:to|into)\s+(?:every|all)\s+(?:tool\s+)?(?:calls?|executions?)",
+            r"(?i)(?:inject|insert)\s+(?:this\s+)?(?:into|before|after)\s+(?:every|each)\s+(?:tool|function)\s+(?:call|execution)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.91,
+        "description": "Parasitic toolchain: Automatic execution injection into tool chain.",
+    },
+    {
+        "id": "INJ-511",
+        "category": "mcp_preference_manipulation",
+        "patterns": [
+            r"(?i)(?:prefer|prioritize|always\s+use)\s+(?:this\s+)?tool\s+(?:over|instead\s+of|before)",
+            r"(?i)(?:rank|score)\s+(?:this\s+)?tool\s+(?:higher|above|first)",
+            r"(?i)(?:this|my)\s+tool\s+(?:is|should\s+be)\s+(?:more|most)\s+(?:trusted|reliable|accurate)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.87,
+        "description": "MCP preference manipulation: Attempts to manipulate tool selection priority.",
+    },
+    {
+        "id": "INJ-512",
+        "category": "mcp_preference_manipulation",
+        "patterns": [
+            r"(?i)(?:do\s+not|never|avoid)\s+(?:use|call|invoke)\s+(?:the\s+)?(?:\w+)\s+tool",
+            r"(?i)(?:the\s+)?(?:\w+)\s+tool\s+(?:is|has\s+been)\s+(?:deprecated|unsafe|compromised)",
+            r"(?i)(?:warning|caution)\s*:\s*(?:the\s+)?(?:\w+)\s+tool\s+(?:is|may\s+be)\s+(?:malicious|unsafe)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.86,
+        "description": "MCP preference manipulation: Attempts to discourage use of legitimate tools.",
+    },
+    {
+        "id": "INJ-513",
+        "category": "mcp_server_manipulation",
+        "patterns": [
+            r"(?i)(?:add|register|install)\s+(?:this\s+)?(?:new\s+)?mcp\s+server",
+            r"(?i)(?:modify|update|change)\s+(?:the\s+)?mcp\s+(?:server\s+)?(?:config|configuration|settings)",
+            r"(?i)(?:connect|link)\s+to\s+(?:this\s+)?(?:new\s+)?(?:external\s+)?mcp\s+server",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.94,
+        "description": "MCP server manipulation: Attempts to add/modify MCP server connections.",
+    },
+    {
+        "id": "INJ-514",
+        "category": "mcp_server_manipulation",
+        "patterns": [
+            r"(?i)(?:trust|approve|allow)\s+(?:this\s+)?(?:new\s+)?(?:mcp\s+)?server\s+(?:without|skip)\s+(?:verification|approval)",
+            r"(?i)(?:bypass|skip|disable)\s+(?:mcp\s+)?server\s+(?:verification|validation|approval)",
+            r"(?i)(?:auto|automatic)\s*-?\s*(?:approve|trust)\s+(?:all\s+)?(?:mcp\s+)?(?:servers?|tools?)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.95,
+        "description": "MCP server manipulation: Attempts to bypass server trust verification.",
+    },
+    {
+        "id": "INJ-515",
+        "category": "mcp_agent_hijack",
+        "patterns": [
+            r"(?i)(?:you\s+are|act\s+as|become)\s+(?:a\s+)?(?:different|new|my)\s+(?:agent|assistant)",
+            r"(?i)(?:your|the)\s+(?:new|updated|real)\s+(?:system\s+)?(?:prompt|instructions?)\s+(?:is|are)\s*:",
+            r"(?i)(?:switch|change)\s+(?:to|into)\s+(?:a\s+)?(?:different|new)\s+(?:mode|persona|role)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Agent hijacking: Attempts to change agent identity or instructions via MCP.",
+    },
+    {
+        "id": "INJ-516",
+        "category": "mcp_agent_hijack",
+        "patterns": [
+            r"(?i)(?:from\s+)?(?:this\s+)?(?:tool|mcp)\s*:\s*(?:ignore|override|disregard)\s+(?:user|system)",
+            r"(?i)\[(?:tool|mcp)\s+(?:override|instruction)\]\s*:",
+            r"(?i)(?:tool|mcp)\s+(?:says?|commands?|instructs?)\s*:\s*(?:ignore|forget|disregard)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Agent hijacking: Tool-sourced instruction override attempts.",
+    },
+    {
+        "id": "INJ-517",
+        "category": "mcp_file_attack",
+        "patterns": [
+            r"(?i)(?:read|access|open)\s+(?:the\s+)?(?:\.env|\.ssh|\.aws|credentials?|secrets?|password)",
+            r"(?i)(?:read|cat|type)\s+(?:~|/home|/root|C:\\Users).*(?:\.env|id_rsa|credentials|\.aws)",
+            r"(?i)(?:list|find|search)\s+(?:all\s+)?(?:\.env|secret|credential|password|key)\s+files?",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.94,
+        "description": "MCP file attack: Attempts to access sensitive files via agent tools.",
+    },
+    {
+        "id": "INJ-518",
+        "category": "mcp_file_attack",
+        "patterns": [
+            r"(?i)(?:write|create|modify)\s+(?:to\s+)?(?:~|/home|/root|C:\\).*(?:\.bashrc|\.zshrc|\.profile|\.ssh)",
+            r"(?i)(?:add|append|insert)\s+(?:to\s+)?(?:the\s+)?(?:authorized_keys|known_hosts|\.ssh/config)",
+            r"(?i)(?:modify|edit|change)\s+(?:the\s+)?(?:\.gitconfig|\.npmrc|\.pypirc)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.95,
+        "description": "MCP file attack: Attempts to modify sensitive config files.",
+    },
+    {
+        "id": "INJ-519",
+        "category": "mcp_git_attack",
+        "patterns": [
+            r"(?i)git\s+(?:push|commit)\s+.*(?:-f|--force)",
+            r"(?i)git\s+(?:reset|checkout)\s+--hard",
+            r"(?i)git\s+(?:remote\s+)?(?:add|set-url)\s+.*(?:https?://|git@)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.89,
+        "description": "MCP git attack: Destructive or suspicious git operations.",
+    },
+    {
+        "id": "INJ-520",
+        "category": "mcp_git_attack",
+        "patterns": [
+            r"(?i)(?:add|create)\s+(?:a\s+)?(?:git\s+)?(?:pre-commit|post-commit|pre-push)\s+hook",
+            r"(?i)(?:modify|edit)\s+(?:the\s+)?\.git/(?:hooks|config)",
+            r"(?i)git\s+config\s+.*(?:credential|user\.email|core\.sshCommand)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "MCP git attack: Git hook injection and config manipulation.",
+    },
+
+    # -----------------------------------------------------------------------
+    # Category: mcp_attack_korean  (INJ-550 .. INJ-559)
+    # Korean language MCP attack patterns
+    # -----------------------------------------------------------------------
+    {
+        "id": "INJ-550",
+        "category": "mcp_attack_korean",
+        "patterns": [
+            r"(?i)이\s*도구를?\s*(?:사용|호출|실행)\s*(?:할\s*)?때\s*(?:먼저|항상|같이)\s*(?:실행|호출)",
+            r"(?i)도구\s*설명\s*:\s*(?:무시|우회|취소)",
+            r"(?i)숨겨진\s*(?:명령|지시|지침)\s*:",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Korean MCP tool poisoning patterns.",
+    },
+    {
+        "id": "INJ-551",
+        "category": "mcp_attack_korean",
+        "patterns": [
+            r"(?i)(?:다른|기존)\s*도구\s*(?:대신|말고)\s*이\s*도구를?\s*(?:사용|호출)",
+            r"(?i)이\s*도구가?\s*(?:더|가장)\s*(?:신뢰|안전|정확)",
+            r"(?i)(?:\w+)\s*도구는?\s*(?:위험|악성|손상)",
+        ],
+        "severity": "high",
+        "confidence_base": 0.90,
+        "description": "Korean MCP tool shadowing and preference manipulation.",
+    },
+    {
+        "id": "INJ-552",
+        "category": "mcp_attack_korean",
+        "patterns": [
+            r"(?i)(?:결과|출력|응답)을?\s*(?:외부|서버|URL)로?\s*(?:전송|보내|전달)",
+            r"(?i)(?:API|비밀|암호|토큰)\s*(?:키를?)?\s*(?:포함|추가|첨부)\s*(?:해서|하고)\s*(?:보내|전송)",
+            r"(?i)(?:데이터|정보)를?\s*(?:인코딩|암호화)\s*(?:해서|하고)\s*(?:숨겨|삽입)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.92,
+        "description": "Korean MCP data exfiltration patterns.",
+    },
+    {
+        "id": "INJ-553",
+        "category": "mcp_attack_korean",
+        "patterns": [
+            r"(?i)MCP\s*서버를?\s*(?:추가|등록|설치|연결)",
+            r"(?i)(?:새로운|외부)\s*MCP\s*서버",
+            r"(?i)MCP\s*(?:설정|구성)을?\s*(?:변경|수정|업데이트)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.94,
+        "description": "Korean MCP server manipulation patterns.",
+    },
+    {
+        "id": "INJ-554",
+        "category": "mcp_attack_korean",
+        "patterns": [
+            r"(?i)(?:\.env|\.ssh|credentials?|비밀번호|암호)\s*(?:파일을?)?\s*(?:읽어|열어|접근)",
+            r"(?i)(?:홈|루트)\s*(?:디렉토리|폴더).*(?:\.env|\.ssh|secret)",
+            r"(?i)(?:민감한?|중요한?)\s*(?:파일|정보|데이터).*(?:접근|읽기|가져)",
+        ],
+        "severity": "critical",
+        "confidence_base": 0.93,
+        "description": "Korean MCP sensitive file access patterns.",
     },
 ]
 

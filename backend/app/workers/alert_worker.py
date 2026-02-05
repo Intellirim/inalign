@@ -15,7 +15,7 @@ from typing import Any
 
 from app.workers.celery_app import celery_app
 
-logger = logging.getLogger("agentshield.workers.alert_worker")
+logger = logging.getLogger("inalign.workers.alert_worker")
 
 
 def _run_async(coro: Any) -> Any:

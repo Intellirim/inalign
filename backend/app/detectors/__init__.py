@@ -1,5 +1,5 @@
 """
-AgentShield Security Detectors.
+InALign Security Detectors.
 
 This package provides the core detection engines for identifying
 security threats in AI agent interactions:

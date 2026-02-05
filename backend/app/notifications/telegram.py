@@ -15,7 +15,7 @@ import httpx
 
 from app.notifications import BaseNotifier
 
-logger = logging.getLogger("agentshield.notifications.telegram")
+logger = logging.getLogger("inalign.notifications.telegram")
 
 # ---------------------------------------------------------------------------
 # Severity emoji mapping
@@ -118,7 +118,7 @@ class TelegramNotifier(BaseNotifier):
         """
         severity: str = alert_data.get("severity", "medium").lower()
         emoji: str = _SEVERITY_EMOJI.get(severity, "\U0001F514")
-        title: str = alert_data.get("title", "AgentShield Alert")
+        title: str = alert_data.get("title", "InALign Alert")
         description: str = alert_data.get("description", "")
         session_id: str = alert_data.get("session_id", "N/A")
         agent_id: str = alert_data.get("agent_id", "N/A")
@@ -149,6 +149,6 @@ class TelegramNotifier(BaseNotifier):
             lines.append(_escape(truncated))
 
         lines.append("")
-        lines.append(f"\U0001F6E1 _Sent by AgentShield_")
+        lines.append(f"\U0001F6E1 _Sent by InALign_")
 
         return "\n".join(lines)

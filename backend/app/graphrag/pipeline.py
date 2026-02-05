@@ -34,7 +34,7 @@ from app.schemas.report import (
     SimilarAttack,
 )
 
-logger = logging.getLogger("agentshield.graphrag.pipeline")
+logger = logging.getLogger("inalign.graphrag.pipeline")
 
 
 class GraphRAGPipeline:

@@ -81,7 +81,7 @@ export default function Header() {
             <div className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-slate-700 bg-slate-800 py-1 shadow-xl">
               <div className="border-b border-slate-700 px-4 py-2">
                 <p className="text-sm font-medium text-white">Admin User</p>
-                <p className="text-xs text-slate-400">admin@agentshield.io</p>
+                <p className="text-xs text-slate-400">admin@inalign.io</p>
               </div>
               <button
                 onClick={() => {

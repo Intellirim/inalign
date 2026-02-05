@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Agent, Policy, PolicyViolation
 
 
-logger = logging.getLogger("agentshield.policy_engine")
+logger = logging.getLogger("inalign.policy_engine")
 
 
 class PolicyEngine:

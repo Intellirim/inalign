@@ -26,7 +26,7 @@ if str(_backend_root) not in sys.path:
 
 from app.config import configure_logging, get_settings
 
-logger = logging.getLogger("agentshield.scripts.seed_patterns")
+logger = logging.getLogger("inalign.scripts.seed_patterns")
 
 
 def load_injection_patterns() -> list[dict[str, Any]]:

@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 const settingsCards = [
   {
     title: 'API Keys',
-    description: 'Create and manage API keys for authenticating with AgentShield.',
+    description: 'Create and manage API keys for authenticating with InALign.',
     href: '/dashboard/settings/api-keys',
     icon: (
       <svg className="h-8 w-8 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

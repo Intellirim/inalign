@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: agentshield
+  namespace: inalign
   labels:
     app: frontend
     app.kubernetes.io/name: frontend
-    app.kubernetes.io/part-of: agentshield
+    app.kubernetes.io/part-of: inalign
 spec:
   replicas: 2
   selector:
@@ -17,18 +17,18 @@ spec:
       labels:
         app: frontend
         app.kubernetes.io/name: frontend
-        app.kubernetes.io/part-of: agentshield
+        app.kubernetes.io/part-of: inalign
     spec:
       containers:
         - name: frontend
-          image: agentshield/frontend:latest
+          image: inalign/frontend:latest
           ports:
             - containerPort: 3000
               name: http
               protocol: TCP
           env:
             - name: NEXT_PUBLIC_API_URL
-              value: "https://api.agentshield.io"
+              value: "https://api.inalign.io"
             - name: NODE_ENV
               value: "production"
           resources:
@@ -61,11 +61,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: agentshield
+  namespace: inalign
   labels:
     app: frontend
     app.kubernetes.io/name: frontend
-    app.kubernetes.io/part-of: agentshield
+    app.kubernetes.io/part-of: inalign
 spec:
   type: ClusterIP
   selector:

@@ -10,15 +10,15 @@ from typing import Any
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
-logger = logging.getLogger("agentshield.exceptions")
+logger = logging.getLogger("inalign.exceptions")
 
 
 # ---------------------------------------------------------------------------
 # Exception hierarchy
 # ---------------------------------------------------------------------------
 
-class AgentShieldError(Exception):
-    """Base exception for all AgentShield errors."""
+class InALignError(Exception):
+    """Base exception for all InALign errors."""
 
     def __init__(self, message: str = "An unexpected error occurred", details: Any = None):
         self.message = message
@@ -26,21 +26,21 @@ class AgentShieldError(Exception):
         super().__init__(message)
 
 
-class AuthenticationError(AgentShieldError):
+class AuthenticationError(InALignError):
     """Invalid or missing credentials."""
 
     def __init__(self, message: str = "Authentication failed", details: Any = None):
         super().__init__(message, details)
 
 
-class AuthorizationError(AgentShieldError):
+class AuthorizationError(InALignError):
     """Insufficient permissions."""
 
     def __init__(self, message: str = "Insufficient permissions", details: Any = None):
         super().__init__(message, details)
 
 
-class RateLimitError(AgentShieldError):
+class RateLimitError(InALignError):
     """Rate limit exceeded."""
 
     def __init__(self, message: str = "Rate limit exceeded", retry_after: int = 60):
@@ -48,14 +48,14 @@ class RateLimitError(AgentShieldError):
         super().__init__(message)
 
 
-class ValidationError(AgentShieldError):
+class ValidationError(InALignError):
     """Request validation failed."""
 
     def __init__(self, message: str = "Validation error", details: Any = None):
         super().__init__(message, details)
 
 
-class NotFoundError(AgentShieldError):
+class NotFoundError(InALignError):
     """Requested resource not found."""
 
     def __init__(self, resource: str = "Resource", resource_id: str = ""):
@@ -65,28 +65,28 @@ class NotFoundError(AgentShieldError):
         super().__init__(msg)
 
 
-class ScanError(AgentShieldError):
+class ScanError(InALignError):
     """Error during input/output scanning."""
 
     def __init__(self, message: str = "Scan processing failed", details: Any = None):
         super().__init__(message, details)
 
 
-class GraphError(AgentShieldError):
+class GraphError(InALignError):
     """Error in Neo4j graph operations."""
 
     def __init__(self, message: str = "Graph operation failed", details: Any = None):
         super().__init__(message, details)
 
 
-class ReportGenerationError(AgentShieldError):
+class ReportGenerationError(InALignError):
     """Error generating a security report."""
 
     def __init__(self, message: str = "Report generation failed", details: Any = None):
         super().__init__(message, details)
 
 
-class ExternalServiceError(AgentShieldError):
+class ExternalServiceError(InALignError):
     """Error communicating with an external service."""
 
     def __init__(self, service: str, message: str = ""):
@@ -97,7 +97,7 @@ class ExternalServiceError(AgentShieldError):
 # FastAPI exception handlers
 # ---------------------------------------------------------------------------
 
-_STATUS_MAP: dict[type[AgentShieldError], int] = {
+_STATUS_MAP: dict[type[InALignError], int] = {
     AuthenticationError: status.HTTP_401_UNAUTHORIZED,
     AuthorizationError: status.HTTP_403_FORBIDDEN,
     RateLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
@@ -121,9 +121,9 @@ def _error_response(request: Request, status_code: int, message: str, details: A
     return JSONResponse(status_code=status_code, content=body)
 
 
-async def agentshield_exception_handler(request: Request, exc: AgentShieldError) -> JSONResponse:
+async def inalign_exception_handler(request: Request, exc: InALignError) -> JSONResponse:
     status_code = _STATUS_MAP.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
-    logger.error("AgentShieldError [%d]: %s", status_code, exc.message, exc_info=exc)
+    logger.error("InALignError [%d]: %s", status_code, exc.message, exc_info=exc)
     headers = {}
     if isinstance(exc, RateLimitError):
         headers["Retry-After"] = str(exc.retry_after)
@@ -141,5 +141,5 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 def register_exception_handlers(app: FastAPI) -> None:
     """Register all custom exception handlers on the FastAPI app."""
-    app.add_exception_handler(AgentShieldError, agentshield_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(InALignError, inalign_exception_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, generic_exception_handler)

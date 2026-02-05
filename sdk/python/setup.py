@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="agentshield",
+    name="inalign",
     version="0.1.0",
-    author="AgentShield Team",
-    author_email="team@agentshield.io",
-    description="Python SDK for AgentShield - AI Agent Security Platform",
+    author="InALign Team",
+    author_email="team@inalign.io",
+    description="Python SDK for InALign - AI Agent Security Platform",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/agentshield/agentshield-python",
+    url="https://github.com/inalign/inalign-python",
     packages=find_packages(exclude=["tests*", "examples*"]),
     classifiers=[
         "Development Status :: 3 - Alpha",

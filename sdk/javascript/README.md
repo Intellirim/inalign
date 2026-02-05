@@ -1,25 +1,25 @@
-# @agentshield/sdk
+# @inalign/sdk
 
-Official JavaScript/TypeScript SDK for [AgentShield](https://agentshield.io) - AI Agent Security Platform.
+Official JavaScript/TypeScript SDK for [InALign](https://inalign.io) - AI Agent Security Platform.
 
 Protect your AI agents with real-time threat detection, PII scanning, anomaly detection, and comprehensive audit logging.
 
 ## Installation
 
 ```bash
-npm install @agentshield/sdk
+npm install @inalign/sdk
 # or
-yarn add @agentshield/sdk
+yarn add @inalign/sdk
 # or
-pnpm add @agentshield/sdk
+pnpm add @inalign/sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { AgentShield } from "@agentshield/sdk";
+import { InALign } from "@inalign/sdk";
 
-const shield = new AgentShield("your-api-key");
+const shield = new InALign("your-api-key");
 
 // Scan user input for threats and PII
 const result = await shield.scanInput({
@@ -50,10 +50,10 @@ console.log(`PII Found: ${result.pii_detected.map((p) => p.type)}`);
 ### Initialize the Client
 
 ```typescript
-import { AgentShield } from "@agentshield/sdk";
+import { InALign } from "@inalign/sdk";
 
-const shield = new AgentShield("your-api-key", {
-  baseUrl: "https://api.agentshield.io", // optional
+const shield = new InALign("your-api-key", {
+  baseUrl: "https://api.inalign.io", // optional
   timeout: 30000, // optional, in milliseconds
 });
 ```
@@ -158,15 +158,15 @@ await shield.acknowledgeAlert("alert-123");
 The SDK throws typed errors for different scenarios:
 
 ```typescript
-import { AgentShield } from "@agentshield/sdk";
+import { InALign } from "@inalign/sdk";
 import {
-  AgentShieldError,
+  InALignError,
   AuthenticationError,
   RateLimitError,
   NotFoundError,
   ValidationError,
   ServerError,
-} from "@agentshield/sdk/client";
+} from "@inalign/sdk/client";
 
 try {
   const result = await shield.scanInput({ ... });
@@ -175,7 +175,7 @@ try {
     console.log("Check your API key");
   } else if (error instanceof RateLimitError) {
     console.log("Slow down, retrying...");
-  } else if (error instanceof AgentShieldError) {
+  } else if (error instanceof InALignError) {
     console.log(`Error: ${error.detail} (status: ${error.statusCode})`);
   }
 }
@@ -198,7 +198,7 @@ import type {
   ThreatInfo,
   PIIInfo,
   AnomalyInfo,
-} from "@agentshield/sdk";
+} from "@inalign/sdk";
 ```
 
 ## Requirements

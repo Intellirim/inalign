@@ -1,5 +1,5 @@
 """
-GraphRAG module for AgentShield.
+GraphRAG module for InALign.
 
 Implements a Graph Retrieval-Augmented Generation pipeline that converts
 Neo4j session graphs into structured security analysis reports using LLM

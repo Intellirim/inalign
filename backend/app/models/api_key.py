@@ -1,5 +1,5 @@
 """
-API Key model for AgentShield.
+API Key model for InALign.
 
 Each user may create multiple API keys with scoped permissions.  Only the
 SHA-256 hash of the key is stored; the raw key is returned **once** at

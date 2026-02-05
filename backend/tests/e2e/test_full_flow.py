@@ -1,5 +1,5 @@
 """
-End-to-end test for the complete AgentShield security analysis flow.
+End-to-end test for the complete InALign security analysis flow.
 
 Simulates the full lifecycle: scan input for injection, log actions,
 check session state, and generate a security report. Uses mocked
@@ -30,7 +30,7 @@ class TestFullFlow:
     ) -> None:
         """Execute the full flow: scan -> log -> check -> report.
 
-        This test validates that all AgentShield components work
+        This test validates that all InALign components work
         together to detect, track, and report security threats in
         an AI agent session.
         """

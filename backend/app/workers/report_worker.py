@@ -14,7 +14,7 @@ from typing import Any
 
 from app.workers.celery_app import celery_app
 
-logger = logging.getLogger("agentshield.workers.report_worker")
+logger = logging.getLogger("inalign.workers.report_worker")
 
 
 @celery_app.task(

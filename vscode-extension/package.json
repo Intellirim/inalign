@@ -1,0 +1,92 @@
+{
+  "name": "in-a-lign",
+  "displayName": "In-A-Lign AI Guard",
+  "description": "AI Security + Efficiency - Protect your AI coding assistant with injection detection, PII masking, and cost optimization",
+  "version": "0.1.1",
+  "publisher": "in-a-lign",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/in-a-lign/in-a-lign"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "AI",
+    "security",
+    "Claude",
+    "Copilot",
+    "injection",
+    "prompt injection",
+    "PII",
+    "privacy"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "inalign.showStats",
+        "title": "In-A-Lign: Show Statistics"
+      },
+      {
+        "command": "inalign.showDashboard",
+        "title": "In-A-Lign: Open Dashboard"
+      },
+      {
+        "command": "inalign.toggleProxy",
+        "title": "In-A-Lign: Toggle Proxy"
+      },
+      {
+        "command": "inalign.setupHooks",
+        "title": "In-A-Lign: Setup Proxy Mode (API Key Required)"
+      },
+      {
+        "command": "inalign.setupLocalMode",
+        "title": "In-A-Lign: Enable Local Security (No API Key)"
+      },
+      {
+        "command": "inalign.scanSelection",
+        "title": "In-A-Lign: Scan Selected Text"
+      }
+    ],
+    "configuration": {
+      "title": "In-A-Lign",
+      "properties": {
+        "inalign.proxyUrl": {
+          "type": "string",
+          "default": "http://localhost:8080",
+          "description": "URL of the In-A-Lign proxy server"
+        },
+        "inalign.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show In-A-Lign status in the status bar"
+        },
+        "inalign.pollInterval": {
+          "type": "number",
+          "default": 5000,
+          "description": "How often to poll for stats (ms)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

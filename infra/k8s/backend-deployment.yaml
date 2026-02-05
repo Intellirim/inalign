@@ -2,11 +2,11 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: agentshield
+  namespace: inalign
   labels:
     app: backend
     app.kubernetes.io/name: backend
-    app.kubernetes.io/part-of: agentshield
+    app.kubernetes.io/part-of: inalign
 spec:
   replicas: 3
   selector:
@@ -17,11 +17,11 @@ spec:
       labels:
         app: backend
         app.kubernetes.io/name: backend
-        app.kubernetes.io/part-of: agentshield
+        app.kubernetes.io/part-of: inalign
     spec:
       containers:
         - name: backend
-          image: agentshield/backend:latest
+          image: inalign/backend:latest
           ports:
             - containerPort: 8000
               name: http
@@ -36,10 +36,10 @@ spec:
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: secret-key
             - name: ALLOWED_ORIGINS
-              value: "https://app.agentshield.io"
+              value: "https://app.inalign.io"
             - name: POSTGRES_HOST
               value: "postgres"
             - name: POSTGRES_PORT
@@ -47,43 +47,43 @@ spec:
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: postgres-db
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: postgres-user
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: postgres-password
             - name: NEO4J_URI
               value: "bolt://neo4j:7687"
             - name: NEO4J_USER
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: neo4j-user
             - name: NEO4J_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: neo4j-password
             - name: NEO4J_DATABASE
-              value: "agentshield"
+              value: "inalign"
             - name: REDIS_URL
               value: "redis://redis:6379/0"
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: openai-api-key
             - name: ANTHROPIC_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: agentshield-secrets
+                  name: inalign-secrets
                   key: anthropic-api-key
           resources:
             requests:
@@ -115,11 +115,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: agentshield
+  namespace: inalign
   labels:
     app: backend
     app.kubernetes.io/name: backend
-    app.kubernetes.io/part-of: agentshield
+    app.kubernetes.io/part-of: inalign
 spec:
   type: ClusterIP
   selector:

@@ -1,20 +1,20 @@
 /**
- * Basic usage example for the AgentShield JavaScript SDK.
+ * Basic usage example for the InALign JavaScript SDK.
  *
  * Run with: npx ts-node examples/basic-usage.ts
  */
 
-import { AgentShield } from "../src";
+import { InALign } from "../src";
 
 const AGENT_ID = "customer-support-agent-01";
 const SESSION_ID = "sess-abc-123";
 
 async function main() {
   // Initialize the client
-  const shield = new AgentShield(
-    process.env.AGENTSHIELD_API_KEY || "your-api-key",
+  const shield = new InALign(
+    process.env.INALIGN_API_KEY || "your-api-key",
     {
-      baseUrl: process.env.AGENTSHIELD_BASE_URL || "https://api.agentshield.io",
+      baseUrl: process.env.INALIGN_BASE_URL || "https://api.inalign.io",
       timeout: 30000,
     },
   );

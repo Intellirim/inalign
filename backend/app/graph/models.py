@@ -2,7 +2,7 @@
 Pydantic models for Neo4j graph nodes, edges, and composite subgraph data.
 
 These models serve as the canonical schema for data flowing between the
-Neo4j graph layer and the rest of the AgentShield backend.  They are used
+Neo4j graph layer and the rest of the InALign backend.  They are used
 for serialisation/deserialisation, API responses, and input validation.
 """
 

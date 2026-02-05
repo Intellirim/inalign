@@ -25,7 +25,7 @@ if str(_backend_root) not in sys.path:
 from app.config import configure_logging, get_settings
 from app.models.database import Base, engine
 
-logger = logging.getLogger("agentshield.scripts.init_db")
+logger = logging.getLogger("inalign.scripts.init_db")
 
 
 async def main() -> None:
@@ -77,7 +77,7 @@ async def main() -> None:
 
         # Check if admin user already exists
         result = await session.execute(
-            select(User).where(User.email == "admin@agentshield.io")
+            select(User).where(User.email == "admin@inalign.io")
         )
         existing_admin = result.scalar_one_or_none()
 
@@ -85,8 +85,8 @@ async def main() -> None:
             logger.info("Admin user already exists: %s", existing_admin.email)
         else:
             admin_user = User(
-                email="admin@agentshield.io",
-                name="AgentShield Admin",
+                email="admin@inalign.io",
+                name="InALign Admin",
                 hashed_password=hash_password("Admin@Shield!2024"),
                 is_active=True,
                 role=UserRole.ADMIN,

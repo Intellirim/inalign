@@ -41,7 +41,7 @@ export default function LoginPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-white">AgentShield</h1>
+          <h1 className="text-3xl font-bold text-white">InALign</h1>
           <p className="mt-2 text-sm text-slate-400">
             AI Agent Security Monitoring Platform
           </p>
@@ -62,7 +62,7 @@ export default function LoginPage() {
               <Input
                 label="Email"
                 type="email"
-                placeholder="admin@agentshield.io"
+                placeholder="admin@inalign.io"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -85,7 +85,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Protected by AgentShield v1.0
+          Protected by InALign v1.0
         </p>
       </div>
     </div>

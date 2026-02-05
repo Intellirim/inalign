@@ -1,7 +1,7 @@
-export { AgentShield } from "./client";
+export { InALign } from "./client";
 
 export type {
-  AgentShieldConfig,
+  InALignConfig,
   ScanInputRequest,
   ScanInputResponse,
   ScanOutputRequest,
@@ -21,5 +21,5 @@ export type {
   ListAlertsResponse,
   AlertResponse,
   PaginatedResponse,
-  AgentShieldErrorResponse,
+  InALignErrorResponse,
 } from "./types";

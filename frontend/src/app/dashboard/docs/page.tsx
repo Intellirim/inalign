@@ -107,11 +107,11 @@ export default function DocsPage() {
       {/* Intro */}
       <Card>
         <CardHeader>
-          <CardTitle>AgentShield API Documentation</CardTitle>
+          <CardTitle>InALign API Documentation</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-slate-400">
-            The AgentShield API provides endpoints for scanning AI agent inputs and outputs,
+            The InALign API provides endpoints for scanning AI agent inputs and outputs,
             logging actions for anomaly detection, managing sessions, generating security reports,
             and handling alerts. All endpoints require authentication via Bearer token.
           </p>
@@ -119,7 +119,7 @@ export default function DocsPage() {
             <p className="text-sm text-slate-300">
               <span className="font-medium">Base URL:</span>{' '}
               <code className="rounded bg-slate-800 px-2 py-0.5 text-blue-400">
-                https://api.agentshield.io/api/v1
+                https://api.inalign.io/api/v1
               </code>
             </p>
             <p className="mt-2 text-sm text-slate-300">

@@ -23,6 +23,9 @@ from app.api.v1.policies import router as policies_router
 from app.api.v1.proxy import router as proxy_router
 from app.api.v1.activities import router as activities_router
 from app.api.v1.monitor import router as monitor_router
+from app.api.v1.cost_guard import router as cost_guard_router
+from app.api.v1.living_agent import router as living_agent_router
+from app.api.v1.platform import router as platform_router
 
 v1_router = APIRouter(prefix="/v1")
 
@@ -40,3 +43,9 @@ v1_router.include_router(policies_router, prefix="/policies", tags=["Policies"])
 v1_router.include_router(proxy_router, prefix="/proxy", tags=["Proxy"])
 v1_router.include_router(activities_router, prefix="/activities", tags=["Activities"])
 v1_router.include_router(monitor_router, prefix="/monitor", tags=["Monitoring"])
+# Cost Guard endpoints (Token optimization, Budget management)
+v1_router.include_router(cost_guard_router, prefix="/cost-guard", tags=["Cost Guard"])
+# Living Agent (Always-running intelligent guardian)
+v1_router.include_router(living_agent_router, prefix="/living-agent", tags=["Living Agent"])
+# In-A-Lign Platform (Unified security & efficiency)
+v1_router.include_router(platform_router, tags=["Platform"])

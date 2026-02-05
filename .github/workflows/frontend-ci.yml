@@ -49,7 +49,7 @@ jobs:
       - name: Build application
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: https://api.agentshield.io
+          NEXT_PUBLIC_API_URL: https://api.inalign.io
         run: npm run build
 
       - name: Upload build artifacts

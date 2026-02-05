@@ -2,7 +2,7 @@
 Dashboard endpoints.
 
 Provide aggregated statistics, trend data, and top-threat breakdowns
-consumed by the AgentShield web UI.
+consumed by the InALign web UI.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import CurrentUser, DBSession
 from app.services.usage_service import UsageService
 
-logger = logging.getLogger("agentshield.api.dashboard")
+logger = logging.getLogger("inalign.api.dashboard")
 
 router = APIRouter()
 

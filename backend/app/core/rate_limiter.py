@@ -12,7 +12,7 @@ from redis.asyncio import Redis
 from app.config import get_settings
 from app.dependencies import get_redis
 
-logger = logging.getLogger("agentshield.rate_limiter")
+logger = logging.getLogger("inalign.rate_limiter")
 
 
 class RateLimiter:

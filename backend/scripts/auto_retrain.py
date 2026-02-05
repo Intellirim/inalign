@@ -427,12 +427,37 @@ async def main():
     parser.add_argument("--force", action="store_true", help="Force retraining even if threshold not met")
     parser.add_argument("--continuous", action="store_true", help="Run continuously")
     parser.add_argument("--interval", type=int, default=1, help="Check interval in hours (for continuous mode)")
+    parser.add_argument("--export-only", action="store_true", help="Only export training data (for Colab)")
+    parser.add_argument("--stats", action="store_true", help="Show data statistics only")
     args = parser.parse_args()
 
     retrainer = AutoRetrainer()
 
-    if args.continuous:
+    if args.stats:
+        # Just show stats
+        data = await retrainer.check_new_data()
+        print(f"\n{'='*50}")
+        print("Neo4j Data Statistics")
+        print(f"{'='*50}")
+        print(f"  Total attacks: {data['total_attacks']}")
+        print(f"  Total benign: {data['total_benign']}")
+        print(f"  New since last training: {data['new_total']}")
+        print(f"  Last training: {retrainer.checkpoint.get('last_training', 'Never')}")
+        print(f"  Current model F1: {retrainer.checkpoint.get('current_model_f1', 'Unknown')}")
+
+    elif args.export_only:
+        # Export data for Colab training
+        print("Exporting training data for Colab...")
+        data_file = await retrainer.export_training_data()
+        print(f"\nExported to: {data_file}")
+        print(f"\nNext steps:")
+        print(f"  1. Upload {data_file.name} to Colab")
+        print(f"  2. Run train_on_colab.ipynb")
+        print(f"  3. Download model and extract to backend/app/ml/models/injection_detector/best/")
+
+    elif args.continuous:
         await retrainer.run_continuous(args.interval)
+
     else:
         result = await retrainer.run_pipeline(force=args.force)
         print(f"\nResult: {json.dumps(result, indent=2)}")

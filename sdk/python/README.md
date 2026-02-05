@@ -1,21 +1,21 @@
-# AgentShield Python SDK
+# InALign Python SDK
 
-Official Python SDK for [AgentShield](https://agentshield.io) - AI Agent Security Platform.
+Official Python SDK for [InALign](https://inalign.io) - AI Agent Security Platform.
 
 Protect your AI agents with real-time threat detection, PII scanning, anomaly detection, and comprehensive audit logging.
 
 ## Installation
 
 ```bash
-pip install agentshield
+pip install inalign
 ```
 
 ## Quick Start
 
 ```python
-from agentshield import AgentShield
+from inalign import InALign
 
-client = AgentShield(api_key="your-api-key")
+client = InALign(api_key="your-api-key")
 
 # Scan user input for threats and PII
 result = client.scan_input(
@@ -38,7 +38,7 @@ print(f"PII Found: {[p.type for p in result.pii_detected]}")
 - **Session Management**: Track and monitor agent sessions with risk scoring
 - **Report Generation**: Generate detailed security analysis reports
 - **Alert Management**: Receive and manage security alerts
-- **Async Support**: Full async/await support with `AsyncAgentShield`
+- **Async Support**: Full async/await support with `AsyncInALign`
 - **Type Safety**: Complete Pydantic models for all API responses
 
 ## Usage
@@ -46,11 +46,11 @@ print(f"PII Found: {[p.type for p in result.pii_detected]}")
 ### Synchronous Client
 
 ```python
-from agentshield import AgentShield
+from inalign import InALign
 
-client = AgentShield(
+client = InALign(
     api_key="your-api-key",
-    base_url="https://api.agentshield.io",  # optional
+    base_url="https://api.inalign.io",  # optional
     timeout=30,  # optional, in seconds
 )
 
@@ -109,10 +109,10 @@ client.close()
 
 ```python
 import asyncio
-from agentshield import AsyncAgentShield
+from inalign import AsyncInALign
 
 async def main():
-    async with AsyncAgentShield(api_key="your-api-key") as client:
+    async with AsyncInALign(api_key="your-api-key") as client:
         result = await client.scan_input(
             text="User message",
             agent_id="agent-1",
@@ -128,7 +128,7 @@ asyncio.run(main())
 Both clients support the context manager pattern:
 
 ```python
-with AgentShield(api_key="your-key") as client:
+with InALign(api_key="your-key") as client:
     result = client.scan_input(text="Hello", agent_id="a", session_id="s")
 ```
 
@@ -137,11 +137,11 @@ with AgentShield(api_key="your-key") as client:
 See `examples/with_langchain.py` for a complete LangChain callback handler that automatically protects your chains and agents.
 
 ```python
-from examples.with_langchain import AgentShieldCallbackHandler
+from examples.with_langchain import InALignCallbackHandler
 from langchain_openai import ChatOpenAI
 
-handler = AgentShieldCallbackHandler(
-    api_key="your-agentshield-key",
+handler = InALignCallbackHandler(
+    api_key="your-inalign-key",
     agent_id="my-langchain-agent",
 )
 
@@ -158,7 +158,7 @@ from examples.with_openai import ShieldedOpenAI
 
 client = ShieldedOpenAI(
     openai_api_key="sk-...",
-    agentshield_api_key="your-key",
+    inalign_api_key="your-key",
     agent_id="my-openai-agent",
 )
 
@@ -170,8 +170,8 @@ response = client.chat("What is zero-trust security?")
 The SDK raises typed exceptions for different error scenarios:
 
 ```python
-from agentshield.exceptions import (
-    AgentShieldError,       # Base exception
+from inalign.exceptions import (
+    InALignError,       # Base exception
     AuthenticationError,    # 401/403
     RateLimitError,         # 429
     NotFoundError,          # 404
@@ -185,7 +185,7 @@ except AuthenticationError:
     print("Check your API key")
 except RateLimitError:
     print("Slow down, retrying...")
-except AgentShieldError as e:
+except InALignError as e:
     print(f"Error: {e.message} (status: {e.status_code})")
 ```
 

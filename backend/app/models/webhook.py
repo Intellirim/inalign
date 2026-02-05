@@ -1,5 +1,5 @@
 """
-Webhook model for AgentShield.
+Webhook model for InALign.
 
 Users can register HTTP endpoints that receive real-time POST notifications
 when specific events occur (e.g. a critical alert is raised).  Each webhook

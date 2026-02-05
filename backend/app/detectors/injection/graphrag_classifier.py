@@ -20,10 +20,33 @@ import logging
 import os
 from typing import Any, Optional
 
-import numpy as np
-from sentence_transformers import SentenceTransformer
+# Lazy imports - only load when actually used
+np = None
+SentenceTransformer = None
 
 logger = logging.getLogger("inalign.graphrag_classifier")
+
+
+def _get_dependencies():
+    """Lazily import heavy dependencies."""
+    global np, SentenceTransformer
+    if np is None:
+        try:
+            import numpy as _np
+            np = _np
+        except ImportError:
+            logger.warning("numpy not installed. GraphRAGClassifier will be disabled.")
+            return False
+
+    if SentenceTransformer is None:
+        try:
+            from sentence_transformers import SentenceTransformer as _ST
+            SentenceTransformer = _ST
+        except ImportError:
+            logger.warning("sentence-transformers not installed. GraphRAGClassifier will be disabled.")
+            return False
+
+    return True
 
 
 class GraphRAGClassifier:
@@ -48,16 +71,19 @@ class GraphRAGClassifier:
         self.confidence_threshold = confidence_threshold
         self.top_k = top_k
 
-        self._embedder: Optional[SentenceTransformer] = None
-        self._attack_embeddings: Optional[np.ndarray] = None
+        self._embedder = None
+        self._attack_embeddings = None
         self._attack_texts: list[str] = []
         self._attack_categories: list[str] = []
-        self._benign_embeddings: Optional[np.ndarray] = None
+        self._benign_embeddings = None
         self._benign_texts: list[str] = []
         self._benign_categories: list[str] = []
 
         self.enabled = False
-        self._load_data()
+
+        # Only try to load if dependencies are available
+        if _get_dependencies():
+            self._load_data()
 
     def _load_data(self) -> None:
         """Load embeddings from Neo4j."""

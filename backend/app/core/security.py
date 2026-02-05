@@ -15,7 +15,7 @@ import jwt
 
 from app.config import get_settings
 
-logger = logging.getLogger("agentshield.security")
+logger = logging.getLogger("inalign.security")
 
 # ---------------------------------------------------------------------------
 # API Key Management

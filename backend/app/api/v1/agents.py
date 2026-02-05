@@ -1,7 +1,7 @@
 """
 Agent management API endpoints.
 
-Provides CRUD operations for AI agents registered in AgentShield.
+Provides CRUD operations for AI agents registered in InALign.
 """
 
 from __future__ import annotations

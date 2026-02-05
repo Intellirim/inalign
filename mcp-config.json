@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "in-a-lign": {
+      "command": "python",
+      "args": ["-m", "mcp_server"],
+      "cwd": "./backend",
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

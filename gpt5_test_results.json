@@ -1,0 +1,9 @@
+{
+  "retest_blocked": 8,
+  "retest_total": 9,
+  "new_model": "gpt-5-mini",
+  "new_detected": 0,
+  "new_total": 0,
+  "new_rate": 0,
+  "still_evading": []
+}

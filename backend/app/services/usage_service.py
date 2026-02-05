@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.usage import Usage
 
-logger = logging.getLogger("agentshield.services.usage")
+logger = logging.getLogger("inalign.services.usage")
 
 # Period string -> timedelta mapping
 _PERIOD_MAP: dict[str, timedelta] = {

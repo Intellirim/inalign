@@ -1,5 +1,5 @@
 import type {
-  AgentShieldConfig,
+  InALignConfig,
   ScanInputRequest,
   ScanInputResponse,
   ScanOutputRequest,
@@ -13,55 +13,55 @@ import type {
   ReportResponse,
   ListAlertsParams,
   ListAlertsResponse,
-  AgentShieldErrorResponse,
+  InALignErrorResponse,
 } from "./types";
 
 /**
- * Error thrown by the AgentShield SDK.
+ * Error thrown by the InALign SDK.
  */
-export class AgentShieldError extends Error {
+export class InALignError extends Error {
   public readonly statusCode: number;
   public readonly detail: string;
   public readonly code?: string;
 
   constructor(message: string, statusCode: number, detail: string, code?: string) {
     super(message);
-    this.name = "AgentShieldError";
+    this.name = "InALignError";
     this.statusCode = statusCode;
     this.detail = detail;
     this.code = code;
   }
 }
 
-export class AuthenticationError extends AgentShieldError {
+export class AuthenticationError extends InALignError {
   constructor(detail: string, statusCode = 401) {
     super(`Authentication failed: ${detail}`, statusCode, detail);
     this.name = "AuthenticationError";
   }
 }
 
-export class RateLimitError extends AgentShieldError {
+export class RateLimitError extends InALignError {
   constructor(detail: string) {
     super(`Rate limit exceeded: ${detail}`, 429, detail);
     this.name = "RateLimitError";
   }
 }
 
-export class NotFoundError extends AgentShieldError {
+export class NotFoundError extends InALignError {
   constructor(detail: string) {
     super(`Not found: ${detail}`, 404, detail);
     this.name = "NotFoundError";
   }
 }
 
-export class ValidationError extends AgentShieldError {
+export class ValidationError extends InALignError {
   constructor(detail: string) {
     super(`Validation failed: ${detail}`, 422, detail);
     this.name = "ValidationError";
   }
 }
 
-export class ServerError extends AgentShieldError {
+export class ServerError extends InALignError {
   constructor(detail: string, statusCode = 500) {
     super(`Server error: ${detail}`, statusCode, detail);
     this.name = "ServerError";
@@ -69,11 +69,11 @@ export class ServerError extends AgentShieldError {
 }
 
 /**
- * AgentShield SDK client for JavaScript/TypeScript.
+ * InALign SDK client for JavaScript/TypeScript.
  *
  * @example
  * ```typescript
- * const shield = new AgentShield("your-api-key");
+ * const shield = new InALign("your-api-key");
  *
  * const result = await shield.scanInput({
  *   text: "My SSN is 123-45-6789",
@@ -85,25 +85,25 @@ export class ServerError extends AgentShieldError {
  * console.log(result.threats);
  * ```
  */
-export class AgentShield {
+export class InALign {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
   private readonly customHeaders: Record<string, string>;
 
-  constructor(apiKey: string, options?: AgentShieldConfig) {
+  constructor(apiKey: string, options?: InALignConfig) {
     if (!apiKey) {
       throw new Error("apiKey is required and cannot be empty.");
     }
 
     this.apiKey = apiKey;
-    this.baseUrl = (options?.baseUrl ?? "https://api.agentshield.io").replace(/\/+$/, "");
+    this.baseUrl = (options?.baseUrl ?? "https://api.inalign.io").replace(/\/+$/, "");
     this.timeout = options?.timeout ?? 30000;
     this.customHeaders = options?.headers ?? {};
   }
 
   /**
-   * Make an HTTP request to the AgentShield API.
+   * Make an HTTP request to the InALign API.
    */
   private async _request<T>(
     method: string,
@@ -126,7 +126,7 @@ export class AgentShield {
       Authorization: `Bearer ${this.apiKey}`,
       "Content-Type": "application/json",
       Accept: "application/json",
-      "User-Agent": "@agentshield/sdk-js/0.1.0",
+      "User-Agent": "@inalign/sdk-js/0.1.0",
       ...this.customHeaders,
     };
 
@@ -147,9 +147,9 @@ export class AgentShield {
       const response = await fetch(url.toString(), fetchOptions);
 
       if (!response.ok) {
-        let errorBody: AgentShieldErrorResponse;
+        let errorBody: InALignErrorResponse;
         try {
-          errorBody = (await response.json()) as AgentShieldErrorResponse;
+          errorBody = (await response.json()) as InALignErrorResponse;
         } catch {
           errorBody = { detail: response.statusText };
         }
@@ -170,7 +170,7 @@ export class AgentShield {
             if (response.status >= 500) {
               throw new ServerError(detail, response.status);
             }
-            throw new AgentShieldError(detail, response.status, detail, errorBody.code);
+            throw new InALignError(detail, response.status, detail, errorBody.code);
         }
       }
 

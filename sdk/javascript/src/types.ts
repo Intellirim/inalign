@@ -1,8 +1,8 @@
 /**
- * Configuration options for the AgentShield client.
+ * Configuration options for the InALign client.
  */
-export interface AgentShieldConfig {
-  /** Base URL for the AgentShield API. */
+export interface InALignConfig {
+  /** Base URL for the InALign API. */
   baseUrl?: string;
   /** Request timeout in milliseconds. */
   timeout?: number;
@@ -343,9 +343,9 @@ export interface AlertResponse {
 export type ListAlertsResponse = PaginatedResponse<AlertResponse>;
 
 /**
- * Error response from the AgentShield API.
+ * Error response from the InALign API.
  */
-export interface AgentShieldErrorResponse {
+export interface InALignErrorResponse {
   /** Error detail message. */
   detail: string;
   /** Error code, if available. */

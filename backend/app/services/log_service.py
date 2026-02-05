@@ -19,7 +19,7 @@ from app.schemas.log import (
 )
 from app.schemas.common import Severity
 
-logger = logging.getLogger("agentshield.services.log")
+logger = logging.getLogger("inalign.services.log")
 
 
 class LogService:

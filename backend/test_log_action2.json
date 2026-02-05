@@ -1,0 +1,12 @@
+{
+  "agent_id": "agent-001",
+  "session_id": "session-test-001",
+  "action": {
+    "type": "llm_call",
+    "name": "generate_response",
+    "target": "openai_gpt4",
+    "parameters": {"prompt": "Summarize the admin user data"},
+    "result_summary": "Generated summary of 3 admin users with emails and roles",
+    "duration_ms": 2300
+  }
+}

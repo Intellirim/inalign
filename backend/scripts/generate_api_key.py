@@ -6,8 +6,8 @@ the hashed key in the database, and prints the raw key exactly once.
 
 Usage::
 
-    python -m scripts.generate_api_key --email admin@agentshield.io
-    python -m scripts.generate_api_key --email admin@agentshield.io --name "Production Key"
+    python -m scripts.generate_api_key --email admin@inalign.io
+    python -m scripts.generate_api_key --email admin@inalign.io --name "Production Key"
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ if str(_backend_root) not in sys.path:
 
 from app.config import configure_logging, get_settings
 
-logger = logging.getLogger("agentshield.scripts.generate_api_key")
+logger = logging.getLogger("inalign.scripts.generate_api_key")
 
 
 async def generate_key(email: str, key_name: str) -> None:
@@ -119,7 +119,7 @@ async def generate_key(email: str, key_name: str) -> None:
 def main() -> None:
     """Parse CLI arguments and generate the API key."""
     parser = argparse.ArgumentParser(
-        description="Generate a new API key for an AgentShield user."
+        description="Generate a new API key for an InALign user."
     )
     parser.add_argument(
         "--email",

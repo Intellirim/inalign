@@ -70,7 +70,7 @@ const authOptions: NextAuthOptions = {
     signIn: '/',
     error: '/',
   },
-  secret: process.env.NEXTAUTH_SECRET || 'agentshield-dev-secret-change-in-production',
+  secret: process.env.NEXTAUTH_SECRET || 'inalign-dev-secret-change-in-production',
 };
 
 const handler = NextAuth(authOptions);

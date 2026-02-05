@@ -16,7 +16,7 @@ from typing import Any
 
 import httpx
 
-logger = logging.getLogger("agentshield.graphrag.report_generator")
+logger = logging.getLogger("inalign.graphrag.report_generator")
 
 # ---------------------------------------------------------------------------
 # Constants

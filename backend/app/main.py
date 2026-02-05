@@ -1,5 +1,5 @@
 """
-FastAPI application entry point for AgentShield.
+FastAPI application entry point for InALign.
 
 Creates the FastAPI app with lifespan context management, registers all
 middleware, exception handlers, routers, and configures OpenAPI with
@@ -27,7 +27,7 @@ from app.dependencies import (
     shutdown_redis,
 )
 
-logger = logging.getLogger("agentshield.main")
+logger = logging.getLogger("inalign.main")
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging(settings)
 
     logger.info(
-        "AgentShield starting up (env=%s, debug=%s)",
+        "InALign starting up (env=%s, debug=%s)",
         settings.api_env.value,
         settings.debug,
     )
@@ -74,18 +74,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("Failed to initialise Redis.")
 
-    logger.info("AgentShield startup complete.")
+    logger.info("InALign startup complete.")
 
     yield
 
     # --- Shutdown ----------------------------------------------------------
-    logger.info("AgentShield shutting down...")
+    logger.info("InALign shutting down...")
 
     await shutdown_redis()
     await shutdown_neo4j()
     await shutdown_db()
 
-    logger.info("AgentShield shutdown complete.")
+    logger.info("InALign shutdown complete.")
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="AgentShield API",
+        title="InALign API",
         version="1.0.0",
         description=(
             "AI Agent security monitoring and threat detection platform. "
@@ -149,7 +149,7 @@ def _custom_openapi(app: FastAPI) -> dict:
         return app.openapi_schema
 
     openapi_schema = get_openapi(
-        title="AgentShield API",
+        title="InALign API",
         version="1.0.0",
         description=(
             "AI Agent security monitoring and threat detection platform.\n\n"

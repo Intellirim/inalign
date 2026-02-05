@@ -1,4 +1,4 @@
-"""Basic usage example for the AgentShield Python SDK.
+"""Basic usage example for the InALign Python SDK.
 
 This example demonstrates:
 1. Scanning user input for threats and PII
@@ -9,12 +9,12 @@ This example demonstrates:
 
 import os
 
-from agentshield import AgentShield
+from inalign import InALign
 
 # Initialize the client
-client = AgentShield(
-    api_key=os.environ.get("AGENTSHIELD_API_KEY", "ask_your-api-key"),
-    base_url=os.environ.get("AGENTSHIELD_BASE_URL", "https://api.agentshield.io"),
+client = InALign(
+    api_key=os.environ.get("INALIGN_API_KEY", "ask_your-api-key"),
+    base_url=os.environ.get("INALIGN_BASE_URL", "https://api.inalign.io"),
 )
 
 AGENT_ID = "customer-support-agent-01"

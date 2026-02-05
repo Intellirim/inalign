@@ -15,7 +15,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 
 from app.config import get_settings
 
-logger = logging.getLogger("agentshield.middleware")
+logger = logging.getLogger("inalign.middleware")
 
 
 # ---------------------------------------------------------------------------

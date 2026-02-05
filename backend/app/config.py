@@ -74,9 +74,9 @@ class Settings(BaseSettings):
     # -- PostgreSQL ----------------------------------------------------------
     postgres_host: str = Field(default="localhost")
     postgres_port: int = Field(default=5432, ge=1, le=65535)
-    postgres_db: str = Field(default="agentshield")
-    postgres_user: str = Field(default="agentshield")
-    postgres_password: str = Field(default="agentshield")
+    postgres_db: str = Field(default="inalign")
+    postgres_user: str = Field(default="inalign")
+    postgres_password: str = Field(default="inalign")
     postgres_pool_size: int = Field(default=20, ge=1)
     postgres_max_overflow: int = Field(default=10, ge=0)
     postgres_echo: bool = Field(default=False)
@@ -239,7 +239,7 @@ def configure_logging(settings: Settings | None = None) -> None:
         "formatters": formatters,
         "handlers": handlers,
         "loggers": {
-            "agentshield": {
+            "inalign": {
                 "level": settings.log_level,
                 "handlers": ["console"],
                 "propagate": False,

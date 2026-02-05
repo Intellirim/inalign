@@ -14,7 +14,7 @@ import httpx
 
 from app.notifications import BaseNotifier
 
-logger = logging.getLogger("agentshield.notifications.slack")
+logger = logging.getLogger("inalign.notifications.slack")
 
 # ---------------------------------------------------------------------------
 # Severity colour mapping (Slack attachment colour hex codes)
@@ -103,7 +103,7 @@ class SlackNotifier(BaseNotifier):
         severity: str = alert_data.get("severity", "medium").lower()
         colour: str = _SEVERITY_COLOURS.get(severity, "#CCCCCC")
         emoji: str = _SEVERITY_EMOJI.get(severity, ":bell:")
-        title: str = alert_data.get("title", "AgentShield Alert")
+        title: str = alert_data.get("title", "InALign Alert")
         description: str = alert_data.get("description", "")
         session_id: str = alert_data.get("session_id", "N/A")
         agent_id: str = alert_data.get("agent_id", "N/A")
@@ -159,7 +159,7 @@ class SlackNotifier(BaseNotifier):
                 "elements": [
                     {
                         "type": "mrkdwn",
-                        "text": ":shield: Sent by *AgentShield*",
+                        "text": ":shield: Sent by *InALign*",
                     }
                 ],
             }

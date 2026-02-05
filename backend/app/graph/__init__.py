@@ -1,5 +1,5 @@
 """
-Graph layer for AgentShield.
+Graph layer for InALign.
 
 Provides the Neo4j async client and Pydantic graph node/edge models used
 throughout the application for session tracking, threat detection, and

@@ -21,7 +21,7 @@ from app.schemas.scan import (
 )
 from app.services.scan_service import ScanService
 
-logger = logging.getLogger("agentshield.api.scan")
+logger = logging.getLogger("inalign.api.scan")
 
 router = APIRouter()
 

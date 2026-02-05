@@ -1,0 +1,6 @@
+FROM agentshield-backend:latest@sha256:7415ced6e9f436b4b60ee846dcc9be31f296196437d2412788fe3692c501c5e0
+USER root
+RUN /opt/venv/bin/pip install --no-cache-dir bcrypt==4.0.1
+COPY backend/app/core/rate_limiter.py /app/app/core/rate_limiter.py
+RUN chown appuser:appuser /app/app/core/rate_limiter.py
+USER appuser

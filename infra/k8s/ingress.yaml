@@ -1,11 +1,11 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: agentshield-ingress
-  namespace: agentshield
+  name: inalign-ingress
+  namespace: inalign
   labels:
     app.kubernetes.io/name: ingress
-    app.kubernetes.io/part-of: agentshield
+    app.kubernetes.io/part-of: inalign
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -14,19 +14,19 @@ metadata:
     nginx.ingress.kubernetes.io/rate-limit: "100"
     nginx.ingress.kubernetes.io/rate-limit-window: "1m"
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.agentshield.io"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.inalign.io"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, Accept"
 spec:
   tls:
     - hosts:
-        - api.agentshield.io
-      secretName: api-agentshield-tls
+        - api.inalign.io
+      secretName: api-inalign-tls
     - hosts:
-        - app.agentshield.io
-      secretName: app-agentshield-tls
+        - app.inalign.io
+      secretName: app-inalign-tls
   rules:
-    - host: api.agentshield.io
+    - host: api.inalign.io
       http:
         paths:
           - path: /
@@ -36,7 +36,7 @@ spec:
                 name: backend
                 port:
                   number: 8000
-    - host: app.agentshield.io
+    - host: app.inalign.io
       http:
         paths:
           - path: /

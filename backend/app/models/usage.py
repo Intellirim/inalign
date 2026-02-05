@@ -1,5 +1,5 @@
 """
-Usage / request-log model for AgentShield.
+Usage / request-log model for InALign.
 
 Every authenticated API call is recorded for metering, billing, and
 observability.  Rows are append-only and should be periodically aggregated

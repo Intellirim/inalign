@@ -1,11 +1,11 @@
 [project]
-name = "agentshield-backend"
+name = "inalign-backend"
 version = "1.0.0"
 description = "AI Agent security monitoring and threat detection platform"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
-    {name = "AgentShield Team", email = "team@agentshield.io"},
+    {name = "InALign Team", email = "team@inalign.io"},
 ]
 readme = "README.md"
 keywords = ["ai", "security", "agent", "monitoring", "threat-detection"]

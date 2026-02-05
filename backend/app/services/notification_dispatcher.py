@@ -1,5 +1,5 @@
 """
-Notification dispatcher service for AgentShield.
+Notification dispatcher service for InALign.
 
 Automatically dispatches alerts and policy violations to configured
 notification channels (Slack, Telegram, Email, Webhooks).
@@ -20,7 +20,7 @@ from app.notifications.webhook import WebhookNotifier
 from app.config import get_settings
 
 
-logger = logging.getLogger("agentshield.services.notification_dispatcher")
+logger = logging.getLogger("inalign.services.notification_dispatcher")
 
 
 class NotificationChannel(str, Enum):

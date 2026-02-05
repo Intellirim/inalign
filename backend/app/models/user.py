@@ -1,5 +1,5 @@
 """
-User model for AgentShield.
+User model for InALign.
 
 Stores registered users who interact with the dashboard or manage API keys.
 """

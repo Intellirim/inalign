@@ -15,7 +15,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-logger = logging.getLogger("agentshield.graphrag.pattern_matcher")
+logger = logging.getLogger("inalign.graphrag.pattern_matcher")
 
 # Optional dependency -- gracefully degrade.
 try:

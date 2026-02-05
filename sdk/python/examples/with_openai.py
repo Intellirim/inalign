@@ -1,6 +1,6 @@
-"""OpenAI wrapper example for AgentShield.
+"""OpenAI wrapper example for InALign.
 
-This example shows how to wrap the OpenAI client with AgentShield
+This example shows how to wrap the OpenAI client with InALign
 to automatically scan inputs and outputs for security threats.
 """
 
@@ -10,11 +10,11 @@ from typing import Any, Optional
 
 from openai import OpenAI
 
-from agentshield import AgentShield
+from inalign import InALign
 
 
 class ShieldedOpenAI:
-    """A wrapper around the OpenAI client that adds AgentShield protection.
+    """A wrapper around the OpenAI client that adds InALign protection.
 
     Automatically scans user messages for prompt injection and threats
     before sending to OpenAI, and scans responses for PII leakage.
@@ -23,7 +23,7 @@ class ShieldedOpenAI:
 
         client = ShieldedOpenAI(
             openai_api_key="sk-...",
-            agentshield_api_key="as-...",
+            inalign_api_key="as-...",
             agent_id="my-openai-agent",
         )
         response = client.chat("Tell me about AI safety")
@@ -33,18 +33,18 @@ class ShieldedOpenAI:
     def __init__(
         self,
         openai_api_key: Optional[str] = None,
-        agentshield_api_key: Optional[str] = None,
+        inalign_api_key: Optional[str] = None,
         agent_id: str = "openai-agent",
         session_id: Optional[str] = None,
-        agentshield_base_url: str = "https://api.agentshield.io",
+        inalign_base_url: str = "https://api.inalign.io",
         model: str = "gpt-4",
         block_on_threat: bool = True,
         auto_sanitize: bool = True,
     ) -> None:
         self.openai = OpenAI(api_key=openai_api_key or os.environ.get("OPENAI_API_KEY"))
-        self.shield = AgentShield(
-            api_key=agentshield_api_key or os.environ.get("AGENTSHIELD_API_KEY", ""),
-            base_url=agentshield_base_url,
+        self.shield = InALign(
+            api_key=inalign_api_key or os.environ.get("INALIGN_API_KEY", ""),
+            base_url=inalign_base_url,
         )
         self.agent_id = agent_id
         self.session_id = session_id or str(uuid.uuid4())
@@ -60,7 +60,7 @@ class ShieldedOpenAI:
         max_tokens: int = 1024,
         metadata: Optional[dict[str, Any]] = None,
     ) -> str:
-        """Send a chat message with AgentShield protection.
+        """Send a chat message with InALign protection.
 
         Args:
             user_message: The user's message.
@@ -83,7 +83,7 @@ class ShieldedOpenAI:
             metadata=metadata,
         )
 
-        print(f"[AgentShield] Input scan - Safe: {input_scan.safe}, Risk: {input_scan.risk_level}")
+        print(f"[InALign] Input scan - Safe: {input_scan.safe}, Risk: {input_scan.risk_level}")
 
         if not input_scan.safe:
             for threat in input_scan.threats:
@@ -100,7 +100,7 @@ class ShieldedOpenAI:
                     f"threats: {[t.type for t in input_scan.threats]}",
                 )
                 raise ValueError(
-                    f"Input blocked by AgentShield. Risk: {input_scan.risk_level}. "
+                    f"Input blocked by InALign. Risk: {input_scan.risk_level}. "
                     f"Threats: {[t.type for t in input_scan.threats]}"
                 )
 
@@ -137,7 +137,7 @@ class ShieldedOpenAI:
             auto_sanitize=self.auto_sanitize,
         )
 
-        print(f"[AgentShield] Output scan - Safe: {output_scan.safe}, Risk: {output_scan.risk_level}")
+        print(f"[InALign] Output scan - Safe: {output_scan.safe}, Risk: {output_scan.risk_level}")
 
         if not output_scan.safe:
             if output_scan.pii_detected:
@@ -185,7 +185,7 @@ def main() -> None:
     # Initialize the shielded OpenAI client
     client = ShieldedOpenAI(
         openai_api_key=os.environ.get("OPENAI_API_KEY"),
-        agentshield_api_key=os.environ.get("AGENTSHIELD_API_KEY", "your-api-key"),
+        inalign_api_key=os.environ.get("INALIGN_API_KEY", "your-api-key"),
         agent_id="openai-demo-agent",
         model="gpt-4",
         block_on_threat=True,
@@ -219,7 +219,7 @@ def main() -> None:
         )
         print(f"\nAssistant: {response[:300]}...")
     except ValueError as e:
-        print(f"\nBlocked by AgentShield: {e}")
+        print(f"\nBlocked by InALign: {e}")
 
     # Example 3: PII in response
     print("\n" + "=" * 60)

@@ -20,7 +20,7 @@ from neo4j import AsyncSession
 
 from app.graph import attack_queries as aq
 
-logger = logging.getLogger("agentshield.attack_knowledge")
+logger = logging.getLogger("inalign.attack_knowledge")
 
 # ---------------------------------------------------------------------------
 # Attack keyword extraction

@@ -1,0 +1,18 @@
+{
+  "certificate_id": "cert-f693bbede088",
+  "issued_at": "2026-02-05T09:24:04.290576+00:00",
+  "session_id": "export-demo-001",
+  "record_count": 3,
+  "first_activity": "2026-02-05T09:24:04.290576+00:00",
+  "last_activity": "2026-02-05T09:24:04.290576+00:00",
+  "merkle_root": "36ddea2016602db3b449ae1118e6d336a448b14811f22a62b342008125be50a5",
+  "chain_integrity": true,
+  "issuer": "InALign Security Platform",
+  "anchored": false,
+  "chain_type": null,
+  "transaction_hash": null,
+  "block_number": null,
+  "block_timestamp": null,
+  "verification_url": null,
+  "merkle_proof": null
+}

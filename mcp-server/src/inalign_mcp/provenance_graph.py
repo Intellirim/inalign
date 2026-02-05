@@ -1,0 +1,747 @@
+"""
+Provenance Graph Store - Neo4j Integration for Agent Activity Visualization.
+
+Stores provenance records as a graph for:
+- Visual audit trails
+- Behavior pattern analysis
+- Anomaly detection through graph algorithms
+- Attack path visualization
+"""
+
+import logging
+from typing import Optional, Any
+from datetime import datetime, timezone
+from dataclasses import dataclass
+
+from .provenance import (
+    ProvenanceRecord,
+    ProvenanceChain,
+    ActivityType,
+    get_or_create_chain,
+)
+
+logger = logging.getLogger("inalign-provenance-graph")
+
+# Neo4j connection (optional)
+_neo4j_driver = None
+
+
+def init_neo4j(uri: str = "bolt://localhost:7687", user: str = "neo4j", password: str = "password"):
+    """Initialize Neo4j connection for provenance graph storage."""
+    global _neo4j_driver
+    try:
+        from neo4j import GraphDatabase
+        _neo4j_driver = GraphDatabase.driver(uri, auth=(user, password))
+        # Create indexes and constraints
+        with _neo4j_driver.session() as session:
+            # Unique constraints
+            session.run("""
+                CREATE CONSTRAINT prov_record_id IF NOT EXISTS
+                FOR (r:ProvenanceRecord) REQUIRE r.record_id IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT prov_session_id IF NOT EXISTS
+                FOR (s:Session) REQUIRE s.session_id IS UNIQUE
+            """)
+            session.run("""
+                CREATE CONSTRAINT prov_agent_id IF NOT EXISTS
+                FOR (a:Agent) REQUIRE a.agent_id IS UNIQUE
+            """)
+            # Indexes for queries
+            session.run("""
+                CREATE INDEX prov_record_timestamp IF NOT EXISTS
+                FOR (r:ProvenanceRecord) ON (r.timestamp)
+            """)
+            session.run("""
+                CREATE INDEX prov_record_type IF NOT EXISTS
+                FOR (r:ProvenanceRecord) ON (r.activity_type)
+            """)
+        logger.info("Neo4j provenance graph initialized")
+        return True
+    except Exception as e:
+        logger.warning(f"Neo4j not available for provenance graph: {e}")
+        return False
+
+
+def close_neo4j():
+    """Close Neo4j connection."""
+    global _neo4j_driver
+    if _neo4j_driver:
+        _neo4j_driver.close()
+        _neo4j_driver = None
+
+
+def is_neo4j_available() -> bool:
+    """Check if Neo4j is available."""
+    return _neo4j_driver is not None
+
+
+# ============================================
+# Graph Storage Operations
+# ============================================
+
+def store_record(record: ProvenanceRecord) -> bool:
+    """
+    Store a provenance record in Neo4j as graph nodes and relationships.
+
+    Creates:
+    - ProvenanceRecord node
+    - Session node (if not exists)
+    - Agent node (if not exists)
+    - Tool/Decision nodes
+    - Relationships: BELONGS_TO, PERFORMED_BY, FOLLOWS, USED, GENERATED
+    """
+    if not _neo4j_driver:
+        return False
+
+    try:
+        with _neo4j_driver.session() as session:
+            # Create the main record node (including activity_attributes for full data)
+            import json
+            attributes_json = json.dumps(record.activity_attributes) if record.activity_attributes else "{}"
+
+            session.run("""
+                MERGE (r:ProvenanceRecord {record_id: $record_id})
+                SET r.timestamp = $timestamp,
+                    r.activity_type = $activity_type,
+                    r.activity_name = $activity_name,
+                    r.record_hash = $record_hash,
+                    r.previous_hash = $previous_hash,
+                    r.sequence_number = $sequence_number,
+                    r.activity_attributes = $activity_attributes
+            """, {
+                "record_id": record.id,
+                "timestamp": record.timestamp,
+                "activity_type": record.activity_type.value,
+                "activity_name": record.activity_name,
+                "record_hash": record.record_hash,
+                "previous_hash": record.previous_hash,
+                "sequence_number": record.sequence_number,
+                "activity_attributes": attributes_json,
+            })
+
+            # Create/link session with client_id for data isolation
+            if record.session_id:
+                # Get client_id from record attributes or default
+                client_id = None
+                if record.activity_attributes:
+                    client_id = record.activity_attributes.get("client_id")
+
+                session.run("""
+                    MERGE (s:Session {session_id: $session_id})
+                    SET s.client_id = $client_id
+                    WITH s
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    SET r.client_id = $client_id
+                    MERGE (r)-[:BELONGS_TO]->(s)
+                """, {
+                    "session_id": record.session_id,
+                    "record_id": record.id,
+                    "client_id": client_id,
+                })
+
+            # Create/link agent
+            if record.agent:
+                session.run("""
+                    MERGE (a:Agent {agent_id: $agent_id})
+                    SET a.name = $agent_name,
+                        a.type = $agent_type
+                    WITH a
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:PERFORMED_BY]->(a)
+                """, {
+                    "agent_id": record.agent.id,
+                    "agent_name": record.agent.name,
+                    "agent_type": record.agent.type,
+                    "record_id": record.id,
+                })
+
+            # Link to previous record (chain)
+            if record.previous_hash:
+                session.run("""
+                    MATCH (prev:ProvenanceRecord {record_hash: $previous_hash})
+                    MATCH (curr:ProvenanceRecord {record_id: $record_id})
+                    MERGE (curr)-[:FOLLOWS]->(prev)
+                """, {
+                    "previous_hash": record.previous_hash,
+                    "record_id": record.id,
+                })
+
+            # Create activity-specific nodes
+            if record.activity_type == ActivityType.TOOL_CALL:
+                session.run("""
+                    MERGE (t:Tool {name: $tool_name})
+                    WITH t
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:CALLED]->(t)
+                """, {
+                    "tool_name": record.activity_name,
+                    "record_id": record.id,
+                })
+            elif record.activity_type == ActivityType.DECISION:
+                session.run("""
+                    MERGE (d:Decision {name: $decision_name})
+                    WITH d
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:MADE]->(d)
+                """, {
+                    "decision_name": record.activity_name,
+                    "record_id": record.id,
+                })
+
+            # Store used entities
+            for entity in record.used_entities:
+                session.run("""
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    CREATE (e:Entity {
+                        entity_id: $entity_id,
+                        entity_type: $entity_type,
+                        value_hash: $value_hash
+                    })
+                    CREATE (r)-[:USED]->(e)
+                """, {
+                    "record_id": record.id,
+                    "entity_id": entity.id,
+                    "entity_type": entity.type,
+                    "value_hash": entity.value_hash,
+                })
+
+            # Store generated entities
+            for entity in record.generated_entities:
+                session.run("""
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    CREATE (e:Entity {
+                        entity_id: $entity_id,
+                        entity_type: $entity_type,
+                        value_hash: $value_hash
+                    })
+                    CREATE (r)-[:GENERATED]->(e)
+                """, {
+                    "record_id": record.id,
+                    "entity_id": entity.id,
+                    "entity_type": entity.type,
+                    "value_hash": entity.value_hash,
+                })
+
+        return True
+    except Exception as e:
+        logger.error(f"Failed to store provenance record: {e}")
+        return False
+
+
+def store_chain(chain: ProvenanceChain) -> int:
+    """Store all records from a chain. Returns count of stored records."""
+    stored = 0
+    for record in chain.records:
+        if store_record(record):
+            stored += 1
+    return stored
+
+
+# ============================================
+# Graph Query Operations (Visualization API)
+# ============================================
+
+@dataclass
+class GraphNode:
+    """Node for visualization."""
+    id: str
+    label: str
+    type: str
+    properties: dict[str, Any]
+
+
+@dataclass
+class GraphEdge:
+    """Edge for visualization."""
+    source: str
+    target: str
+    type: str
+    properties: dict[str, Any]
+
+
+@dataclass
+class ProvenanceGraph:
+    """Graph structure for visualization."""
+    nodes: list[GraphNode]
+    edges: list[GraphEdge]
+    metadata: dict[str, Any]
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "nodes": [
+                {"id": n.id, "label": n.label, "type": n.type, "properties": n.properties}
+                for n in self.nodes
+            ],
+            "edges": [
+                {"source": e.source, "target": e.target, "type": e.type, "properties": e.properties}
+                for e in self.edges
+            ],
+            "metadata": self.metadata,
+        }
+
+
+def get_session_graph(session_id: str) -> Optional[ProvenanceGraph]:
+    """
+    Get the provenance graph for a session.
+    Returns nodes and edges for visualization.
+    """
+    if not _neo4j_driver:
+        return None
+
+    try:
+        with _neo4j_driver.session() as session:
+            # Get all nodes related to session
+            result = session.run("""
+                MATCH (s:Session {session_id: $session_id})<-[:BELONGS_TO]-(r:ProvenanceRecord)
+                OPTIONAL MATCH (r)-[:PERFORMED_BY]->(a:Agent)
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                OPTIONAL MATCH (r)-[:FOLLOWS]->(prev:ProvenanceRecord)
+                RETURN r, a, t, d, prev
+                ORDER BY r.sequence_number
+            """, {"session_id": session_id})
+
+            nodes = []
+            edges = []
+            seen_nodes = set()
+
+            for record in result:
+                r = record["r"]
+                a = record["a"]
+                t = record["t"]
+                d = record["d"]
+                prev = record["prev"]
+
+                # Record node
+                record_id = r["record_id"]
+                if record_id not in seen_nodes:
+                    nodes.append(GraphNode(
+                        id=record_id,
+                        label=r["activity_name"],
+                        type="record",
+                        properties={
+                            "activity_type": r["activity_type"],
+                            "timestamp": r["timestamp"],
+                            "sequence": r["sequence_number"],
+                        }
+                    ))
+                    seen_nodes.add(record_id)
+
+                # Agent node
+                if a:
+                    agent_id = a["agent_id"]
+                    if agent_id not in seen_nodes:
+                        nodes.append(GraphNode(
+                            id=agent_id,
+                            label=a["name"],
+                            type="agent",
+                            properties={"agent_type": a.get("type", "unknown")}
+                        ))
+                        seen_nodes.add(agent_id)
+                    edges.append(GraphEdge(
+                        source=record_id,
+                        target=agent_id,
+                        type="PERFORMED_BY",
+                        properties={}
+                    ))
+
+                # Tool node
+                if t:
+                    tool_id = f"tool:{t['name']}"
+                    if tool_id not in seen_nodes:
+                        nodes.append(GraphNode(
+                            id=tool_id,
+                            label=t["name"],
+                            type="tool",
+                            properties={}
+                        ))
+                        seen_nodes.add(tool_id)
+                    edges.append(GraphEdge(
+                        source=record_id,
+                        target=tool_id,
+                        type="CALLED",
+                        properties={}
+                    ))
+
+                # Decision node
+                if d:
+                    decision_id = f"decision:{d['name']}"
+                    if decision_id not in seen_nodes:
+                        nodes.append(GraphNode(
+                            id=decision_id,
+                            label=d["name"],
+                            type="decision",
+                            properties={}
+                        ))
+                        seen_nodes.add(decision_id)
+                    edges.append(GraphEdge(
+                        source=record_id,
+                        target=decision_id,
+                        type="MADE",
+                        properties={}
+                    ))
+
+                # Chain link
+                if prev:
+                    edges.append(GraphEdge(
+                        source=record_id,
+                        target=prev["record_id"],
+                        type="FOLLOWS",
+                        properties={}
+                    ))
+
+            return ProvenanceGraph(
+                nodes=nodes,
+                edges=edges,
+                metadata={
+                    "session_id": session_id,
+                    "record_count": len([n for n in nodes if n.type == "record"]),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+    except Exception as e:
+        logger.error(f"Failed to get session graph: {e}")
+        return None
+
+
+def get_agent_behavior_graph(agent_id: str, limit: int = 100) -> Optional[ProvenanceGraph]:
+    """
+    Get behavior graph for a specific agent.
+    Shows tools called, decisions made, and patterns.
+    """
+    if not _neo4j_driver:
+        return None
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (a:Agent {agent_id: $agent_id})<-[:PERFORMED_BY]-(r:ProvenanceRecord)
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
+                RETURN r, t, d, s
+                ORDER BY r.timestamp DESC
+                LIMIT $limit
+            """, {"agent_id": agent_id, "limit": limit})
+
+            nodes = []
+            edges = []
+            seen_nodes = set()
+            tool_counts = {}
+            decision_counts = {}
+
+            # Add agent node
+            nodes.append(GraphNode(
+                id=agent_id,
+                label=agent_id,
+                type="agent",
+                properties={}
+            ))
+            seen_nodes.add(agent_id)
+
+            for record in result:
+                r = record["r"]
+                t = record["t"]
+                d = record["d"]
+                s = record["s"]
+
+                record_id = r["record_id"]
+
+                # Tool aggregation
+                if t:
+                    tool_name = t["name"]
+                    tool_counts[tool_name] = tool_counts.get(tool_name, 0) + 1
+
+                # Decision aggregation
+                if d:
+                    decision_name = d["name"]
+                    decision_counts[decision_name] = decision_counts.get(decision_name, 0) + 1
+
+            # Create aggregated tool nodes
+            for tool_name, count in tool_counts.items():
+                tool_id = f"tool:{tool_name}"
+                nodes.append(GraphNode(
+                    id=tool_id,
+                    label=tool_name,
+                    type="tool",
+                    properties={"call_count": count}
+                ))
+                edges.append(GraphEdge(
+                    source=agent_id,
+                    target=tool_id,
+                    type="USES",
+                    properties={"count": count}
+                ))
+
+            # Create aggregated decision nodes
+            for decision_name, count in decision_counts.items():
+                decision_id = f"decision:{decision_name}"
+                nodes.append(GraphNode(
+                    id=decision_id,
+                    label=decision_name,
+                    type="decision",
+                    properties={"count": count}
+                ))
+                edges.append(GraphEdge(
+                    source=agent_id,
+                    target=decision_id,
+                    type="DECIDES",
+                    properties={"count": count}
+                ))
+
+            return ProvenanceGraph(
+                nodes=nodes,
+                edges=edges,
+                metadata={
+                    "agent_id": agent_id,
+                    "total_tools": len(tool_counts),
+                    "total_decisions": len(decision_counts),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+    except Exception as e:
+        logger.error(f"Failed to get agent behavior graph: {e}")
+        return None
+
+
+def get_attack_path_graph(session_id: str) -> Optional[ProvenanceGraph]:
+    """
+    Analyze and visualize potential attack paths in a session.
+    Highlights suspicious activity sequences.
+    """
+    if not _neo4j_driver:
+        return None
+
+    try:
+        with _neo4j_driver.session() as session:
+            # Find records with security-related decisions
+            result = session.run("""
+                MATCH (s:Session {session_id: $session_id})<-[:BELONGS_TO]-(r:ProvenanceRecord)
+                WHERE r.activity_type IN ['decision', 'tool_call']
+                OPTIONAL MATCH (r)-[:FOLLOWS*1..5]->(chain:ProvenanceRecord)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                WHERE d.name CONTAINS 'block' OR d.name CONTAINS 'warn'
+                RETURN r, collect(DISTINCT chain) as chain_records, d
+                ORDER BY r.sequence_number
+            """, {"session_id": session_id})
+
+            nodes = []
+            edges = []
+            seen_nodes = set()
+
+            for record in result:
+                r = record["r"]
+                chain_records = record["chain_records"]
+                d = record["d"]
+
+                record_id = r["record_id"]
+
+                # Highlight blocked/warned records
+                is_security_event = d is not None
+
+                if record_id not in seen_nodes:
+                    nodes.append(GraphNode(
+                        id=record_id,
+                        label=r["activity_name"],
+                        type="security_event" if is_security_event else "record",
+                        properties={
+                            "activity_type": r["activity_type"],
+                            "timestamp": r["timestamp"],
+                            "is_blocked": is_security_event,
+                        }
+                    ))
+                    seen_nodes.add(record_id)
+
+                # Add chain to show attack progression
+                prev_id = record_id
+                for chain_rec in chain_records:
+                    chain_id = chain_rec["record_id"]
+                    if chain_id not in seen_nodes:
+                        nodes.append(GraphNode(
+                            id=chain_id,
+                            label=chain_rec["activity_name"],
+                            type="record",
+                            properties={
+                                "activity_type": chain_rec["activity_type"],
+                                "timestamp": chain_rec["timestamp"],
+                            }
+                        ))
+                        seen_nodes.add(chain_id)
+
+                    edges.append(GraphEdge(
+                        source=prev_id,
+                        target=chain_id,
+                        type="ATTACK_PATH",
+                        properties={}
+                    ))
+                    prev_id = chain_id
+
+            return ProvenanceGraph(
+                nodes=nodes,
+                edges=edges,
+                metadata={
+                    "session_id": session_id,
+                    "security_events": len([n for n in nodes if n.type == "security_event"]),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+    except Exception as e:
+        logger.error(f"Failed to get attack path graph: {e}")
+        return None
+
+
+# ============================================
+# Analytics Queries
+# ============================================
+
+def get_tool_usage_stats(days: int = 7) -> dict[str, Any]:
+    """Get tool usage statistics."""
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord)-[:CALLED]->(t:Tool)
+                WHERE datetime(r.timestamp) > datetime() - duration({days: $days})
+                RETURN t.name as tool, count(*) as count
+                ORDER BY count DESC
+                LIMIT 20
+            """, {"days": days})
+
+            stats = {}
+            for record in result:
+                stats[record["tool"]] = record["count"]
+
+            return {
+                "period_days": days,
+                "tool_usage": stats,
+                "total_calls": sum(stats.values()),
+            }
+    except Exception as e:
+        logger.error(f"Failed to get tool usage stats: {e}")
+        return {"error": str(e)}
+
+
+def get_security_event_stats(days: int = 7) -> dict[str, Any]:
+    """Get security event statistics."""
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord)-[:MADE]->(d:Decision)
+                WHERE datetime(r.timestamp) > datetime() - duration({days: $days})
+                RETURN d.name as decision, count(*) as count
+                ORDER BY count DESC
+            """, {"days": days})
+
+            stats = {}
+            blocked = 0
+            warned = 0
+            for record in result:
+                name = record["decision"]
+                count = record["count"]
+                stats[name] = count
+                if "block" in name.lower():
+                    blocked += count
+                if "warn" in name.lower():
+                    warned += count
+
+            return {
+                "period_days": days,
+                "decision_counts": stats,
+                "total_blocked": blocked,
+                "total_warned": warned,
+            }
+    except Exception as e:
+        logger.error(f"Failed to get security event stats: {e}")
+        return {"error": str(e)}
+
+
+def detect_anomalous_patterns() -> list[dict[str, Any]]:
+    """
+    Use graph algorithms to detect anomalous behavior patterns.
+    """
+    if not _neo4j_driver:
+        return []
+
+    try:
+        with _neo4j_driver.session() as session:
+            # Find agents with unusual tool usage patterns
+            result = session.run("""
+                MATCH (a:Agent)<-[:PERFORMED_BY]-(r:ProvenanceRecord)-[:CALLED]->(t:Tool)
+                WITH a, t, count(*) as usage
+                WITH a, collect({tool: t.name, count: usage}) as tool_usage, sum(usage) as total
+                WHERE total > 10
+                RETURN a.agent_id as agent, tool_usage, total
+                ORDER BY total DESC
+                LIMIT 10
+            """)
+
+            anomalies = []
+            for record in result:
+                agent = record["agent"]
+                tool_usage = record["tool_usage"]
+                total = record["total"]
+
+                # Check for concentrated tool usage (potential automation abuse)
+                max_single_tool = max(t["count"] for t in tool_usage)
+                if max_single_tool / total > 0.8:  # 80%+ on single tool
+                    anomalies.append({
+                        "type": "concentrated_tool_usage",
+                        "agent": agent,
+                        "description": f"Agent uses single tool for {max_single_tool}/{total} calls",
+                        "severity": "medium",
+                    })
+
+            return anomalies
+    except Exception as e:
+        logger.error(f"Failed to detect anomalous patterns: {e}")
+        return []
+
+
+# ============================================
+# Convenience Functions
+# ============================================
+
+def sync_chain_to_graph(session_id: str) -> int:
+    """
+    Sync a provenance chain to the graph database.
+    Call this after recording activities to persist to Neo4j.
+    """
+    chain = get_or_create_chain(session_id)
+    return store_chain(chain)
+
+
+def get_visualization_data(
+    session_id: str = None,
+    agent_id: str = None,
+    view_type: str = "session"
+) -> dict[str, Any]:
+    """
+    Get visualization data for the frontend.
+
+    Args:
+        session_id: Session to visualize
+        agent_id: Agent to visualize
+        view_type: "session", "agent", or "attack_path"
+
+    Returns:
+        Dict with nodes, edges, and metadata
+    """
+    if view_type == "session" and session_id:
+        graph = get_session_graph(session_id)
+    elif view_type == "agent" and agent_id:
+        graph = get_agent_behavior_graph(agent_id)
+    elif view_type == "attack_path" and session_id:
+        graph = get_attack_path_graph(session_id)
+    else:
+        return {"error": "Invalid parameters"}
+
+    if graph:
+        return graph.to_dict()
+    return {"error": "Failed to generate graph"}

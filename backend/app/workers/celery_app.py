@@ -1,5 +1,5 @@
 """
-Celery application configuration for AgentShield background workers.
+Celery application configuration for InALign background workers.
 
 Configures the Celery application with Redis as the message broker and
 result backend, JSON serialisation, task time limits, named queues,
@@ -17,7 +17,7 @@ from kombu import Exchange, Queue
 
 from app.config import get_settings
 
-logger = logging.getLogger("agentshield.workers.celery_app")
+logger = logging.getLogger("inalign.workers.celery_app")
 
 # ---------------------------------------------------------------------------
 # Settings
@@ -30,7 +30,7 @@ _result_backend: str = str(settings.redis_url)
 # Celery application
 # ---------------------------------------------------------------------------
 celery_app = Celery(
-    "agentshield",
+    "inalign",
     broker=_broker_url,
     backend=_result_backend,
 )

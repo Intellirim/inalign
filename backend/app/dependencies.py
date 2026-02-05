@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import (
 from app.config import Settings, get_settings
 from app.core.security import verify_api_key
 
-logger = logging.getLogger("agentshield.dependencies")
+logger = logging.getLogger("inalign.dependencies")
 
 # ---------------------------------------------------------------------------
 # Module-level singletons (initialised at app startup via lifespan)

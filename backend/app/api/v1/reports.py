@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from app.dependencies import CurrentUser, DBSession
 from app.schemas.report import ReportRequest, ReportResponse
 
-logger = logging.getLogger("agentshield.api.reports")
+logger = logging.getLogger("inalign.api.reports")
 
 router = APIRouter()
 

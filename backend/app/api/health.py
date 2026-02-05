@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, status
 
-logger = logging.getLogger("agentshield.api.health")
+logger = logging.getLogger("inalign.api.health")
 
 router = APIRouter(tags=["Health"])
 
@@ -34,7 +34,7 @@ async def root() -> dict:
     return {
         "status": "healthy",
         "version": "1.0.0",
-        "service": "AgentShield",
+        "service": "InALign",
     }
 
 
@@ -65,7 +65,7 @@ async def health_check() -> dict:
     return {
         "status": overall_status,
         "version": "1.0.0",
-        "service": "AgentShield",
+        "service": "InALign",
         "checks": {
             "database": db_ok,
             "neo4j": neo4j_ok,

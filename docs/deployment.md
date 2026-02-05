@@ -1,4 +1,4 @@
-# AgentShield Deployment Guide
+# InALign Deployment Guide
 
 ## Local Development (Docker Compose)
 
@@ -12,8 +12,8 @@
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/agentshield/agentshield.git
-cd agentshield
+git clone https://github.com/inalign/inalign.git
+cd inalign
 ```
 
 2. Copy the environment file:
@@ -114,7 +114,7 @@ kubectl apply -f infra/k8s/redis-deployment.yaml
 Wait for them to be ready:
 
 ```bash
-kubectl get pods -n agentshield -w
+kubectl get pods -n inalign -w
 ```
 
 ### Step 4: Deploy Application
@@ -143,29 +143,29 @@ kubectl apply -f infra/k8s/ingress.yaml
 
 ```bash
 # Check all resources
-kubectl get all -n agentshield
+kubectl get all -n inalign
 
 # Check ingress
-kubectl get ingress -n agentshield
+kubectl get ingress -n inalign
 
 # Check pod logs
-kubectl logs -f deployment/backend -n agentshield
+kubectl logs -f deployment/backend -n inalign
 
 # Port-forward for local testing
-kubectl port-forward svc/backend 8000:8000 -n agentshield
+kubectl port-forward svc/backend 8000:8000 -n inalign
 ```
 
 ### Scaling
 
 ```bash
 # Scale backend
-kubectl scale deployment/backend --replicas=5 -n agentshield
+kubectl scale deployment/backend --replicas=5 -n inalign
 
 # Scale frontend
-kubectl scale deployment/frontend --replicas=3 -n agentshield
+kubectl scale deployment/frontend --replicas=3 -n inalign
 
 # Set up HPA (Horizontal Pod Autoscaler)
-kubectl autoscale deployment/backend --min=3 --max=10 --cpu-percent=70 -n agentshield
+kubectl autoscale deployment/backend --min=3 --max=10 --cpu-percent=70 -n inalign
 ```
 
 ## Environment Variables Reference
@@ -186,8 +186,8 @@ kubectl autoscale deployment/backend --min=3 --max=10 --cpu-percent=70 -n agents
 |----------|-------------|---------|----------|
 | `POSTGRES_HOST` | PostgreSQL host | `localhost` | Yes |
 | `POSTGRES_PORT` | PostgreSQL port | `5432` | No |
-| `POSTGRES_DB` | Database name | `agentshield` | Yes |
-| `POSTGRES_USER` | Database user | `agentshield` | Yes |
+| `POSTGRES_DB` | Database name | `inalign` | Yes |
+| `POSTGRES_USER` | Database user | `inalign` | Yes |
 | `POSTGRES_PASSWORD` | Database password | - | Yes |
 
 ### Neo4j
@@ -197,7 +197,7 @@ kubectl autoscale deployment/backend --min=3 --max=10 --cpu-percent=70 -n agents
 | `NEO4J_URI` | Neo4j Bolt URI | `bolt://localhost:7687` | Yes |
 | `NEO4J_USER` | Neo4j username | `neo4j` | Yes |
 | `NEO4J_PASSWORD` | Neo4j password | - | Yes |
-| `NEO4J_DATABASE` | Neo4j database name | `agentshield` | No |
+| `NEO4J_DATABASE` | Neo4j database name | `inalign` | No |
 
 ### Redis
 
@@ -248,17 +248,17 @@ kubectl autoscale deployment/backend --min=3 --max=10 --cpu-percent=70 -n agents
 
 ```bash
 # Backup
-kubectl exec -n agentshield postgres-0 -- pg_dump -U agentshield agentshield > backup.sql
+kubectl exec -n inalign postgres-0 -- pg_dump -U inalign inalign > backup.sql
 
 # Restore
-kubectl exec -i -n agentshield postgres-0 -- psql -U agentshield agentshield < backup.sql
+kubectl exec -i -n inalign postgres-0 -- psql -U inalign inalign < backup.sql
 ```
 
 ### Neo4j
 
 ```bash
 # Use neo4j-admin for backup
-kubectl exec -n agentshield neo4j-0 -- neo4j-admin database dump agentshield --to-path=/backups/
+kubectl exec -n inalign neo4j-0 -- neo4j-admin database dump inalign --to-path=/backups/
 ```
 
 ### Redis

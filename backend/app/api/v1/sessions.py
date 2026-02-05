@@ -16,7 +16,7 @@ from app.dependencies import CurrentUser, Neo4jSession
 from app.schemas.session import SessionListResponse, SessionResponse
 from app.services.session_service import SessionService
 
-logger = logging.getLogger("agentshield.api.sessions")
+logger = logging.getLogger("inalign.api.sessions")
 
 router = APIRouter()
 

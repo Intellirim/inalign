@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AgentShield Adversarial Training Loop.
+InALign Adversarial Training Loop.
 
 Continuous cycle:  Attack → Detect → Learn → Repeat
 
@@ -42,13 +42,13 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%H:%M:%S",
 )
-logger = logging.getLogger("agentshield.adversarial_loop")
+logger = logging.getLogger("inalign.adversarial_loop")
 
 
 def print_banner():
     print(r"""
     ╔══════════════════════════════════════════════════════════╗
-    ║       AgentShield Adversarial Training System           ║
+    ║       InALign Adversarial Training System           ║
     ║   Attack → Detect → Learn → Repeat                     ║
     ╚══════════════════════════════════════════════════════════╝
     """)
@@ -156,7 +156,7 @@ async def run_training_loop(
 
     Each round:
     1. Generate diverse attacks using all mutation strategies.
-    2. Test all attacks against the AgentShield API.
+    2. Test all attacks against the InALign API.
     3. Analyze missed attacks with PatternLearner.
     4. (Optional) Auto-inject learned patterns into the detection engine.
     5. Save results for analysis.
@@ -266,7 +266,7 @@ async def run_training_loop(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AgentShield Adversarial Training Loop",
+        description="InALign Adversarial Training Loop",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Examples:

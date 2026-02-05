@@ -1,5 +1,5 @@
 """
-Red Team Attack Agent for AgentShield.
+Red Team Attack Agent for InALign.
 
 Generates diverse adversarial attack prompts and tests them against
 the detection API to find blind spots.
@@ -31,7 +31,7 @@ from .mutations import (
     ZeroWidthMutator,
 )
 
-logger = logging.getLogger("agentshield.adversarial")
+logger = logging.getLogger("inalign.adversarial")
 
 # ---------------------------------------------------------------------------
 # Seed attacks (concise, representative attacks across categories)

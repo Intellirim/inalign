@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InALign - AI Agent Governance Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+            color: white;
+            padding: 80px 20px 100px;
+            text-align: center;
+        }
+        .hero-content { max-width: 900px; margin: 0 auto; }
+        .logo {
+            font-size: 48px;
+            font-weight: 800;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .tagline {
+            font-size: 24px;
+            color: #94a3b8;
+            margin-bottom: 32px;
+        }
+        .headline {
+            font-size: 56px;
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 24px;
+        }
+        .subheadline {
+            font-size: 20px;
+            color: #cbd5e1;
+            max-width: 600px;
+            margin: 0 auto 40px;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 16px 32px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover { background: #2563eb; transform: translateY(-2px); }
+        .btn-secondary {
+            background: transparent;
+            color: white;
+            border: 2px solid #475569;
+        }
+        .btn-secondary:hover { border-color: #94a3b8; }
+
+        /* Problem Section */
+        .problem {
+            padding: 80px 20px;
+            background: #f8fafc;
+        }
+        .section-content { max-width: 1100px; margin: 0 auto; }
+        .section-title {
+            font-size: 36px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+        .section-subtitle {
+            text-align: center;
+            color: #64748b;
+            font-size: 18px;
+            margin-bottom: 48px;
+        }
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        .problem-card {
+            background: white;
+            padding: 32px;
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+        }
+        .problem-icon {
+            font-size: 40px;
+            margin-bottom: 16px;
+        }
+        .problem-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .problem-desc { color: #64748b; }
+
+        /* Solution Section */
+        .solution {
+            padding: 80px 20px;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+        }
+        .feature-card {
+            text-align: center;
+            padding: 24px;
+        }
+        .feature-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 28px;
+        }
+        .feature-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .feature-desc { color: #64748b; }
+
+        /* How It Works */
+        .how-it-works {
+            padding: 80px 20px;
+            background: #0f172a;
+            color: white;
+        }
+        .how-it-works .section-title { color: white; }
+        .how-it-works .section-subtitle { color: #94a3b8; }
+        .steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 32px;
+            margin-top: 48px;
+        }
+        .step {
+            text-align: center;
+        }
+        .step-number {
+            width: 48px;
+            height: 48px;
+            background: #3b82f6;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+        .step-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .step-desc { color: #94a3b8; font-size: 14px; }
+
+        /* Code Example */
+        .code-section {
+            padding: 80px 20px;
+            background: #f8fafc;
+        }
+        .code-block {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            overflow-x: auto;
+            max-width: 800px;
+            margin: 32px auto 0;
+        }
+        .code-block pre {
+            color: #e2e8f0;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .code-comment { color: #64748b; }
+        .code-string { color: #86efac; }
+        .code-key { color: #93c5fd; }
+
+        /* Pricing */
+        .pricing {
+            padding: 80px 20px;
+        }
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .pricing-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 32px;
+            text-align: center;
+        }
+        .pricing-card.featured {
+            border-color: #3b82f6;
+            transform: scale(1.05);
+        }
+        .pricing-name {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .pricing-price {
+            font-size: 48px;
+            font-weight: 800;
+            color: #3b82f6;
+        }
+        .pricing-price span { font-size: 18px; color: #64748b; }
+        .pricing-features {
+            list-style: none;
+            margin: 24px 0;
+            text-align: left;
+        }
+        .pricing-features li {
+            padding: 8px 0;
+            color: #64748b;
+        }
+        .pricing-features li::before {
+            content: "✓";
+            color: #22c55e;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        /* CTA */
+        .final-cta {
+            padding: 80px 20px;
+            background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%);
+            color: white;
+            text-align: center;
+        }
+        .final-cta .section-title { color: white; margin-bottom: 24px; }
+
+        /* Footer */
+        footer {
+            padding: 40px 20px;
+            background: #0f172a;
+            color: #94a3b8;
+            text-align: center;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .headline { font-size: 36px; }
+            .section-title { font-size: 28px; }
+            .pricing-card.featured { transform: none; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="logo">InALign</div>
+            <div class="tagline">AI Agent Governance Platform</div>
+            <h1 class="headline">Know What Your AI Agents Did.<br>Prove It.</h1>
+            <p class="subheadline">
+                Tamper-proof audit trails for AI agents. Track every action, every decision,
+                with cryptographic proof. Essential for compliance, incident response, and trust.
+            </p>
+            <div class="cta-buttons">
+                <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
+                <a href="#how-it-works" class="btn btn-secondary">See How It Works</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Problem -->
+    <section class="problem">
+        <div class="section-content">
+            <h2 class="section-title">The Problem with AI Agents</h2>
+            <p class="section-subtitle">AI agents are powerful. But who's watching them?</p>
+            <div class="problem-grid">
+                <div class="problem-card">
+                    <div class="problem-icon">🔍</div>
+                    <h3 class="problem-title">No Visibility</h3>
+                    <p class="problem-desc">
+                        When something goes wrong, you can't trace what the agent did or why.
+                        Debugging becomes guesswork.
+                    </p>
+                </div>
+                <div class="problem-card">
+                    <div class="problem-icon">⚖️</div>
+                    <h3 class="problem-title">Compliance Risk</h3>
+                    <p class="problem-desc">
+                        Regulators want proof. "The AI did it" isn't an acceptable answer.
+                        You need verifiable audit trails.
+                    </p>
+                </div>
+                <div class="problem-card">
+                    <div class="problem-icon">🎯</div>
+                    <h3 class="problem-title">Accountability Gap</h3>
+                    <p class="problem-desc">
+                        Who gave the command? What was executed? Without provenance,
+                        there's no accountability.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Solution -->
+    <section class="solution">
+        <div class="section-content">
+            <h2 class="section-title">Complete Agent Governance</h2>
+            <p class="section-subtitle">Every action recorded. Every decision traceable. Cryptographically verified.</p>
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🔗</div>
+                    <h3 class="feature-title">Hash Chain Provenance</h3>
+                    <p class="feature-desc">
+                        Every action creates a cryptographic record linked to the previous one.
+                        Tampering is mathematically impossible.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">👤</div>
+                    <h3 class="feature-title">User Command Tracking</h3>
+                    <p class="feature-desc">
+                        Know exactly what prompt triggered each action.
+                        Complete chain from human intent to agent execution.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔎</div>
+                    <h3 class="feature-title">Instant Trace</h3>
+                    <p class="feature-desc">
+                        Search across all sessions in milliseconds.
+                        Find who did what, when, and why—immediately.
+                    </p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📜</div>
+                    <h3 class="feature-title">Audit Certificates</h3>
+                    <p class="feature-desc">
+                        Export legally-compliant audit reports with Merkle proofs.
+                        Third-party verifiable without trusting us.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section class="how-it-works" id="how-it-works">
+        <div class="section-content">
+            <h2 class="section-title">How It Works</h2>
+            <p class="section-subtitle">Add provenance to any AI agent in minutes</p>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <h3 class="step-title">Connect Your Agent</h3>
+                    <p class="step-desc">Add InALign MCP server to Claude Code, Cursor, or any MCP-compatible agent.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <h3 class="step-title">Automatic Recording</h3>
+                    <p class="step-desc">Every tool call, file access, and decision is automatically recorded with SHA-256 hashing.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <h3 class="step-title">Search & Trace</h3>
+                    <p class="step-desc">Use the dashboard to search activity, investigate incidents, and export audit reports.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Code Example -->
+    <section class="code-section">
+        <div class="section-content">
+            <h2 class="section-title">Simple Integration</h2>
+            <p class="section-subtitle">Add to your Claude Code settings in 30 seconds</p>
+            <div class="code-block">
+<pre><span class="code-comment">// ~/.claude/settings.json</span>
+{
+  <span class="code-key">"mcpServers"</span>: {
+    <span class="code-key">"inalign"</span>: {
+      <span class="code-key">"command"</span>: <span class="code-string">"inalign-mcp"</span>,
+      <span class="code-key">"env"</span>: {
+        <span class="code-key">"API_KEY"</span>: <span class="code-string">"your-api-key"</span>
+      }
+    }
+  }
+}</pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section class="pricing" id="pricing">
+        <div class="section-content">
+            <h2 class="section-title">Simple Pricing</h2>
+            <p class="section-subtitle">Start free. Scale as you grow.</p>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <h3 class="pricing-name">Starter</h3>
+                    <div class="pricing-price">$0<span>/mo</span></div>
+                    <ul class="pricing-features">
+                        <li>1,000 actions/month</li>
+                        <li>7-day retention</li>
+                        <li>Basic search</li>
+                        <li>1 agent</li>
+                    </ul>
+                    <a href="#" class="btn btn-secondary">Get Started</a>
+                </div>
+                <div class="pricing-card featured">
+                    <h3 class="pricing-name">Pro</h3>
+                    <div class="pricing-price">$49<span>/mo</span></div>
+                    <ul class="pricing-features">
+                        <li>50,000 actions/month</li>
+                        <li>30-day retention</li>
+                        <li>Full search & trace</li>
+                        <li>10 agents</li>
+                        <li>Audit exports</li>
+                    </ul>
+                    <a href="#" class="btn btn-primary">Start Free Trial</a>
+                </div>
+                <div class="pricing-card">
+                    <h3 class="pricing-name">Enterprise</h3>
+                    <div class="pricing-price">Custom</div>
+                    <ul class="pricing-features">
+                        <li>Unlimited actions</li>
+                        <li>1-year retention</li>
+                        <li>GraphRAG analysis</li>
+                        <li>Unlimited agents</li>
+                        <li>SSO & RBAC</li>
+                        <li>On-prem option</li>
+                    </ul>
+                    <a href="#" class="btn btn-secondary">Contact Sales</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Final CTA -->
+    <section class="final-cta">
+        <div class="section-content">
+            <h2 class="section-title">Start Tracking Your AI Agents Today</h2>
+            <p style="color: #94a3b8; margin-bottom: 32px;">
+                Free to start. No credit card required. Set up in 2 minutes.
+            </p>
+            <a href="#" class="btn btn-primary">Get Your API Key</a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>© 2026 InALign. AI Agent Governance Platform.</p>
+        <p style="margin-top: 8px; font-size: 14px;">
+            <a href="#" style="color: #94a3b8;">Documentation</a> ·
+            <a href="#" style="color: #94a3b8;">GitHub</a> ·
+            <a href="#" style="color: #94a3b8;">Contact</a>
+        </p>
+    </footer>
+</body>
+</html>

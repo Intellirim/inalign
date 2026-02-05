@@ -36,7 +36,7 @@ from app.schemas.auth import (
 )
 from app.schemas.common import SuccessResponse
 
-logger = logging.getLogger("agentshield.api.auth")
+logger = logging.getLogger("inalign.api.auth")
 
 router = APIRouter()
 

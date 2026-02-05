@@ -1,33 +1,33 @@
-# AgentShield SDK Guide
+# InALign SDK Guide
 
-This guide covers installation, setup, and usage for the AgentShield Python and JavaScript SDKs.
+This guide covers installation, setup, and usage for the InALign Python and JavaScript SDKs.
 
 ## Python SDK
 
 ### Installation
 
 ```bash
-pip install agentshield
+pip install inalign
 ```
 
 For development:
 
 ```bash
-pip install agentshield[dev]
+pip install inalign[dev]
 ```
 
 ### Setup
 
 ```python
-from agentshield import AgentShield
+from inalign import InALign
 
 # Basic initialization
-client = AgentShield(api_key="your-api-key")
+client = InALign(api_key="your-api-key")
 
 # With custom configuration
-client = AgentShield(
+client = InALign(
     api_key="your-api-key",
-    base_url="https://api.agentshield.io",
+    base_url="https://api.inalign.io",
     timeout=30,  # seconds
 )
 ```
@@ -35,10 +35,10 @@ client = AgentShield(
 ### Async Client
 
 ```python
-from agentshield import AsyncAgentShield
+from inalign import AsyncInALign
 
 async def main():
-    async with AsyncAgentShield(api_key="your-api-key") as client:
+    async with AsyncInALign(api_key="your-api-key") as client:
         result = await client.scan_input(
             text="Hello",
             agent_id="agent-1",
@@ -72,7 +72,7 @@ if not result.is_safe:
 
     # Block high-risk inputs
     if result.risk_level in ("high", "critical"):
-        raise ValueError("Unsafe input blocked by AgentShield")
+        raise ValueError("Unsafe input blocked by InALign")
 ```
 
 ### Scanning Output
@@ -168,8 +168,8 @@ for alert in alerts["items"]:
 ### Error Handling
 
 ```python
-from agentshield.exceptions import (
-    AgentShieldError,
+from inalign.exceptions import (
+    InALignError,
     AuthenticationError,
     RateLimitError,
     NotFoundError,
@@ -189,7 +189,7 @@ except ValidationError as e:
     print(f"Invalid request: {e.message}")
 except ServerError:
     print("Server error - retry later")
-except AgentShieldError as e:
+except InALignError as e:
     print(f"Error {e.status_code}: {e.message}")
 ```
 
@@ -198,16 +198,16 @@ except AgentShieldError as e:
 ### Installation
 
 ```bash
-npm install @agentshield/sdk
+npm install @inalign/sdk
 ```
 
 ### Setup
 
 ```typescript
-import { AgentShield } from "@agentshield/sdk";
+import { InALign } from "@inalign/sdk";
 
-const shield = new AgentShield("your-api-key", {
-  baseUrl: "https://api.agentshield.io",
+const shield = new InALign("your-api-key", {
+  baseUrl: "https://api.inalign.io",
   timeout: 30000, // milliseconds
 });
 ```
@@ -297,17 +297,17 @@ await shield.acknowledgeAlert("alert-123");
 
 ## LangChain Integration (Python)
 
-AgentShield can be integrated as a LangChain callback handler to automatically protect your chains and agents.
+InALign can be integrated as a LangChain callback handler to automatically protect your chains and agents.
 
 ### Setup
 
 ```python
-from agentshield import AgentShield
+from inalign import InALign
 from langchain_core.callbacks import BaseCallbackHandler
 
-class AgentShieldCallbackHandler(BaseCallbackHandler):
+class InALignCallbackHandler(BaseCallbackHandler):
     def __init__(self, api_key: str, agent_id: str):
-        self.client = AgentShield(api_key=api_key)
+        self.client = InALign(api_key=api_key)
         self.agent_id = agent_id
         self.session_id = str(uuid.uuid4())
 
@@ -337,8 +337,8 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
 ```python
 from langchain_openai import ChatOpenAI
 
-handler = AgentShieldCallbackHandler(
-    api_key="your-agentshield-key",
+handler = InALignCallbackHandler(
+    api_key="your-inalign-key",
     agent_id="my-langchain-agent",
 )
 
@@ -348,16 +348,16 @@ response = llm.invoke("What are the best practices for AI safety?")
 
 ## OpenAI Integration (Python)
 
-Wrap the OpenAI client with AgentShield for automatic protection:
+Wrap the OpenAI client with InALign for automatic protection:
 
 ```python
-from agentshield import AgentShield
+from inalign import InALign
 from openai import OpenAI
 
 class ShieldedChat:
     def __init__(self, openai_key: str, shield_key: str):
         self.openai = OpenAI(api_key=openai_key)
-        self.shield = AgentShield(api_key=shield_key)
+        self.shield = InALign(api_key=shield_key)
 
     def chat(self, message: str, agent_id: str, session_id: str) -> str:
         # Scan input

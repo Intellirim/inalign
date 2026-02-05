@@ -1,0 +1,12 @@
+{
+  "agent_id": "agent-001",
+  "session_id": "session-test-001",
+  "action": {
+    "type": "tool_call",
+    "name": "database_query",
+    "target": "users_table",
+    "parameters": {"query": "SELECT * FROM users WHERE role=admin"},
+    "result_summary": "Returned 3 admin users",
+    "duration_ms": 150
+  }
+}

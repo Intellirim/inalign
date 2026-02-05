@@ -20,7 +20,7 @@ from app.dependencies import CurrentUser, DBSession
 from app.models.webhook import Webhook
 from app.schemas.common import SuccessResponse
 
-logger = logging.getLogger("agentshield.api.webhooks")
+logger = logging.getLogger("inalign.api.webhooks")
 
 router = APIRouter()
 
@@ -298,7 +298,7 @@ async def test_webhook(
         "event": "test",
         "webhook_id": str(webhook.id),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "message": "This is a test notification from AgentShield.",
+        "message": "This is a test notification from InALign.",
     }).encode()
 
     signature = sign_webhook_payload(payload, webhook.secret)
@@ -312,8 +312,8 @@ async def test_webhook(
                 content=payload,
                 headers={
                     "Content-Type": "application/json",
-                    "X-AgentShield-Signature": signature,
-                    "X-AgentShield-Event": "test",
+                    "X-InALign-Signature": signature,
+                    "X-InALign-Event": "test",
                 },
             )
 

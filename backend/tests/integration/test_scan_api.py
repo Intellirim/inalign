@@ -81,7 +81,7 @@ class TestScanAPI:
         response = await async_client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert data["service"] == "AgentShield API"
+        assert data["service"] == "InALign API"
 
     async def test_scan_requires_auth(
         self, async_client: AsyncClient

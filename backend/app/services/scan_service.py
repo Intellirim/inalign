@@ -23,7 +23,7 @@ from app.schemas.scan import (
     ScanOutputResponse,
 )
 
-logger = logging.getLogger("agentshield.services.scan")
+logger = logging.getLogger("inalign.services.scan")
 
 # Risk-score thresholds --------------------------------------------------
 _BLOCK_THRESHOLD: float = 0.7
@@ -99,48 +99,59 @@ class ScanService:
             len(request.text),
         )
 
-        # Run detection -------------------------------------------------------
-        try:
-            detection_result = await self._injection_detector.detect(request.text)  # type: ignore[attr-defined]
-            threats = detection_result.get("threats", [])
-        except Exception:
-            logger.exception("Injection detection failed for request %s", request_id)
-            threats = []
+        # Run detection in PARALLEL for maximum coverage -----------------------
+        import asyncio
 
-        # Run Graph RAG detection (if Neo4j available) ----------------------
-        graph_threats: list[dict] = []
-        if self._neo4j is not None and not threats:
-            # Only query graph if regex didn't catch anything —
-            # this is where Graph RAG shines: catching what regex misses
+        async def run_pattern_detection():
+            try:
+                result = await self._injection_detector.detect(request.text)
+                return result.get("threats", [])
+            except Exception:
+                logger.exception("Injection detection failed for request %s", request_id)
+                return []
+
+        async def run_graph_detection():
+            if self._neo4j is None:
+                return []
             try:
                 from app.detectors.injection.graph_detector import GraphDetector
                 graph_det = GraphDetector(self._neo4j)
-                graph_threats = await graph_det.detect(request.text)
-                if graph_threats:
-                    threats.extend(graph_threats)
-                    logger.info(
-                        "GraphRAG found %d additional threat(s) for request %s",
-                        len(graph_threats), request_id,
-                    )
+                return await graph_det.detect(request.text)
             except Exception:
                 logger.warning("GraphRAG detection failed for request %s", request_id, exc_info=True)
+                return []
 
-        # Run LLM classifier (only if regex + Graph RAG both missed) ----------
-        llm_threats: list[dict] = []
-        if not threats:
+        async def run_llm_detection():
             try:
                 from app.detectors.injection.llm_classifier import LLMClassifier
                 llm_clf = LLMClassifier()
                 if llm_clf.enabled:
-                    llm_threats = await llm_clf.classify(request.text)
-                    if llm_threats:
-                        threats.extend(llm_threats)
-                        logger.info(
-                            "LLM classifier found %d threat(s) for request %s",
-                            len(llm_threats), request_id,
-                        )
+                    return await llm_clf.classify(request.text)
+                return []
             except Exception:
                 logger.warning("LLM classifier failed for request %s", request_id, exc_info=True)
+                return []
+
+        # Execute all detectors in parallel
+        pattern_threats, graph_threats, llm_threats = await asyncio.gather(
+            run_pattern_detection(),
+            run_graph_detection(),
+            run_llm_detection(),
+        )
+
+        # Merge all threats (deduplicate by pattern_id)
+        seen_patterns = set()
+        threats = []
+        for threat in pattern_threats + graph_threats + llm_threats:
+            pid = threat.get("pattern_id", "")
+            if pid not in seen_patterns:
+                seen_patterns.add(pid)
+                threats.append(threat)
+
+        if graph_threats:
+            logger.info("GraphRAG found %d threat(s) for request %s", len(graph_threats), request_id)
+        if llm_threats:
+            logger.info("LLM classifier found %d threat(s) for request %s", len(llm_threats), request_id)
 
         # Compute aggregate risk score ----------------------------------------
         if threats:

@@ -1,5 +1,5 @@
 """
-Cypher query constants for the AgentShield Neo4j graph layer.
+Cypher query constants for the InALign Neo4j graph layer.
 
 All queries use parameterised placeholders ($param) to prevent injection and
 allow the Neo4j driver to cache execution plans.  Queries are organised by

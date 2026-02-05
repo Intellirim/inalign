@@ -61,7 +61,7 @@ class ProxyRequest(BaseModel):
     """Unified proxy request for any agent action.
 
     The SDK sends this before executing any tool/API/file/LLM operation.
-    AgentShield evaluates policies and returns whether to proceed.
+    InALign evaluates policies and returns whether to proceed.
     """
 
     agent_id: str = Field(..., description="Agent performing the action")

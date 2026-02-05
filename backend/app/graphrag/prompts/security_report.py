@@ -18,7 +18,7 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 
 SECURITY_REPORT_PROMPT_KO: str = """\
-당신은 AgentShield 보안 분석 전문가입니다.
+당신은 InALign 보안 분석 전문가입니다.
 아래에 제공된 AI 에이전트 세션 그래프 데이터를 철저히 분석하고,
 구조화된 JSON 보안 보고서를 생성하십시오.
 
@@ -123,7 +123,7 @@ SECURITY_REPORT_PROMPT_KO: str = """\
 # ---------------------------------------------------------------------------
 
 SECURITY_REPORT_PROMPT_EN: str = """\
-You are an AgentShield security analysis expert.
+You are an InALign security analysis expert.
 Thoroughly analyse the AI agent session graph data provided below and
 generate a structured JSON security report.
 

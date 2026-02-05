@@ -105,7 +105,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            NEXT_PUBLIC_API_URL=https://api.agentshield.io
+            NEXT_PUBLIC_API_URL=https://api.inalign.io
 
   # -------------------------------------------------------------------
   # Deploy to Kubernetes
@@ -143,22 +143,22 @@ jobs:
           # Update backend deployment with new image
           kubectl set image deployment/backend \
             backend=${{ env.BACKEND_IMAGE }}:${{ env.IMAGE_TAG }} \
-            -n agentshield
+            -n inalign
 
           # Update frontend deployment with new image
           kubectl set image deployment/frontend \
             frontend=${{ env.FRONTEND_IMAGE }}:${{ env.IMAGE_TAG }} \
-            -n agentshield
+            -n inalign
 
           # Wait for rollout
-          kubectl rollout status deployment/backend -n agentshield --timeout=300s
-          kubectl rollout status deployment/frontend -n agentshield --timeout=300s
+          kubectl rollout status deployment/backend -n inalign --timeout=300s
+          kubectl rollout status deployment/frontend -n inalign --timeout=300s
 
       - name: Verify deployment
         run: |
-          kubectl get pods -n agentshield
-          kubectl get services -n agentshield
-          kubectl get ingress -n agentshield
+          kubectl get pods -n inalign
+          kubectl get services -n inalign
+          kubectl get ingress -n inalign
 
       - name: Notify on success
         if: success()
@@ -169,7 +169,7 @@ jobs:
           # Placeholder: Add Slack/Discord notification here
           # curl -X POST ${{ secrets.SLACK_WEBHOOK_URL }} \
           #   -H 'Content-Type: application/json' \
-          #   -d '{"text": "AgentShield deployed successfully to ${{ github.event.inputs.environment || 'staging' }}"}'
+          #   -d '{"text": "InALign deployed successfully to ${{ github.event.inputs.environment || 'staging' }}"}'
 
       - name: Notify on failure
         if: failure()

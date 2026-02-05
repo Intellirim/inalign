@@ -21,7 +21,7 @@ from app.schemas.report import (
 )
 from app.schemas.common import RiskLevel, Severity
 
-logger = logging.getLogger("agentshield.services.report")
+logger = logging.getLogger("inalign.services.report")
 
 
 class ReportService:

@@ -18,7 +18,7 @@ from app.schemas.session import (
     TimelineEvent,
 )
 
-logger = logging.getLogger("agentshield.services.session")
+logger = logging.getLogger("inalign.services.session")
 
 
 def _parse_risk_level(score: float) -> RiskLevel:

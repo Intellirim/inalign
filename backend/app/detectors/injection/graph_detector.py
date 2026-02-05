@@ -21,7 +21,7 @@ from neo4j import AsyncSession
 
 from app.services.attack_knowledge_service import AttackKnowledgeService
 
-logger = logging.getLogger("agentshield.graph_detector")
+logger = logging.getLogger("inalign.graph_detector")
 
 # Keywords that are too common in benign text to be useful alone.
 # The graph detector requires MULTIPLE co-occurring attack keywords

@@ -1,4 +1,4 @@
-"""AgentShield service layer."""
+"""InALign service layer."""
 
 from app.services.policy_engine import PolicyEngine
 from app.services.activity_service import ActivityService

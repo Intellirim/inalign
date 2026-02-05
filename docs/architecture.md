@@ -1,8 +1,8 @@
-# AgentShield Architecture
+# InALign Architecture
 
 ## System Overview
 
-AgentShield is an AI Agent Security Platform designed to provide real-time security monitoring, threat detection, and audit logging for AI agents. The platform sits between user interactions and AI agent actions, scanning inputs/outputs and monitoring behavior patterns.
+InALign is an AI Agent Security Platform designed to provide real-time security monitoring, threat detection, and audit logging for AI agents. The platform sits between user interactions and AI agent actions, scanning inputs/outputs and monitoring behavior patterns.
 
 ```
                     +------------------+
@@ -10,7 +10,7 @@ AgentShield is an AI Agent Security Platform designed to provide real-time secur
                     +--------+---------+
                              |
                     +--------v---------+
-                    |  AgentShield SDK |
+                    |  InALign SDK |
                     | (Python / JS)    |
                     +--------+---------+
                              |

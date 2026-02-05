@@ -1,5 +1,5 @@
 # ==========================================================================
-# AgentShield Full-Stack Docker Compose
+# InALign Full-Stack Docker Compose
 # Usage:  docker compose up --build -d
 # Stop:   docker compose down
 # Reset:  docker compose down -v   (deletes data volumes)
@@ -10,31 +10,31 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: agentshield-postgres
+    container_name: inalign-postgres
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_DB: agentshield
-      POSTGRES_USER: agentshield
-      POSTGRES_PASSWORD: agentshield_dev
+      POSTGRES_DB: inalign
+      POSTGRES_USER: inalign
+      POSTGRES_PASSWORD: inalign_dev
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agentshield -d agentshield"]
+      test: ["CMD-SHELL", "pg_isready -U inalign -d inalign"]
       interval: 5s
       timeout: 3s
       retries: 10
     networks:
-      - agentshield-net
+      - inalign-net
 
   neo4j:
     image: neo4j:5-community
-    container_name: agentshield-neo4j
+    container_name: inalign-neo4j
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
-      NEO4J_AUTH: neo4j/agentshield_dev
+      NEO4J_AUTH: neo4j/inalign_dev
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_server_memory_heap_initial__size: 256m
       NEO4J_server_memory_heap_max__size: 512m
@@ -47,11 +47,11 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - agentshield-net
+      - inalign-net
 
   redis:
     image: redis:7-alpine
-    container_name: agentshield-redis
+    container_name: inalign-redis
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
@@ -63,7 +63,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - agentshield-net
+      - inalign-net
 
   # ---------- Backend API ----------
 
@@ -71,23 +71,23 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: agentshield-backend
+    container_name: inalign-backend
     ports:
       - "8000:8000"
     environment:
       API_HOST: "0.0.0.0"
       API_PORT: "8000"
       API_ENV: "development"
-      SECRET_KEY: "agentshield-dev-secret-key-32chars"
+      SECRET_KEY: "inalign-dev-secret-key-32chars"
       ALLOWED_ORIGINS: '["http://localhost:3000","http://localhost:8000"]'
       POSTGRES_HOST: "postgres"
       POSTGRES_PORT: "5432"
-      POSTGRES_DB: "agentshield"
-      POSTGRES_USER: "agentshield"
-      POSTGRES_PASSWORD: "agentshield_dev"
+      POSTGRES_DB: "inalign"
+      POSTGRES_USER: "inalign"
+      POSTGRES_PASSWORD: "inalign_dev"
       NEO4J_URI: "bolt://neo4j:7687"
       NEO4J_USER: "neo4j"
-      NEO4J_PASSWORD: "agentshield_dev"
+      NEO4J_PASSWORD: "inalign_dev"
       NEO4J_DATABASE: "neo4j"
       REDIS_URL: "redis://redis:6379/0"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
@@ -108,7 +108,7 @@ services:
       retries: 5
       start_period: 15s
     networks:
-      - agentshield-net
+      - inalign-net
 
   # ---------- Frontend ----------
 
@@ -116,7 +116,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: agentshield-frontend
+    container_name: inalign-frontend
     ports:
       - "3000:3000"
     environment:
@@ -126,7 +126,7 @@ services:
       backend:
         condition: service_healthy
     networks:
-      - agentshield-net
+      - inalign-net
 
 volumes:
   postgres_data:
@@ -134,5 +134,5 @@ volumes:
   redis_data:
 
 networks:
-  agentshield-net:
+  inalign-net:
     driver: bridge

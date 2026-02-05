@@ -1,5 +1,5 @@
 """
-Notification channel integrations for AgentShield alerts.
+Notification channel integrations for InALign alerts.
 
 Provides pluggable notifiers for Slack, Telegram, email (SendGrid),
 and generic webhooks.  All notifiers inherit from :class:`BaseNotifier`.

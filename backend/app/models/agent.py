@@ -2,7 +2,7 @@
 Agent model for tracking registered AI agents and their configurations.
 
 This module defines the Agent entity which represents an AI agent
-that is monitored and governed by AgentShield.
+that is monitored and governed by InALign.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 
 class Agent(Base):
-    """An AI agent registered in the AgentShield system.
+    """An AI agent registered in the InALign system.
 
     Agents are the primary entities being monitored. Each agent can have
     policies attached, and all actions are logged against an agent_id.

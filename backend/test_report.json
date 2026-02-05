@@ -1,0 +1,5 @@
+{
+  "report_type": "security_analysis",
+  "include_recommendations": true,
+  "language": "ko"
+}

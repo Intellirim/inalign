@@ -13,8 +13,8 @@ Usage:
         print(f"Blocked: {result.threats}")
 """
 
-from inalign.guard import Guard, GuardResult
+from inalign.guard import Guard, GuardResult, GuardConfig
 from inalign.config import InALignConfig
 
 __version__ = "0.1.0"
-__all__ = ["Guard", "GuardResult", "InALignConfig"]
+__all__ = ["Guard", "GuardResult", "GuardConfig", "InALignConfig"]

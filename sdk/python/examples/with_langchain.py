@@ -1,6 +1,6 @@
-"""LangChain integration example for AgentShield.
+"""LangChain integration example for InALign.
 
-This example demonstrates how to use AgentShield as a LangChain callback
+This example demonstrates how to use InALign as a LangChain callback
 handler to automatically scan inputs and outputs during chain execution.
 """
 
@@ -12,11 +12,11 @@ from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 from langchain_openai import ChatOpenAI
 
-from agentshield import AgentShield
+from inalign import InALign
 
 
-class AgentShieldCallbackHandler(BaseCallbackHandler):
-    """LangChain callback handler that integrates with AgentShield.
+class InALignCallbackHandler(BaseCallbackHandler):
+    """LangChain callback handler that integrates with InALign.
 
     Automatically scans LLM inputs for prompt injection and threats,
     and scans outputs for PII leakage and sensitive data.
@@ -25,8 +25,8 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
 
         from langchain_openai import ChatOpenAI
 
-        handler = AgentShieldCallbackHandler(
-            api_key="your-agentshield-key",
+        handler = InALignCallbackHandler(
+            api_key="your-inalign-key",
             agent_id="my-langchain-agent",
         )
         llm = ChatOpenAI(callbacks=[handler])
@@ -38,12 +38,12 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
         api_key: str,
         agent_id: str,
         session_id: Optional[str] = None,
-        base_url: str = "https://api.agentshield.io",
+        base_url: str = "https://api.inalign.io",
         block_unsafe_inputs: bool = True,
         auto_sanitize_outputs: bool = True,
     ) -> None:
         super().__init__()
-        self.client = AgentShield(api_key=api_key, base_url=base_url)
+        self.client = InALign(api_key=api_key, base_url=base_url)
         self.agent_id = agent_id
         self.session_id = session_id or str(uuid.uuid4())
         self.block_unsafe_inputs = block_unsafe_inputs
@@ -67,13 +67,13 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
             self._last_input_scan = result
 
             if not result.safe:
-                print(f"[AgentShield] WARNING - Unsafe input detected! Risk: {result.risk_level}")
+                print(f"[InALign] WARNING - Unsafe input detected! Risk: {result.risk_level}")
                 for threat in result.threats:
                     print(f"  Threat: {threat.type} (severity: {threat.severity})")
 
                 if self.block_unsafe_inputs and result.risk_level in ("high", "critical"):
                     raise ValueError(
-                        f"AgentShield blocked unsafe input. Risk level: {result.risk_level}. "
+                        f"InALign blocked unsafe input. Risk level: {result.risk_level}. "
                         f"Threats: {[t.type for t in result.threats]}"
                     )
 
@@ -100,7 +100,7 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
                 )
 
                 if not result.safe:
-                    print(f"[AgentShield] WARNING - Unsafe output detected! Risk: {result.risk_level}")
+                    print(f"[InALign] WARNING - Unsafe output detected! Risk: {result.risk_level}")
                     if result.pii_detected:
                         for pii in result.pii_detected:
                             print(f"  PII found: {pii.type}")
@@ -151,15 +151,15 @@ class AgentShieldCallbackHandler(BaseCallbackHandler):
 
 
 def main() -> None:
-    # Initialize the AgentShield callback handler
-    shield_handler = AgentShieldCallbackHandler(
-        api_key=os.environ.get("AGENTSHIELD_API_KEY", "your-api-key"),
+    # Initialize the InALign callback handler
+    shield_handler = InALignCallbackHandler(
+        api_key=os.environ.get("INALIGN_API_KEY", "your-api-key"),
         agent_id="langchain-demo-agent",
         block_unsafe_inputs=True,
         auto_sanitize_outputs=True,
     )
 
-    # Create a LangChain LLM with AgentShield protection
+    # Create a LangChain LLM with InALign protection
     llm = ChatOpenAI(
         model="gpt-4",
         temperature=0.7,
@@ -183,7 +183,7 @@ def main() -> None:
         )
         print(f"Response: {response.content[:200]}...")
     except ValueError as e:
-        print(f"Blocked by AgentShield: {e}")
+        print(f"Blocked by InALign: {e}")
 
     # Generate session report
     print("\n=== Session Report ===")

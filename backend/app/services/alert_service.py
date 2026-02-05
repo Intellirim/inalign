@@ -17,7 +17,7 @@ from app.models.alert import Alert, AlertSeverity, AlertType
 from app.schemas.alert import AlertListResponse, AlertResponse
 from app.schemas.common import Severity
 
-logger = logging.getLogger("agentshield.services.alert")
+logger = logging.getLogger("inalign.services.alert")
 
 
 def _alert_to_response(alert: Alert) -> AlertResponse:

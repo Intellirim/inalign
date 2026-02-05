@@ -8,7 +8,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'AgentShield',
+  title: 'InALign',
   description: 'AI Agent Security Monitoring & Protection Platform',
 };
 

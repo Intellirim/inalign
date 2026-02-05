@@ -18,7 +18,7 @@ import httpx
 
 from app.notifications import BaseNotifier
 
-logger = logging.getLogger("agentshield.notifications.webhook")
+logger = logging.getLogger("inalign.notifications.webhook")
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -65,7 +65,7 @@ class WebhookNotifier(BaseNotifier):
         headers: dict[str, str] = {
             "Content-Type": "application/json",
             "X-Signature": signature,
-            "User-Agent": "AgentShield-Webhook/1.0",
+            "User-Agent": "InALign-Webhook/1.0",
         }
 
         last_exception: Exception | None = None

@@ -15,7 +15,7 @@ from app.dependencies import CurrentUser, DBSession
 from app.schemas.alert import AlertAcknowledgeRequest, AlertListResponse, AlertResponse
 from app.services.alert_service import AlertService
 
-logger = logging.getLogger("agentshield.api.alerts")
+logger = logging.getLogger("inalign.api.alerts")
 
 router = APIRouter()
 

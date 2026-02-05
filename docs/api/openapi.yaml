@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: AgentShield API
+  title: InALign API
   description: |
-    AgentShield is an AI Agent Security Platform that provides real-time threat detection,
+    InALign is an AI Agent Security Platform that provides real-time threat detection,
     PII scanning, anomaly detection, and comprehensive audit logging for AI agents.
 
     ## Authentication
@@ -19,17 +19,17 @@ info:
     - `X-RateLimit-Reset`: Unix timestamp when the window resets
   version: 1.0.0
   contact:
-    name: AgentShield Team
-    email: support@agentshield.io
-    url: https://agentshield.io
+    name: InALign Team
+    email: support@inalign.io
+    url: https://inalign.io
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: https://api.agentshield.io
+  - url: https://api.inalign.io
     description: Production server
-  - url: https://staging-api.agentshield.io
+  - url: https://staging-api.inalign.io
     description: Staging server
   - url: http://localhost:8000
     description: Local development server
@@ -425,7 +425,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: API Key
-      description: "API key obtained from the AgentShield dashboard"
+      description: "API key obtained from the InALign dashboard"
 
   schemas:
     ScanInputRequest:

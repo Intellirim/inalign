@@ -1,5 +1,5 @@
 """
-Adaptive Pattern Learner for AgentShield.
+Adaptive Pattern Learner for InALign.
 
 Analyzes missed attacks (false negatives) and automatically generates
 new regex detection patterns to improve the injection detector.
@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
-logger = logging.getLogger("agentshield.pattern_learner")
+logger = logging.getLogger("inalign.pattern_learner")
 
 # Path to the patterns file
 PATTERNS_FILE = os.path.join(

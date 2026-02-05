@@ -1,5 +1,5 @@
 """
-Database configuration and base model for AgentShield.
+Database configuration and base model for InALign.
 
 Provides the async SQLAlchemy engine, session factory, and a declarative
 base class with common columns shared by every table (UUID primary key,
@@ -32,7 +32,7 @@ from sqlalchemy.orm import (
 # The actual DATABASE_URL should be injected via ``core.config``; the
 # constant below acts as a fallback for local development.
 _DEFAULT_DATABASE_URL = (
-    "postgresql+asyncpg://agentshield:agentshield@localhost:5432/agentshield"
+    "postgresql+asyncpg://inalign:inalign@localhost:5432/inalign"
 )
 
 

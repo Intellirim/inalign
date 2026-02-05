@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("agentshield.auto_defense")
+logger = logging.getLogger("inalign.auto_defense")
 
 # Paths for dynamic defense artifacts
 _DYNAMIC_PATTERNS_PATH = Path(__file__).resolve().parent.parent / "detectors" / "injection" / "dynamic_patterns.json"

@@ -14,7 +14,7 @@ from typing import Any
 from app.graph.neo4j_client import Neo4jClient
 from app.graph import queries
 
-logger = logging.getLogger("agentshield.graph.session_extractor")
+logger = logging.getLogger("inalign.graph.session_extractor")
 
 
 class SessionExtractor:

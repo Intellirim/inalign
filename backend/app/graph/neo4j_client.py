@@ -1,5 +1,5 @@
 """
-Async Neo4j client for the AgentShield graph layer.
+Async Neo4j client for the InALign graph layer.
 
 Wraps the official ``neo4j`` async driver with typed helper methods for
 creating / reading / updating graph nodes and relationships used by the
@@ -15,7 +15,7 @@ from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncManagedTransaction
 
 from app.graph import queries
 
-logger = logging.getLogger("agentshield.graph.neo4j_client")
+logger = logging.getLogger("inalign.graph.neo4j_client")
 
 
 def _convert_neo4j_value(value: Any) -> Any:
@@ -54,7 +54,7 @@ def _node_to_dict(node: Any) -> dict[str, Any]:
 
 class Neo4jClient:
     """
-    High-level async interface to the AgentShield Neo4j database.
+    High-level async interface to the InALign Neo4j database.
 
     Usage::
 
