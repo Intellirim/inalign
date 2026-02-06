@@ -9,10 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 - Web dashboard with Canvas-based graph visualization
-- GraphRAG pattern detection (data exfiltration, privilege escalation, suspicious tool chains)
-- 5-layer threat detection (regex, ML, graph, behavioral, contextual)
+- GraphRAG behavioral analysis (data exfiltration, privilege escalation, suspicious tool chains)
+- Pattern detection engine (290+ signatures across 8 languages)
 - W3C PROV-compatible provenance chains with cryptographic verification
-- Security policy engine with presets (STRICT_ENTERPRISE, BALANCED, DEV_SANDBOX)
+- Security policy engine with governance presets (STRICT_ENTERPRISE, BALANCED, DEV_SANDBOX)
 - Blockchain anchoring for tamper-proof audit trails (Polygon)
 - Third-party verifiable proofs
 - Client management with API key authentication

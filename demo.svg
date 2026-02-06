@@ -59,7 +59,7 @@
 
   <!-- Line 6: Result -->
   <text class="comment" x="20" y="432"># Know what happened. Prove it. Blockchain-anchored.</text>
-  <text class="warn" x="20" y="452">Risk Analysis: No suspicious patterns detected</text>
+  <text class="warn" x="20" y="452">Behavioral Analysis: No suspicious patterns detected</text>
   <text class="success" x="20" y="472">Policy: BALANCED | Records: 4 | Integrity: 100%</text>
 
   <!-- Tagline -->
