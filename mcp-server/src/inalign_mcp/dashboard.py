@@ -2508,6 +2508,233 @@ async def api_anchor_setup():
     })
 
 
+# ============================================
+# API v1 — MCP Server Proxy Endpoints
+# Client MCP servers call these instead of Neo4j directly.
+# Auth: X-API-Key header validated against CUSTOMERS.
+# ============================================
+
+from fastapi import Header
+from pydantic import BaseModel
+from typing import List, Dict
+
+class _StoreRecordBody(BaseModel):
+    record_id: str
+    timestamp: str
+    activity_type: str
+    activity_name: str
+    record_hash: str
+    previous_hash: str = ""
+    sequence_number: int = 0
+    session_id: str = ""
+    client_id: str = ""
+    agent_id: str = ""
+    agent_name: str = ""
+    agent_type: str = ""
+    activity_attributes: str = "{}"
+
+class _RiskAnalyzeBody(BaseModel):
+    session_id: str = ""
+
+class _AgentRiskBody(BaseModel):
+    agent_id: str
+
+class _UserRiskBody(BaseModel):
+    user_id: str
+
+class _AgentsListBody(BaseModel):
+    limit: int = 20
+
+
+def _validate_api_key(api_key: str) -> str:
+    """Validate API key and return client_id. Raises HTTPException if invalid."""
+    from .payments import CUSTOMERS, get_client_id
+    if not api_key or not api_key.startswith("ial_"):
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    # Check against registered customers
+    for email, data in CUSTOMERS.items():
+        if data.get("api_key") == api_key:
+            return data.get("client_id") or get_client_id(api_key)
+    # Accept any ial_ prefixed key (for self-service signups not yet in CUSTOMERS)
+    return get_client_id(api_key)
+
+
+@app.post("/api/v1/provenance/store")
+async def api_v1_store_record(body: _StoreRecordBody, x_api_key: str = Header(...)):
+    """Store a provenance record from a remote MCP server."""
+    client_id = _validate_api_key(x_api_key)
+    ensure_provenance_neo4j()
+
+    from .provenance_graph import _neo4j_driver
+    if not _neo4j_driver:
+        raise HTTPException(status_code=503, detail="Neo4j not available")
+
+    try:
+        import json as _json
+        with _neo4j_driver.session() as session:
+            # Store the record node
+            session.run("""
+                MERGE (r:ProvenanceRecord {record_id: $record_id})
+                SET r.timestamp = $timestamp,
+                    r.activity_type = $activity_type,
+                    r.activity_name = $activity_name,
+                    r.record_hash = $record_hash,
+                    r.previous_hash = $previous_hash,
+                    r.sequence_number = $sequence_number,
+                    r.session_id = $session_id,
+                    r.client_id = $client_id,
+                    r.activity_attributes = $activity_attributes
+            """, {
+                "record_id": body.record_id,
+                "timestamp": body.timestamp,
+                "activity_type": body.activity_type,
+                "activity_name": body.activity_name,
+                "record_hash": body.record_hash,
+                "previous_hash": body.previous_hash,
+                "sequence_number": body.sequence_number,
+                "session_id": body.session_id,
+                "client_id": client_id,
+                "activity_attributes": body.activity_attributes,
+            })
+
+            # Session relationship
+            if body.session_id:
+                session.run("""
+                    MERGE (s:Session {session_id: $session_id})
+                    SET s.client_id = $client_id
+                    WITH s
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    SET r.client_id = $client_id
+                    MERGE (r)-[:BELONGS_TO]->(s)
+                """, {
+                    "session_id": body.session_id,
+                    "record_id": body.record_id,
+                    "client_id": client_id,
+                })
+
+            # Agent relationship
+            if body.agent_id:
+                session.run("""
+                    MERGE (a:Agent {agent_id: $agent_id})
+                    SET a.name = $agent_name, a.type = $agent_type
+                    WITH a
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:PERFORMED_BY]->(a)
+                """, {
+                    "agent_id": body.agent_id,
+                    "agent_name": body.agent_name,
+                    "agent_type": body.agent_type,
+                    "record_id": body.record_id,
+                })
+
+            # FOLLOWS chain
+            if body.previous_hash:
+                session.run("""
+                    MATCH (prev:ProvenanceRecord {record_hash: $previous_hash})
+                    MATCH (curr:ProvenanceRecord {record_id: $record_id})
+                    MERGE (curr)-[:FOLLOWS]->(prev)
+                """, {
+                    "previous_hash": body.previous_hash,
+                    "record_id": body.record_id,
+                })
+
+            # Tool/Decision node
+            if body.activity_type == "tool_call":
+                session.run("""
+                    MERGE (t:Tool {name: $tool_name})
+                    WITH t
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:CALLED]->(t)
+                """, {"tool_name": body.activity_name, "record_id": body.record_id})
+            elif body.activity_type == "decision":
+                session.run("""
+                    MERGE (d:Decision {name: $decision_name})
+                    WITH d
+                    MATCH (r:ProvenanceRecord {record_id: $record_id})
+                    MERGE (r)-[:MADE]->(d)
+                """, {"decision_name": body.activity_name, "record_id": body.record_id})
+
+        return {"status": "ok", "record_id": body.record_id}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/risk/analyze")
+async def api_v1_risk_analyze(body: _RiskAnalyzeBody, x_api_key: str = Header(...)):
+    """Run GraphRAG risk analysis for a session."""
+    client_id = _validate_api_key(x_api_key)
+    ensure_provenance_neo4j()
+
+    from .provenance_graph import _neo4j_driver
+    if not _neo4j_driver:
+        raise HTTPException(status_code=503, detail="Neo4j not available")
+
+    session_id = body.session_id
+
+    # Auto-discover latest session for this client if not specified
+    if not session_id:
+        with _neo4j_driver.session() as neo_session:
+            result = neo_session.run(
+                "MATCH (r:ProvenanceRecord)-[:BELONGS_TO]->(s:Session) "
+                "WHERE r.client_id = $client_id "
+                "RETURN s.session_id as sid, count(r) as cnt "
+                "ORDER BY cnt DESC LIMIT 1",
+                client_id=client_id,
+            )
+            row = result.single()
+            session_id = row["sid"] if row else ""
+
+    if not session_id:
+        return {"error": "No sessions found for this client", "client_id": client_id}
+
+    from .graph_rag import analyze_session_risk
+    risk = analyze_session_risk(session_id, _neo4j_driver)
+    return risk
+
+
+@app.post("/api/v1/risk/agent")
+async def api_v1_risk_agent(body: _AgentRiskBody, x_api_key: str = Header(...)):
+    """Get agent risk profile."""
+    _validate_api_key(x_api_key)
+    ensure_provenance_neo4j()
+
+    from .provenance_graph import _neo4j_driver
+    if not _neo4j_driver:
+        raise HTTPException(status_code=503, detail="Neo4j not available")
+
+    from .graph_rag import get_agent_risk
+    return get_agent_risk(body.agent_id, _neo4j_driver)
+
+
+@app.post("/api/v1/risk/user")
+async def api_v1_risk_user(body: _UserRiskBody, x_api_key: str = Header(...)):
+    """Get user risk profile."""
+    _validate_api_key(x_api_key)
+    ensure_provenance_neo4j()
+
+    from .provenance_graph import _neo4j_driver
+    if not _neo4j_driver:
+        raise HTTPException(status_code=503, detail="Neo4j not available")
+
+    from .graph_rag import get_user_risk
+    return get_user_risk(body.user_id, _neo4j_driver)
+
+
+@app.post("/api/v1/risk/agents")
+async def api_v1_risk_agents(body: _AgentsListBody, x_api_key: str = Header(...)):
+    """List all agents risk summary."""
+    _validate_api_key(x_api_key)
+    ensure_provenance_neo4j()
+
+    from .provenance_graph import _neo4j_driver
+    if not _neo4j_driver:
+        raise HTTPException(status_code=503, detail="Neo4j not available")
+
+    from .graph_rag import get_all_agents_summary
+    return get_all_agents_summary(_neo4j_driver, limit=body.limit)
+
+
 def run_dashboard(host: str = "0.0.0.0", port: int = 8080):
     """Run the dashboard server."""
     from dotenv import load_dotenv

@@ -9,16 +9,15 @@ Usage: python install.py YOUR_API_KEY
 import os
 import sys
 import json
+import subprocess
 import platform
+import shutil
 from pathlib import Path
 
 
 def get_claude_settings_path():
     """Get the Claude settings.json path based on OS."""
-    if platform.system() == "Windows":
-        return Path.home() / ".claude" / "settings.json"
-    else:
-        return Path.home() / ".claude" / "settings.json"
+    return Path.home() / ".claude" / "settings.json"
 
 
 def get_python_path():
@@ -38,24 +37,49 @@ def install(api_key: str):
         print("Error: Invalid API key format. Should start with 'ial_'")
         sys.exit(1)
 
-    # 1. Create ~/.inalign.env file
+    python = get_python_path()
+
+    # 1. Install inalign-mcp package from PyPI (no [neo4j] extra — API proxy mode)
+    print("[1/5] Installing inalign-mcp from PyPI...")
+    ret = subprocess.run(
+        [python, "-m", "pip", "install", "inalign-mcp", "--upgrade", "-q"],
+        capture_output=True, text=True,
+    )
+    if ret.returncode != 0:
+        print(f"      Warning: pip install returned {ret.returncode}")
+        if ret.stderr:
+            print(f"      {ret.stderr.strip()[:200]}")
+    else:
+        print("      Done!")
+
+    # Verify the package is importable
+    verify = subprocess.run(
+        [python, "-c", "import inalign_mcp; print(inalign_mcp.__file__)"],
+        capture_output=True, text=True,
+    )
+    if verify.returncode != 0:
+        print("      ERROR: inalign_mcp package not importable after install!")
+        print("      Try manually: pip install inalign-mcp[neo4j]")
+        sys.exit(1)
+    pkg_path = verify.stdout.strip()
+    print(f"      Package location: {pkg_path}")
+
+    # 2. Create ~/.inalign.env file (API URL for server proxy — no DB credentials needed)
     env_path = Path.home() / ".inalign.env"
     env_content = f"""API_KEY={api_key}
-NEO4J_URI=***REDACTED_URI***
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=***REDACTED***
+API_URL=http://3.36.132.4:8080
 """
 
-    print(f"[1/4] Creating {env_path}...")
+    print(f"[2/5] Creating {env_path}...")
     with open(env_path, "w") as f:
         f.write(env_content)
     print("      Done!")
 
-    # 2. Update Claude settings.json
+    # 3. Update Claude settings.json
     settings_path = get_claude_settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[2/4] Updating {settings_path}...")
+    print(f"[3/5] Updating {settings_path}...")
 
     # Load existing settings or create new
     if settings_path.exists():
@@ -64,22 +88,15 @@ NEO4J_PASSWORD=***REDACTED***
     else:
         settings = {}
 
-    # Add MCP server config
     if "mcpServers" not in settings:
         settings["mcpServers"] = {}
 
-    # Get the install directory (where this script is)
-    install_dir = Path(__file__).parent / "src"
-
+    # Use pip-installed package directly (no PYTHONPATH needed)
     settings["mcpServers"]["inalign"] = {
-        "command": get_python_path(),
+        "command": python,
         "args": ["-m", "inalign_mcp.server"],
         "env": {
-            "PYTHONPATH": str(install_dir),
             "API_KEY": api_key,
-            "NEO4J_URI": "***REDACTED_URI***",
-            "NEO4J_USERNAME": "neo4j",
-            "NEO4J_PASSWORD": "***REDACTED***"
         }
     }
 
@@ -87,10 +104,10 @@ NEO4J_PASSWORD=***REDACTED***
         json.dump(settings, f, indent=2)
     print("      Done!")
 
-    # 3. Create CLAUDE.md template
+    # 4. Create CLAUDE.md template
     claude_md_path = Path.home() / "CLAUDE.md"
 
-    print(f"[3/4] Creating {claude_md_path}...")
+    print(f"[4/5] Creating {claude_md_path}...")
 
     claude_md_content = """# Claude Code Instructions
 
@@ -111,10 +128,17 @@ Example:
     else:
         print("      CLAUDE.md already exists, skipping...")
 
-    # 4. Install dependencies
-    print("[4/4] Installing dependencies...")
-    os.system(f"{get_python_path()} -m pip install neo4j fastapi uvicorn starlette itsdangerous python-multipart -q")
-    print("      Done!")
+    # 5. Verify MCP server can start
+    print("[5/5] Verifying MCP server...")
+    test = subprocess.run(
+        [python, "-c", "from inalign_mcp.server import server; print('OK')"],
+        capture_output=True, text=True, timeout=10,
+        env={**os.environ, "API_KEY": api_key},
+    )
+    if test.returncode == 0 and "OK" in test.stdout:
+        print("      Server verified!")
+    else:
+        print("      Warning: Server import check failed, but may still work at runtime")
 
     # Success message
     client_id = api_key[:12]
@@ -126,12 +150,13 @@ Your API Key: {api_key}
 Your Client ID: {client_id}
 
 Next Steps:
-1. Restart Claude Code (close and reopen VSCode)
+1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
 3. View your activity at: http://3.36.132.4:8080/login
    (Login with your API key)
 
-All your Claude Code activity will now be automatically recorded!
+All your Claude Code activity will now be automatically recorded
+and governed by InALign!
 """)
 
 

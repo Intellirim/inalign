@@ -44,7 +44,7 @@ try:
 except ImportError:
     LIMITER_AVAILABLE = False
 
-# Optional Neo4j and GraphRAG imports
+# Optional Neo4j and GraphRAG imports (for direct Neo4j mode)
 try:
     from .provenance_graph import (
         init_neo4j,
@@ -63,6 +63,13 @@ try:
     GRAPHRAG_AVAILABLE = True
 except ImportError:
     GRAPHRAG_AVAILABLE = False
+
+# API client for HTTP proxy mode (no direct Neo4j needed)
+try:
+    from .api_client import init_api_client, get_api_client, ApiClient
+    API_CLIENT_AVAILABLE = True
+except ImportError:
+    API_CLIENT_AVAILABLE = False
 
 # Policy engine import
 try:
@@ -87,17 +94,19 @@ server = Server("inalign")
 # Session tracking
 SESSION_ID = str(uuid.uuid4())[:12]
 
-# Try to load from .env file if API_KEY not set (Claude Code MCP workaround)
-if not os.getenv("API_KEY"):
-    env_file = os.path.expanduser("~/.inalign.env")
-    if os.path.exists(env_file):
-        logger.info(f"[STARTUP] Loading config from {env_file}")
-        with open(env_file) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    os.environ[key.strip()] = value.strip()
+# Load ~/.inalign.env for any missing config (Neo4j creds, API key, etc.)
+env_file = os.path.expanduser("~/.inalign.env")
+if os.path.exists(env_file):
+    logger.info(f"[STARTUP] Loading config from {env_file}")
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
+                key = key.strip()
+                # Only set if not already in environment (env vars take precedence)
+                if not os.getenv(key):
+                    os.environ[key] = value.strip()
 
 # Debug: Log environment variables at startup
 logger.info(f"[STARTUP] SESSION_ID: {SESSION_ID}")
@@ -115,18 +124,71 @@ if API_KEY:
 else:
     logger.warning(f"[CLIENT] No API_KEY found - client_id will be None")
 
-# Initialize Neo4j connection for provenance storage
+# Initialize storage: prefer direct Neo4j, fallback to API proxy, then in-memory only
+STORAGE_MODE = "memory"  # "neo4j" | "api" | "memory"
 NEO4J_URI = os.getenv("NEO4J_URI")
-if NEO4J_URI:
+API_URL = os.getenv("INALIGN_API_URL") or os.getenv("API_URL")
+
+if NEO4J_URI and GRAPHRAG_AVAILABLE:
     try:
         init_neo4j(
             uri=NEO4J_URI,
             user=os.getenv("NEO4J_USERNAME", "neo4j"),
             password=os.getenv("NEO4J_PASSWORD", "")
         )
-        logger.info(f"[NEO4J] Connected to {NEO4J_URI}")
+        STORAGE_MODE = "neo4j"
+        logger.info(f"[STORAGE] Direct Neo4j mode → {NEO4J_URI}")
     except Exception as e:
         logger.warning(f"[NEO4J] Failed to connect: {e}")
+
+if STORAGE_MODE != "neo4j" and API_URL and API_KEY and API_CLIENT_AVAILABLE:
+    try:
+        init_api_client(API_URL, API_KEY)
+        STORAGE_MODE = "api"
+        logger.info(f"[STORAGE] API proxy mode → {API_URL}")
+    except Exception as e:
+        logger.warning(f"[API] Failed to init: {e}")
+
+if STORAGE_MODE == "memory":
+    logger.info("[STORAGE] In-memory only mode (no Neo4j or API)")
+
+
+def _remote_store(record) -> bool:
+    """Store a provenance record to the remote backend (Neo4j or API proxy)."""
+    if STORAGE_MODE == "neo4j":
+        try:
+            store_record(record)
+            return True
+        except Exception as e:
+            logger.warning(f"[NEO4J] Failed to store: {e}")
+            return False
+    elif STORAGE_MODE == "api":
+        try:
+            client = get_api_client()
+            if not client:
+                return False
+            import json as _json
+            attrs = _json.dumps(record.activity_attributes) if record.activity_attributes else "{}"
+            return client.store_record(
+                record_id=record.id,
+                timestamp=record.timestamp,
+                activity_type=record.activity_type.value,
+                activity_name=record.activity_name,
+                record_hash=record.record_hash,
+                previous_hash=record.previous_hash or "",
+                sequence_number=record.sequence_number,
+                session_id=record.session_id or "",
+                client_id=getattr(record, 'client_id', '') or CLIENT_ID or "",
+                agent_id=record.agent.id if record.agent else "",
+                agent_name=record.agent.name if record.agent else "",
+                agent_type=record.agent.type if record.agent else "",
+                activity_attributes=attrs,
+            )
+        except Exception as e:
+            logger.warning(f"[API] Failed to store: {e}")
+            return False
+    return False
+
 
 stats = {
     "provenance_records": 0,
@@ -409,12 +471,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         stats["provenance_records"] += 1
         logger.info(f"[PROVENANCE] Recorded: {name} (session: {SESSION_ID})")
 
-        # Store auto-provenance to Neo4j so FOLLOWS chain is complete
-        if GRAPHRAG_AVAILABLE and is_neo4j_available():
-            try:
-                store_record(auto_record)
-            except Exception as e:
-                logger.warning(f"[NEO4J] Failed to store auto-provenance: {e}")
+        # Store auto-provenance to remote backend
+        if STORAGE_MODE != "memory":
+            _remote_store(auto_record)
     except Exception as e:
         logger.warning(f"[PROVENANCE] Failed to record: {e}")
     # === END PROVENANCE RECORDING ===
@@ -457,14 +516,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         stats["provenance_records"] += 1
 
-        # Store to Neo4j for dashboard visibility
-        if is_neo4j_available():
-            try:
-                store_record(record)
-                logger.info(f"[NEO4J] Stored record {record.id} with client_id={CLIENT_ID}")
+        # Store to remote backend
+        if STORAGE_MODE != "memory":
+            _remote_store(record)
+            logger.info(f"[{STORAGE_MODE.upper()}] Stored record {record.id} with client_id={CLIENT_ID}")
 
-                # Store full prompt content (compressed) for legal compliance
-                if not hash_only and command:
+            # Store full prompt content (compressed) for legal compliance (Neo4j direct only)
+            if STORAGE_MODE == "neo4j" and not hash_only and command:
+                try:
                     content_hash = store_content(
                         content=command,
                         content_type="prompt",
@@ -473,9 +532,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     )
                     if content_hash:
                         logger.info(f"[NEO4J] Stored full prompt content: {content_hash[:16]}...")
-
-            except Exception as e:
-                logger.warning(f"[NEO4J] Failed to store record: {e}")
+                except Exception as e:
+                    logger.warning(f"[NEO4J] Failed to store content: {e}")
 
         return [TextContent(
             type="text",
@@ -520,25 +578,24 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         stats["provenance_records"] += 1
 
-        # Store to Neo4j for dashboard visibility
-        if is_neo4j_available():
-            try:
-                store_record(record)
-                logger.info(f"[NEO4J] Stored action record {record.id} with client_id={CLIENT_ID}")
+        # Store to remote backend
+        if STORAGE_MODE != "memory":
+            _remote_store(record)
+            logger.info(f"[{STORAGE_MODE.upper()}] Stored action record {record.id} with client_id={CLIENT_ID}")
 
-                # Store full content for inputs/outputs (for legal compliance)
-                if inputs:
-                    input_str = json.dumps(inputs, ensure_ascii=False) if isinstance(inputs, dict) else str(inputs)
-                    if len(input_str) > 100:  # Only store significant content
-                        store_content(input_str, "input", record.id, CLIENT_ID)
-
-                if outputs:
-                    output_str = json.dumps(outputs, ensure_ascii=False) if isinstance(outputs, dict) else str(outputs)
-                    if len(output_str) > 100:  # Only store significant content
-                        store_content(output_str, "output", record.id, CLIENT_ID)
-
-            except Exception as e:
-                logger.warning(f"[NEO4J] Failed to store action record: {e}")
+            # Store full content (Neo4j direct mode only)
+            if STORAGE_MODE == "neo4j":
+                try:
+                    if inputs:
+                        input_str = json.dumps(inputs, ensure_ascii=False) if isinstance(inputs, dict) else str(inputs)
+                        if len(input_str) > 100:
+                            store_content(input_str, "input", record.id, CLIENT_ID)
+                    if outputs:
+                        output_str = json.dumps(outputs, ensure_ascii=False) if isinstance(outputs, dict) else str(outputs)
+                        if len(output_str) > 100:
+                            store_content(output_str, "output", record.id, CLIENT_ID)
+                except Exception as e:
+                    logger.warning(f"[NEO4J] Failed to store content: {e}")
 
         return [TextContent(
             type="text",
@@ -664,16 +721,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "analyze_risk":
         session_id = arguments.get("session_id")
 
-        if GRAPHRAG_AVAILABLE and is_neo4j_available():
+        if STORAGE_MODE == "neo4j":
             try:
                 from .provenance_graph import _neo4j_driver as driver
 
                 if not driver:
                     return [TextContent(type="text", text=json.dumps({
-                        "error": "Neo4j driver is None despite is_neo4j_available()",
+                        "error": "Neo4j driver is None",
                     }))]
 
-                # If no session_id specified, find latest session for this client
                 if not session_id:
                     with driver.session() as neo_session:
                         result = neo_session.run(
@@ -684,10 +740,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                             client_id=CLIENT_ID,
                         )
                         row = result.single()
-                        if row:
-                            session_id = row["sid"]
-                        else:
-                            session_id = SESSION_ID
+                        session_id = row["sid"] if row else SESSION_ID
 
                 risk = analyze_session_risk(session_id, driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
@@ -698,20 +751,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     "traceback": traceback.format_exc(),
                     "session_id": session_id,
                 }))]
+
+        elif STORAGE_MODE == "api":
+            try:
+                client = get_api_client()
+                risk = client.analyze_risk(session_id or "")
+                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+
         else:
             return [TextContent(type="text", text=json.dumps({
-                "message": "GraphRAG not available" if not GRAPHRAG_AVAILABLE else "Neo4j not connected",
+                "message": "No remote backend configured (in-memory only mode)",
                 "session_id": session_id,
                 "risk_level": "unknown",
-                "graphrag_available": GRAPHRAG_AVAILABLE,
-                "neo4j_available": is_neo4j_available() if GRAPHRAG_AVAILABLE else False,
+                "storage_mode": STORAGE_MODE,
             }))]
 
     elif name == "get_behavior_profile":
         session_id = arguments.get("session_id", SESSION_ID)
         chain = get_or_create_chain(session_id, "claude")
 
-        # Basic behavior profile from chain
         tool_counts = {}
         for r in chain.records:
             name_key = r.activity_name
@@ -730,47 +790,68 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "get_agent_risk":
         agent_id = arguments.get("agent_id", "unknown")
 
-        if GRAPHRAG_AVAILABLE:
+        if STORAGE_MODE == "neo4j":
             try:
                 from .provenance_graph import _neo4j_driver
                 risk = get_agent_risk(agent_id, _neo4j_driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        elif STORAGE_MODE == "api":
+            try:
+                client = get_api_client()
+                risk = client.get_agent_risk(agent_id)
+                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
             return [TextContent(type="text", text=json.dumps({
                 "agent_id": agent_id,
-                "message": "GraphRAG not available",
+                "message": "No remote backend configured",
             }))]
 
     elif name == "get_user_risk":
         user_id = arguments.get("user_id", "unknown")
 
-        if GRAPHRAG_AVAILABLE:
+        if STORAGE_MODE == "neo4j":
             try:
                 from .provenance_graph import _neo4j_driver
                 risk = get_user_risk(user_id, _neo4j_driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        elif STORAGE_MODE == "api":
+            try:
+                client = get_api_client()
+                risk = client.get_user_risk(user_id)
+                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
             return [TextContent(type="text", text=json.dumps({
                 "user_id": user_id,
-                "message": "GraphRAG not available",
+                "message": "No remote backend configured",
             }))]
 
     elif name == "list_agents_risk":
         limit = arguments.get("limit", 20)
 
-        if GRAPHRAG_AVAILABLE:
+        if STORAGE_MODE == "neo4j" and GRAPHRAG_AVAILABLE:
             try:
                 agents = get_all_agents_summary(limit)
                 return [TextContent(type="text", text=json.dumps(agents, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+        elif STORAGE_MODE == "api":
+            try:
+                client = get_api_client()
+                agents = client.get_all_agents_summary(limit)
+                return [TextContent(type="text", text=json.dumps(agents, indent=2))]
+            except Exception as e:
+                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
             return [TextContent(type="text", text=json.dumps({
-                "message": "GraphRAG not available",
+                "message": "No remote backend configured",
                 "agents": [],
             }))]
 
@@ -827,14 +908,58 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "simulate_policy" and POLICY_AVAILABLE:
         preset = arguments.get("preset", "BALANCED")
 
-        return [TextContent(
-            type="text",
-            text=json.dumps({
-                "preset": preset,
-                "simulation": "Not implemented yet",
-                "message": "Policy simulation coming soon",
-            }, indent=2)
-        )]
+        # Simulate: replay current session's recorded actions against the target preset
+        from .policy import PRESETS, ThreatCategory, PolicyAction
+
+        target_policy = PRESETS.get(preset)
+        if not target_policy:
+            return [TextContent(type="text", text=json.dumps({"error": f"Unknown preset: {preset}"}))]
+
+        chain = get_or_create_chain(SESSION_ID, "claude")
+        blocked = []
+        warned = []
+        masked = []
+        allowed = []
+
+        # Map tool names to threat categories for simulation
+        sensitive_patterns = {
+            ThreatCategory.SENSITIVE_FILE: [".env", ".key", ".pem", ".ssh", "credentials", "secret"],
+            ThreatCategory.COMMAND_INJECTION: ["bash", "exec", "shell", "system"],
+            ThreatCategory.EXFILTRATION: ["curl", "wget", "http", "upload", "send"],
+        }
+
+        for record in chain.records:
+            matched_category = None
+            for category, patterns in sensitive_patterns.items():
+                if any(p in (record.activity_name or "").lower() for p in patterns):
+                    matched_category = category
+                    break
+
+            if matched_category:
+                action = target_policy.get_action(matched_category, confidence=0.9)
+                entry = {"action_name": record.activity_name, "category": matched_category.value, "policy_action": action.value}
+                if action == PolicyAction.BLOCK:
+                    blocked.append(entry)
+                elif action == PolicyAction.WARN:
+                    warned.append(entry)
+                elif action == PolicyAction.MASK:
+                    masked.append(entry)
+                else:
+                    allowed.append(entry)
+            else:
+                allowed.append({"action_name": record.activity_name, "category": "none", "policy_action": "allow"})
+
+        return [TextContent(type="text", text=json.dumps({
+            "preset": preset,
+            "total_events": len(chain.records),
+            "would_block": len(blocked),
+            "would_warn": len(warned),
+            "would_mask": len(masked),
+            "would_allow": len(allowed),
+            "blocked_details": blocked[:10],
+            "warned_details": warned[:10],
+            "masked_details": masked[:10],
+        }, indent=2))]
 
     # Unknown tool
     else:
