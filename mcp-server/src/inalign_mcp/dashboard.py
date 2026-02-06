@@ -1123,6 +1123,8 @@ TRACE_HTML = """
             ctx.scale(dpr, dpr);
         }}
 
+        var graphLoadedFromApi = false;
+
         function loadFullGraph() {{
             document.getElementById('graphStats').innerHTML = '<span class="stat">Loading graph data...</span>';
 
@@ -1131,12 +1133,36 @@ TRACE_HTML = """
                 .then(function(data) {{
                     if (data.error) {{
                         document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">' + data.error + '</span>';
-                        return;
+                        // Fallback to timeline
+                        return fallbackToTimeline();
                     }}
-                    populateGraph(data);
+                    if (data.nodes && data.nodes.length > 0) {{
+                        graphLoadedFromApi = true;
+                        populateGraph(data);
+                    }} else {{
+                        // Graph API returned empty - fallback to timeline
+                        fallbackToTimeline();
+                    }}
                 }})
                 .catch(function(e) {{
                     document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">Error: ' + e.message + '</span>';
+                    fallbackToTimeline();
+                }});
+        }}
+
+        function fallbackToTimeline() {{
+            fetch('/api/trace/timeline')
+                .then(function(r) {{ return r.json(); }})
+                .then(function(tlData) {{
+                    var records = tlData.timeline || [];
+                    if (records.length > 0) {{
+                        buildGraphFromTimeline(records);
+                    }} else {{
+                        document.getElementById('graphStats').innerHTML = '<span class="stat">No data available</span>';
+                    }}
+                }})
+                .catch(function(e) {{
+                    document.getElementById('graphStats').innerHTML = '<span class="stat">No graph data</span>';
                 }});
         }}
 
@@ -1231,6 +1257,93 @@ TRACE_HTML = """
                 html += '<span class="stat"><span class="dot" style="background:' + color + '"></span>' + count + ' ' + type + '</span>';
             }}
             document.getElementById('graphStats').innerHTML = html;
+        }}
+
+        // ============================================
+        // Build Graph from Timeline Records
+        // ============================================
+
+        function buildGraphFromTimeline(records) {{
+            if (!records || !records.length) return;
+
+            var nodes = [];
+            var edges = [];
+            var seen = {{}};
+            var toolNodes = {{}};
+            var typeGroups = {{}};
+
+            records.forEach(function(r, i) {{
+                var nodeId = r.id;
+                if (!nodeId || seen[nodeId]) return;
+
+                // Record node
+                nodes.push({{
+                    id: nodeId,
+                    label: r.action || r.type || '-',
+                    type: 'record',
+                    group: r.type || 'unknown',
+                    time: r.time || '',
+                    hash: r.hash || '',
+                }});
+                seen[nodeId] = true;
+
+                // Group by action_type for type-hub nodes
+                var actionType = r.type || 'unknown';
+                if (!typeGroups[actionType]) {{
+                    typeGroups[actionType] = [];
+                }}
+                typeGroups[actionType].push(nodeId);
+
+                // Tool node (deduplicated)
+                if (r.tool) {{
+                    var toolId = 'tool:' + r.tool;
+                    if (!toolNodes[toolId]) {{
+                        toolNodes[toolId] = true;
+                        nodes.push({{
+                            id: toolId,
+                            label: r.tool,
+                            type: 'tool',
+                            group: 'tool',
+                        }});
+                    }}
+                    edges.push({{ source: nodeId, target: toolId, type: 'CALLED' }});
+                }}
+
+                // FOLLOWS edge to previous record (provenance chain)
+                if (i > 0 && records[i - 1].id) {{
+                    edges.push({{ source: nodeId, target: records[i - 1].id, type: 'FOLLOWS' }});
+                }}
+            }});
+
+            // Create type-hub nodes for grouping (if more than 2 records of same type)
+            Object.keys(typeGroups).forEach(function(actionType) {{
+                var group = typeGroups[actionType];
+                if (group.length >= 2) {{
+                    var hubId = 'type:' + actionType;
+                    var typeMap = {{
+                        'tool_call': 'tool',
+                        'decision': 'decision',
+                        'file_read': 'content',
+                        'file_write': 'content',
+                        'llm_request': 'agent',
+                        'user_input': 'session',
+                    }};
+                    nodes.push({{
+                        id: hubId,
+                        label: actionType.replace('_', ' '),
+                        type: typeMap[actionType] || 'session',
+                        group: actionType,
+                    }});
+                    seen[hubId] = true;
+                    group.forEach(function(recId) {{
+                        edges.push({{ source: recId, target: hubId, type: 'BELONGS_TO' }});
+                    }});
+                }}
+            }});
+
+            if (nodes.length > 0) {{
+                populateGraph({{ nodes: nodes, edges: edges }});
+            }}
         }}
 
         // ============================================
@@ -1414,7 +1527,12 @@ TRACE_HTML = """
         async function loadTimeline() {{
             var res = await fetch('/api/trace/timeline');
             var data = await res.json();
-            renderTimeline(data.timeline || []);
+            var records = data.timeline || [];
+            renderTimeline(records);
+            // If graph was not loaded from API, build from timeline
+            if (!graphLoadedFromApi && graphData.nodes.length === 0 && records.length > 0) {{
+                buildGraphFromTimeline(records);
+            }}
         }}
 
         async function searchActions() {{
@@ -1425,7 +1543,10 @@ TRACE_HTML = """
             if (type) url += 'type=' + type + '&';
             var res = await fetch(url);
             var data = await res.json();
-            renderTimeline(data.records || []);
+            var records = data.records || [];
+            renderTimeline(records);
+            // Always rebuild graph from search results
+            buildGraphFromTimeline(records);
         }}
 
         function searchType(type) {{
