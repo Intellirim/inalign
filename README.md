@@ -1,10 +1,15 @@
 # InALign
 
+[![PyPI](https://img.shields.io/pypi/v/inalign-mcp.svg)](https://pypi.org/project/inalign-mcp/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
 
 **AI Agent Governance Platform** - Know what your AI agents did. Prove it.
+
+<p align="center">
+  <img src="demo.svg" alt="InALign Demo" width="750">
+</p>
 
 InALign provides cryptographic provenance tracking, real-time threat detection, and tamper-proof audit trails for AI coding agents. It works as an MCP server that integrates directly with Claude Code, Cursor, Windsurf, and other MCP-compatible tools.
 

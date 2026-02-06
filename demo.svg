@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="520">
+  <style>
+    .bg { fill: #1e1e2e; }
+    .header { fill: #313244; }
+    .title { fill: #cdd6f4; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .prompt { fill: #a6e3a1; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .cmd { fill: #cdd6f4; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .comment { fill: #6c7086; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .output { fill: #89b4fa; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .success { fill: #a6e3a1; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .warn { fill: #f9e2af; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .hash { fill: #cba6f7; font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 13px; }
+    .dot-red { fill: #f38ba8; }
+    .dot-yellow { fill: #f9e2af; }
+    .dot-green { fill: #a6e3a1; }
+  </style>
+
+  <!-- Terminal window -->
+  <rect class="bg" width="800" height="520" rx="10" ry="10"/>
+  <rect class="header" width="800" height="36" rx="10" ry="10"/>
+  <rect class="bg" x="0" y="26" width="800" height="10"/>
+
+  <!-- Window dots -->
+  <circle class="dot-red" cx="20" cy="18" r="6"/>
+  <circle class="dot-yellow" cx="40" cy="18" r="6"/>
+  <circle class="dot-green" cx="60" cy="18" r="6"/>
+
+  <!-- Title -->
+  <text class="title" x="400" y="22" text-anchor="middle">InALign MCP Server</text>
+
+  <!-- Line 1: Install -->
+  <text class="comment" x="20" y="62"># Install InALign</text>
+  <text class="prompt" x="20" y="82">$</text>
+  <text class="cmd" x="35" y="82">pip install inalign-mcp</text>
+  <text class="success" x="20" y="102">Successfully installed inalign-mcp-0.2.0</text>
+
+  <!-- Line 2: Configure -->
+  <text class="comment" x="20" y="132"># Add to Claude Code settings - that's it!</text>
+  <text class="prompt" x="20" y="152">$</text>
+  <text class="cmd" x="35" y="152">claude</text>
+
+  <!-- Line 3: Agent working -->
+  <text class="comment" x="20" y="182"># InALign automatically tracks every action...</text>
+  <text class="output" x="20" y="202">Recording: user_command "Fix the login bug"</text>
+  <text class="output" x="20" y="222">Recording: file_read src/auth.py</text>
+  <text class="output" x="20" y="242">Recording: file_write src/auth.py</text>
+  <text class="output" x="20" y="262">Recording: tool_call run_tests</text>
+
+  <!-- Line 4: Hash chain -->
+  <text class="comment" x="20" y="292"># Every action is cryptographically chained</text>
+  <text class="hash" x="20" y="312">Chain: a1b2c3 -> d4e5f6 -> 7g8h9i -> j0k1l2</text>
+  <text class="success" x="20" y="332">Chain integrity: VERIFIED (4 records)</text>
+
+  <!-- Line 5: Verify -->
+  <text class="comment" x="20" y="362"># Verify anytime - tamper-proof audit trail</text>
+  <text class="prompt" x="20" y="382">$</text>
+  <text class="cmd" x="35" y="382">inalign-dashboard</text>
+  <text class="output" x="20" y="402">Dashboard running at http://localhost:8080</text>
+
+  <!-- Line 6: Result -->
+  <text class="comment" x="20" y="432"># Know what happened. Prove it. Blockchain-anchored.</text>
+  <text class="warn" x="20" y="452">Risk Analysis: No suspicious patterns detected</text>
+  <text class="success" x="20" y="472">Policy: BALANCED | Records: 4 | Integrity: 100%</text>
+
+  <!-- Tagline -->
+  <text class="title" x="400" y="505" text-anchor="middle">pip install inalign-mcp  |  Works with Claude Code, Cursor, Windsurf</text>
+</svg>
