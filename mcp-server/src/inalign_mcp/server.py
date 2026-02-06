@@ -78,6 +78,7 @@ try:
         get_policy_engine,
         PolicyAction,
         PRESETS,
+        ThreatCategory,
     )
     POLICY_AVAILABLE = True
 except ImportError:
@@ -909,8 +910,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         preset = arguments.get("preset", "BALANCED")
 
         # Simulate: replay current session's recorded actions against the target preset
-        from .policy import PRESETS, ThreatCategory, PolicyAction
-
         target_policy = PRESETS.get(preset)
         if not target_policy:
             return [TextContent(type="text", text=json.dumps({"error": f"Unknown preset: {preset}"}))]
