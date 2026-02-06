@@ -398,7 +398,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     try:
         # Include client_id for data isolation
         args_with_client = {**arguments, "client_id": CLIENT_ID} if CLIENT_ID else arguments
-        prov_record_tool(
+        # Ensure chain has client_id before recording
+        get_or_create_chain(SESSION_ID, "Claude Code", CLIENT_ID or "")
+        auto_record = prov_record_tool(
             session_id=SESSION_ID,
             tool_name=name,
             arguments=args_with_client,
@@ -406,6 +408,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         )
         stats["provenance_records"] += 1
         logger.info(f"[PROVENANCE] Recorded: {name} (session: {SESSION_ID})")
+
+        # Store auto-provenance to Neo4j so FOLLOWS chain is complete
+        if GRAPHRAG_AVAILABLE and is_neo4j_available():
+            try:
+                store_record(auto_record)
+            except Exception as e:
+                logger.warning(f"[NEO4J] Failed to store auto-provenance: {e}")
     except Exception as e:
         logger.warning(f"[PROVENANCE] Failed to record: {e}")
     # === END PROVENANCE RECORDING ===

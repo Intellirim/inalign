@@ -231,6 +231,8 @@ def store_record(record: ProvenanceRecord) -> bool:
                     r.record_hash = $record_hash,
                     r.previous_hash = $previous_hash,
                     r.sequence_number = $sequence_number,
+                    r.session_id = $session_id,
+                    r.client_id = $client_id,
                     r.activity_attributes = $activity_attributes
             """, {
                 "record_id": record.id,
@@ -240,6 +242,8 @@ def store_record(record: ProvenanceRecord) -> bool:
                 "record_hash": record.record_hash,
                 "previous_hash": record.previous_hash,
                 "sequence_number": record.sequence_number,
+                "session_id": record.session_id,
+                "client_id": getattr(record, 'client_id', '') or '',
                 "activity_attributes": attributes_json,
             })
 
