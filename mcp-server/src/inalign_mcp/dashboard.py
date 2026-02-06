@@ -1840,7 +1840,7 @@ async def logout(request: Request):
 
 @app.get("/api/download/install-script")
 async def download_install_script(api_key: str):
-    """Generate and download personalized install script."""
+    """Generate and download personalized install script (API proxy mode — no DB creds)."""
     from fastapi.responses import Response
 
     script = f'''#!/usr/bin/env python3
@@ -1852,13 +1852,12 @@ API Key: {api_key}
 import os
 import sys
 import json
+import subprocess
 import platform
 from pathlib import Path
 
 API_KEY = "{api_key}"
-NEO4J_URI = "***REDACTED_URI***"
-NEO4J_USERNAME = "neo4j"
-NEO4J_PASSWORD = "***REDACTED***"
+API_URL = "http://3.36.132.4:8080"
 
 def get_python_path():
     return sys.executable
@@ -1868,20 +1867,29 @@ def main():
     print("  InALign MCP Server Installer")
     print("="*50 + "\\n")
 
-    # 1. Create ~/.inalign.env
+    python = get_python_path()
+
+    # 1. Install inalign-mcp from PyPI
+    print("[1/4] Installing inalign-mcp from PyPI...")
+    ret = subprocess.run([python, "-m", "pip", "install", "inalign-mcp", "--upgrade", "-q"],
+        capture_output=True, text=True)
+    if ret.returncode != 0:
+        print(f"      Warning: pip install returned {{ret.returncode}}")
+    else:
+        print("      Done!")
+
+    # 2. Create ~/.inalign.env (API proxy — no database credentials)
     env_path = Path.home() / ".inalign.env"
-    print(f"[1/3] Creating {{env_path}}...")
+    print(f"[2/4] Creating {{env_path}}...")
     with open(env_path, "w") as f:
         f.write(f"API_KEY={{API_KEY}}\\n")
-        f.write(f"NEO4J_URI={{NEO4J_URI}}\\n")
-        f.write(f"NEO4J_USERNAME={{NEO4J_USERNAME}}\\n")
-        f.write(f"NEO4J_PASSWORD={{NEO4J_PASSWORD}}\\n")
+        f.write(f"API_URL={{API_URL}}\\n")
     print("      Done!")
 
-    # 2. Update Claude settings.json
+    # 3. Update Claude settings.json
     settings_path = Path.home() / ".claude" / "settings.json"
     settings_path.parent.mkdir(parents=True, exist_ok=True)
-    print(f"[2/3] Updating {{settings_path}}...")
+    print(f"[3/4] Updating {{settings_path}}...")
 
     settings = {{}}
     if settings_path.exists():
@@ -1892,13 +1900,10 @@ def main():
         settings["mcpServers"] = {{}}
 
     settings["mcpServers"]["inalign"] = {{
-        "command": get_python_path(),
+        "command": python,
         "args": ["-m", "inalign_mcp.server"],
         "env": {{
             "API_KEY": API_KEY,
-            "NEO4J_URI": NEO4J_URI,
-            "NEO4J_USERNAME": NEO4J_USERNAME,
-            "NEO4J_PASSWORD": NEO4J_PASSWORD
         }}
     }}
 
@@ -1906,9 +1911,9 @@ def main():
         json.dump(settings, f, indent=2)
     print("      Done!")
 
-    # 3. Create CLAUDE.md
+    # 4. Create CLAUDE.md
     claude_md = Path.home() / "CLAUDE.md"
-    print(f"[3/3] Creating {{claude_md}}...")
+    print(f"[4/4] Creating {{claude_md}}...")
     if not claude_md.exists():
         with open(claude_md, "w") as f:
             f.write("""# Claude Code Instructions
@@ -1916,11 +1921,9 @@ def main():
 ## InALign Integration
 IMPORTANT: At the start of EVERY conversation, call `mcp__inalign__record_user_command` to record the user's request.
 """)
-    print("      Done!")
-
-    # Install dependencies
-    print("\\nInstalling dependencies...")
-    os.system(f"{{get_python_path()}} -m pip install neo4j -q")
+        print("      Done!")
+    else:
+        print("      Already exists, skipping.")
 
     print("\\n" + "="*50)
     print("  Installation Complete!")
@@ -1930,11 +1933,11 @@ Your API Key: {{API_KEY}}
 Client ID: {{API_KEY[:12]}}
 
 Next Steps:
-1. Restart Claude Code (close/reopen VSCode)
+1. Restart Claude Code (close/reopen terminal or VSCode)
 2. Start using Claude Code normally
 3. View activity at: http://3.36.132.4:8080/login
 
-All activity will be automatically recorded!
+All activity will be automatically recorded and governed by InALign!
 """)
 
 if __name__ == "__main__":
