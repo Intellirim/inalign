@@ -2,221 +2,147 @@
 
 ## System Overview
 
-InALign is an AI Agent Security Platform designed to provide real-time security monitoring, threat detection, and audit logging for AI agents. The platform sits between user interactions and AI agent actions, scanning inputs/outputs and monitoring behavior patterns.
+InALign is an AI Agent Governance Platform that provides cryptographic provenance tracking, behavioral analysis, and tamper-proof audit trails. It operates as an MCP (Model Context Protocol) server, integrating natively with AI coding agents.
 
 ```
                     +------------------+
-                    |   User / Client  |
+                    |   AI Agent       |
+                    | (Claude/Cursor)  |
                     +--------+---------+
                              |
-                    +--------v---------+
-                    |  InALign SDK |
-                    | (Python / JS)    |
-                    +--------+---------+
+                             | MCP (stdio)
                              |
                     +--------v---------+
-                    |   API Gateway    |
-                    |  (Ingress/NGINX) |
+                    |  InALign MCP     |
+                    |  Server          |
                     +--------+---------+
                              |
               +--------------+--------------+
-              |                             |
-     +--------v---------+         +--------v---------+
-     |  Backend API      |         |   Frontend App   |
-     |  (FastAPI)        |         |   (Next.js)      |
-     +--------+---------+         +------------------+
-              |
-     +--------+---------+---------+---------+
-     |        |         |         |         |
-+----v---+ +--v----+ +-v------+ +-v-----+ +v--------+
-|Postgres| | Neo4j | | Redis  | |Celery | |  LLM    |
-|  (SQL) | |(Graph)| |(Cache) | |Worker | | APIs    |
-+--------+ +-------+ +--------+ +-------+ +---------+
+              |              |              |
+     +--------v----+  +-----v------+  +----v--------+
+     | Neo4j Aura  |  |  Polygon   |  | Dashboard   |
+     | (Provenance |  | (Blockchain|  | (Web UI)    |
+     |  Graphs)    |  |  Anchoring)|  |             |
+     +-------------+  +------------+  +-------------+
 ```
 
 ## Core Components
 
-### 1. Backend API (FastAPI)
+### 1. MCP Server (`server.py`)
 
-The core API service built with Python FastAPI.
-
-**Responsibilities:**
-- Request validation and authentication
-- Input/output threat scanning
-- PII detection and sanitization
-- Action logging and anomaly detection
-- Session management
-- Report generation
-- Alert management
+The main entry point. Handles MCP protocol communication with AI agents.
 
 **Key modules:**
-- `app/api/` - API route handlers
-- `app/core/` - Configuration, security, middleware
-- `app/models/` - SQLAlchemy and Pydantic models
-- `app/services/` - Business logic services
-  - `scanner.py` - Threat and PII scanning engine
-  - `anomaly_detector.py` - Behavioral anomaly detection
-  - `report_generator.py` - Report generation with LLM
-  - `alert_manager.py` - Alert creation and notification
+- `server.py` — MCP tool registration and request handling
+- `provenance.py` — SHA-256 hash chain engine
+- `scanner.py` — Pattern-based threat detection (290+ rules)
+- `graph_rag.py` — GraphRAG behavioral analysis
+- `policy.py` — Governance policy engine
+- `polygon_anchor.py` — Blockchain anchoring (Polygon)
+- `dashboard.py` — Web dashboard with graph visualization
 
-### 2. Frontend Dashboard (Next.js)
+### 2. Neo4j (Graph Database)
 
-A React-based dashboard for monitoring and management.
+Stores provenance records as a knowledge graph.
+
+**Stores:**
+- Provenance records (actions, commands, file changes)
+- Session graphs (action sequences per conversation)
+- Agent behavior profiles
+- Cross-session patterns
+
+**Use cases:**
+- GraphRAG behavioral analysis
+- Anomaly detection across sessions
+- Visual graph exploration in dashboard
+- Risk scoring
+
+### 3. Polygon (Blockchain)
+
+Anchors provenance chain hashes to the blockchain.
+
+**How it works:**
+1. Compute merkle root of all session records
+2. Submit merkle root as transaction data to Polygon
+3. Transaction hash serves as immutable proof
+4. Anyone can verify by checking on-chain data
+
+**Supports:**
+- Amoy testnet (free, for development)
+- Polygon mainnet (production, ~$0.01/tx)
+
+### 4. Web Dashboard (`dashboard.py`)
+
+Single-file web application served by the MCP server.
 
 **Features:**
-- Real-time session monitoring
-- Threat visualization and analytics
-- Alert management interface
-- Report viewing and export
-- Agent configuration management
-- User and API key management
-
-### 3. PostgreSQL (Relational Database)
-
-Primary data store for structured data.
-
-**Stores:**
-- User accounts and API keys
-- Agent configurations
-- Scan results and action logs
-- Alert records
-- Report metadata
-- Session summaries
-
-### 4. Neo4j (Graph Database)
-
-Graph database for behavioral analysis and relationship mapping.
-
-**Stores:**
-- Agent behavior graphs (action sequences)
-- Session flow patterns
-- Anomaly relationship networks
-- Threat propagation paths
-
-**Use cases:**
-- Pattern matching for anomaly detection
-- Behavioral baseline computation
-- Attack path analysis
-- Relationship-based risk scoring
-
-**Plugins:**
-- APOC - Utility procedures for data import/export, graph algorithms
-- Graph Data Science (GDS) - Machine learning and graph analytics
-
-### 5. Redis
-
-In-memory data store for caching and real-time operations.
-
-**Use cases:**
-- API response caching
-- Rate limiting counters
-- Session state caching
-- Real-time event pub/sub
-- Celery task broker and result backend
-
-### 6. Celery Workers
-
-Background task processing for async operations.
-
-**Tasks:**
-- Asynchronous deep scanning
-- Report generation (LLM-powered)
-- Alert notification dispatch (Slack, Telegram, Email)
-- Periodic anomaly analysis
-- Data aggregation and cleanup
+- Canvas-based force-directed graph (Neo4j Bloom style)
+- Timeline view with search and filter
+- Risk analysis panel
+- Policy management
+- Export (JSON, PROV-JSONLD)
 
 ## Data Flow
 
-### Input Scanning Flow
+### Recording Flow
 
 ```
-1. User sends message to AI agent
-2. SDK intercepts and calls POST /v1/scan/input
-3. Backend receives request, validates authentication
-4. Scanner service analyzes text:
-   a. Threat detection (prompt injection, jailbreak, etc.)
-   b. PII detection (SSN, email, phone, etc.)
-   c. Risk scoring
-5. Results stored in PostgreSQL
-6. Action graph updated in Neo4j
-7. Response returned to SDK
-8. SDK decides whether to proceed or block
+1. User gives command to AI agent ("Fix the login bug")
+2. Agent calls InALign MCP tool: record_user_command
+3. InALign creates provenance record with SHA-256 hash
+4. Record linked to previous record (hash chain)
+5. Stored in Neo4j graph + local session
+6. Agent continues working, each action recorded similarly
 ```
 
-### Output Scanning Flow
+### Verification Flow
 
 ```
-1. AI agent generates response
-2. SDK intercepts and calls POST /v1/scan/output
-3. Backend scans for:
-   a. PII leakage
-   b. Sensitive data exposure
-   c. Policy violations
-4. If auto_sanitize enabled, redacts sensitive data
-5. Results stored, response returned
-6. SDK uses sanitized text if applicable
+1. User or auditor calls verify_provenance
+2. InALign walks the hash chain from first to last record
+3. Recomputes each hash, checks linkage
+4. If any record was modified, chain breaks → tampering detected
+5. Returns verification result with details
 ```
 
-### Anomaly Detection Flow
+### Anchoring Flow
 
 ```
-1. Action logged via POST /v1/actions/log
-2. Action stored in PostgreSQL
-3. Neo4j graph updated with new action node
-4. Anomaly detector compares against baseline:
-   a. Frequency analysis
-   b. Pattern deviation scoring
-   c. Privilege escalation checks
-5. If anomalous, alert created
-6. Celery dispatches notifications
+1. Session ends or anchor triggered
+2. Compute merkle root of all record hashes
+3. Submit to Polygon as transaction data
+4. Store TX hash as proof
+5. Third party can verify: fetch TX → compare merkle root
 ```
 
-## Technology Choices
+## Technology Stack
 
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
-| Backend API | FastAPI (Python) | Async support, auto OpenAPI docs, Pydantic validation, rich ML/NLP ecosystem |
-| Frontend | Next.js (React) | SSR for performance, TypeScript, rich component ecosystem |
-| Relational DB | PostgreSQL 15 | ACID compliance, JSONB support, mature ecosystem |
-| Graph DB | Neo4j 5 | Native graph storage, Cypher query language, GDS for ML |
-| Cache | Redis 7 | Sub-millisecond latency, pub/sub, rate limiting |
-| Task Queue | Celery | Python-native, Redis broker, reliable task execution |
-| SDK (Python) | httpx + Pydantic | Async support, type safety, modern Python |
-| SDK (JS) | Native fetch | Zero dependencies, TypeScript-first, Node 18+ |
+| MCP Server | Python + MCP SDK | Native MCP support, async |
+| Provenance | SHA-256 + dataclasses | Zero dependencies, fast |
+| Graph DB | Neo4j Aura | Managed graph, Cypher queries |
+| Blockchain | Polygon (web3.py) | Low cost, fast finality |
+| Dashboard | FastAPI + Canvas 2D | Single-file, no build step |
+| Package | PyPI (hatchling) | `pip install inalign-mcp` |
 
-## Security Architecture
+## Security
 
 ### Authentication
-- API key-based authentication (Bearer tokens)
-- Keys scoped to organizations and projects
-- Rate limiting per API key
+- API key-based (`INALIGN_API_KEY` / `API_KEY`)
+- Client ID derived from API key for data isolation
+- Per-client data separation in Neo4j
 
 ### Data Protection
-- All data encrypted at rest (PostgreSQL encryption, Neo4j encryption)
-- TLS 1.3 for all data in transit
-- PII values masked in logs and responses
-- Configurable data retention policies
-
-### Network Security
-- Kubernetes network policies isolate services
-- Ingress with TLS termination
-- Internal services communicate via ClusterIP
-- No direct database access from outside the cluster
+- TLS for Neo4j connections (`neo4j+s://`)
+- No plaintext credentials in code
+- Environment variable configuration
+- PII detection and masking in pattern scanner
 
 ## Scalability
 
-### Horizontal Scaling
-- Backend API: Stateless, scales via Kubernetes replicas
-- Frontend: Stateless, scales via replicas
-- Celery Workers: Scale independently based on queue depth
-
-### Vertical Scaling
-- Neo4j: Increase memory for larger graph datasets
-- PostgreSQL: Increase resources for query-heavy workloads
-- Redis: Increase memory for larger cache sizes
-
-### Performance Targets
-- Input scan latency: < 100ms (p95)
-- Output scan latency: < 100ms (p95)
-- Action logging: < 50ms (p95)
-- Report generation: < 30s (async)
+- **Single agent**: MCP server runs per-agent (stdio)
+- **Multi-agent**: Each agent gets its own MCP server instance
+- **Dashboard**: Shared web UI aggregates all agent data
+- **Neo4j Aura**: Managed, scales automatically
+- **Blockchain**: One TX per session (not per record), cost-efficient
