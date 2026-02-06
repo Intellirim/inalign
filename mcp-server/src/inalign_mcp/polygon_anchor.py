@@ -1,10 +1,13 @@
 """
-Polygon Mainnet Anchoring for InALign
+Polygon Blockchain Anchoring for InALign
 
 Simple, cost-effective blockchain anchoring:
-- ~$0.01-0.05 per transaction
+- ~$0.01-0.05 per transaction on mainnet
+- Free on Amoy testnet
 - Batches multiple sessions
 - Legally valid timestamps
+
+Set POLYGON_NETWORK=amoy for testnet, POLYGON_NETWORK=mainnet for production.
 """
 
 import os
@@ -17,18 +20,45 @@ from dataclasses import dataclass, asdict
 
 logger = logging.getLogger("inalign-polygon")
 
-# Polygon Mainnet Configuration
-POLYGON_CONFIG = {
-    "chain_id": 137,
-    "chain_name": "Polygon Mainnet",
-    "rpc_urls": [
-        "https://polygon-rpc.com",
-        "https://rpc-mainnet.matic.network",
-        "https://matic-mainnet.chainstacklabs.com",
-    ],
-    "explorer": "https://polygonscan.com",
-    "currency": "MATIC",
+# Network configurations
+NETWORK_CONFIGS = {
+    "mainnet": {
+        "chain_id": 137,
+        "chain_name": "Polygon Mainnet",
+        "rpc_urls": [
+            "https://polygon-rpc.com",
+            "https://rpc-mainnet.matic.network",
+            "https://matic-mainnet.chainstacklabs.com",
+        ],
+        "explorer": "https://polygonscan.com",
+        "currency": "POL",
+    },
+    "amoy": {
+        "chain_id": 80002,
+        "chain_name": "Polygon Amoy Testnet",
+        "rpc_urls": [
+            "https://rpc-amoy.polygon.technology",
+            "https://polygon-amoy-bor-rpc.publicnode.com",
+        ],
+        "explorer": "https://amoy.polygonscan.com",
+        "currency": "POL",
+    },
 }
+
+
+def get_network() -> str:
+    """Get current network from environment."""
+    return os.getenv("POLYGON_NETWORK", "amoy").lower()
+
+
+def get_config() -> dict:
+    """Get configuration for current network."""
+    network = get_network()
+    return NETWORK_CONFIGS.get(network, NETWORK_CONFIGS["amoy"])
+
+
+# For backwards compatibility
+POLYGON_CONFIG = get_config()
 
 
 @dataclass
@@ -56,8 +86,8 @@ def get_rpc_url() -> str:
     custom = os.getenv("POLYGON_RPC_URL")
     if custom:
         return custom
-    # Use public RPC (rate limited but free)
-    return POLYGON_CONFIG["rpc_urls"][0]
+    config = get_config()
+    return config["rpc_urls"][0]
 
 
 def get_wallet_key() -> Optional[str]:
@@ -203,7 +233,7 @@ def _anchor_real(
         'gas': 21000 + len(data) * 16,  # Base gas + data cost
         'gasPrice': gas_price,
         'data': data,
-        'chainId': POLYGON_CONFIG["chain_id"],
+        'chainId': get_config()["chain_id"],
     }
 
     # Sign and send
@@ -234,7 +264,7 @@ def _anchor_real(
         gas_used=gas_used,
         cost_matic=cost_matic,
         cost_usd=cost_usd,
-        explorer_url=f"{POLYGON_CONFIG['explorer']}/tx/{tx_hash_hex}",
+        explorer_url=f"{get_config()['explorer']}/tx/{tx_hash_hex}",
     )
 
     # Store anchor proof in Neo4j
