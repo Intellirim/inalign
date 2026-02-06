@@ -657,7 +657,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         if GRAPHRAG_AVAILABLE:
             try:
-                risk = analyze_session_risk(session_id)
+                from .provenance_graph import _neo4j_driver
+                risk = analyze_session_risk(session_id, _neo4j_driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({
@@ -696,7 +697,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         if GRAPHRAG_AVAILABLE:
             try:
-                risk = get_agent_risk(agent_id)
+                from .provenance_graph import _neo4j_driver
+                risk = get_agent_risk(agent_id, _neo4j_driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
@@ -711,7 +713,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         if GRAPHRAG_AVAILABLE:
             try:
-                risk = get_user_risk(user_id)
+                from .provenance_graph import _neo4j_driver
+                risk = get_user_risk(user_id, _neo4j_driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
