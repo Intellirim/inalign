@@ -742,12 +742,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "get_policy" and POLICY_AVAILABLE:
         engine = get_policy_engine()
-        policy = engine.get_current_policy()
+        policy = engine.get_policy()
 
         return [TextContent(
             type="text",
             text=json.dumps({
-                "preset": policy.get("preset", "BALANCED"),
+                "preset": policy.get("name", "BALANCED"),
                 "rules": policy,
             }, indent=2)
         )]
@@ -757,7 +757,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         engine = get_policy_engine()
 
         if preset in PRESETS:
-            engine.set_preset(preset)
+            engine.set_policy(preset)
             stats["policy_checks"] += 1
             return [TextContent(
                 type="text",
@@ -778,16 +778,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             )]
 
     elif name == "list_policies" and POLICY_AVAILABLE:
-        policies = []
-        for name_key, config in PRESETS.items():
-            policies.append({
-                "name": name_key,
-                "description": config.get("description", ""),
-            })
+        engine = get_policy_engine()
+        presets = engine.list_presets()
 
         return [TextContent(
             type="text",
-            text=json.dumps({"policies": policies}, indent=2)
+            text=json.dumps({"policies": presets}, indent=2)
         )]
 
     elif name == "simulate_policy" and POLICY_AVAILABLE:
