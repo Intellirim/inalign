@@ -11,6 +11,8 @@ import os
 import secrets
 import hashlib
 import json
+import threading
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -25,10 +27,18 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
 router = APIRouter()
 
-# In-memory storage (replace with database in production)
-# Format: {email: {api_key, plan, created_at, stripe_customer_id}}
-CUSTOMERS = {
-    # Pre-registered test user
+# ============================================
+# Persistent Customer Storage (JSON file)
+# ============================================
+
+_CUSTOMERS_FILE = os.getenv(
+    "CUSTOMERS_FILE",
+    str(Path(__file__).parent.parent.parent / "customers.json")
+)
+_save_lock = threading.Lock()
+
+# Default test user
+_DEFAULT_CUSTOMERS = {
     "test@inalign.ai": {
         "api_key": "ial_EBSooXgFz6FJ-hdmf3yAntE3xlWAPIAKwI9PfwdCres",
         "client_id": "ial_EBSooXgF",
@@ -36,6 +46,40 @@ CUSTOMERS = {
         "created_at": "2026-02-05"
     }
 }
+
+
+def _load_customers() -> dict:
+    """Load customers from JSON file, falling back to defaults."""
+    try:
+        if os.path.exists(_CUSTOMERS_FILE):
+            with open(_CUSTOMERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                print(f"[CUSTOMERS] Loaded {len(data)} customers from {_CUSTOMERS_FILE}")
+                # Ensure default test user exists
+                for email, info in _DEFAULT_CUSTOMERS.items():
+                    if email not in data:
+                        data[email] = info
+                return data
+    except Exception as e:
+        print(f"[CUSTOMERS] Error loading {_CUSTOMERS_FILE}: {e}")
+
+    print(f"[CUSTOMERS] Using defaults ({len(_DEFAULT_CUSTOMERS)} customers)")
+    return dict(_DEFAULT_CUSTOMERS)
+
+
+def _save_customers():
+    """Save customers to JSON file (thread-safe)."""
+    with _save_lock:
+        try:
+            os.makedirs(os.path.dirname(_CUSTOMERS_FILE) or ".", exist_ok=True)
+            with open(_CUSTOMERS_FILE, "w", encoding="utf-8") as f:
+                json.dump(CUSTOMERS, f, indent=2, ensure_ascii=False)
+            print(f"[CUSTOMERS] Saved {len(CUSTOMERS)} customers to {_CUSTOMERS_FILE}")
+        except Exception as e:
+            print(f"[CUSTOMERS] Error saving: {e}")
+
+
+CUSTOMERS = _load_customers()
 
 # Pricing
 PLANS = {
@@ -130,6 +174,9 @@ async def signup_starter(request: Request):
         # Sync to usage limiter
         sync_usage_limiter(client_id, "starter")
 
+        # Persist to disk
+        _save_customers()
+
         return JSONResponse({
             "success": True,
             "api_key": api_key,
@@ -222,6 +269,9 @@ async def payment_success(session_id: str):
 
         api_key = CUSTOMERS[email]["api_key"]
 
+        # Persist to disk
+        _save_customers()
+
         # Redirect to dashboard with API key shown
         return RedirectResponse(url=f"/dashboard?api_key={api_key}&plan=pro")
 
@@ -278,7 +328,12 @@ async def stripe_webhook(request: Request):
         for email, data in CUSTOMERS.items():
             if data.get("stripe_customer_id") == customer_id:
                 data["plan"] = "starter"
+                _save_customers()
                 break
+
+    # Save after webhook checkout too
+    if event["type"] == "checkout.session.completed":
+        _save_customers()
 
     return JSONResponse({"received": True})
 
