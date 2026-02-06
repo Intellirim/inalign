@@ -456,91 +456,150 @@ TRACE_HTML = """
 <html>
 <head>
     <title>InALign - Trace & Backtrack</title>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Segoe UI', sans-serif; background: #f3f4f6; }}
+        body {{ font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }}
         .header {{
             background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
-            color: white; padding: 16px 40px;
-            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 32px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #1e3a5f;
         }}
-        .logo {{ font-size: 22px; font-weight: bold; }}
-        .nav a {{ color: #93c5fd; text-decoration: none; margin-left: 20px; }}
-        .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
+        .logo {{ font-size: 20px; font-weight: bold; color: white; }}
+        .logo span {{ color: #60a5fa; }}
+        .nav a {{ color: #93c5fd; text-decoration: none; margin-left: 18px; font-size: 14px; }}
+        .nav a:hover {{ color: white; }}
+        .container {{ max-width: 1600px; margin: 0 auto; padding: 16px; }}
+
+        /* Search Panel */
         .search-panel {{
-            background: white; border-radius: 12px; padding: 24px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;
+            background: #1e293b; border-radius: 10px; padding: 16px 20px;
+            margin-bottom: 16px; border: 1px solid #334155;
         }}
-        .search-row {{ display: flex; gap: 12px; margin-bottom: 12px; }}
-        .search-row input, .search-row select {{
-            padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;
+        .search-row {{ display: flex; gap: 10px; margin-bottom: 10px; }}
+        .search-row input {{
+            flex: 1; padding: 8px 14px; background: #0f172a; border: 1px solid #475569;
+            border-radius: 6px; color: #e2e8f0; font-size: 13px; outline: none;
         }}
-        .search-row input {{ flex: 1; }}
-        .search-row select {{ min-width: 160px; }}
-        .btn {{ padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }}
+        .search-row input:focus {{ border-color: #60a5fa; }}
+        .search-row select {{
+            min-width: 150px; padding: 8px 12px; background: #0f172a; border: 1px solid #475569;
+            border-radius: 6px; color: #e2e8f0; font-size: 13px;
+        }}
+        .btn {{ padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px; transition: all 0.2s; }}
         .btn-blue {{ background: #2563eb; color: white; }}
+        .btn-blue:hover {{ background: #1d4ed8; }}
         .btn-purple {{ background: #7c3aed; color: white; }}
-        .btn-gray {{ background: #e5e7eb; color: #333; }}
-        .btn:hover {{ opacity: 0.9; }}
-        .quick-btns {{ display: flex; gap: 8px; flex-wrap: wrap; }}
-        .quick-btns button {{ padding: 6px 14px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px; }}
-        .quick-btns button:hover {{ background: #e5e7eb; }}
-        .layout {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+        .btn-purple:hover {{ background: #6d28d9; }}
+        .btn-gray {{ background: #374151; color: #e2e8f0; }}
+        .btn-gray:hover {{ background: #4b5563; }}
+        .quick-btns {{ display: flex; gap: 6px; flex-wrap: wrap; }}
+        .quick-btns button {{
+            padding: 5px 12px; background: #1e293b; border: 1px solid #475569;
+            border-radius: 5px; cursor: pointer; font-size: 12px; color: #94a3b8; transition: all 0.2s;
+        }}
+        .quick-btns button:hover {{ background: #334155; color: white; border-color: #60a5fa; }}
+
+        /* Graph Panel */
+        .graph-panel {{
+            background: #1e293b; border-radius: 10px; margin-bottom: 16px;
+            border: 1px solid #334155; overflow: hidden;
+        }}
+        .graph-header {{
+            padding: 12px 20px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid #334155;
+        }}
+        .graph-title {{ font-weight: 700; font-size: 15px; color: #f1f5f9; }}
+        .graph-stats {{ display: flex; gap: 16px; font-size: 12px; color: #94a3b8; }}
+        .graph-stats .stat {{ display: flex; align-items: center; gap: 4px; }}
+        .graph-stats .dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
+        #graphContainer {{ width: 100%; height: 520px; background: #0f172a; }}
+        .legend {{
+            padding: 8px 20px; display: flex; gap: 16px; border-top: 1px solid #334155;
+            flex-wrap: wrap;
+        }}
+        .legend-item {{ display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; }}
+        .legend-shape {{ width: 12px; height: 12px; display: inline-block; }}
+
+        /* Bottom Panels */
+        .bottom-layout {{ display: grid; grid-template-columns: 380px 1fr; gap: 16px; }}
         .panel {{
-            background: white; border-radius: 12px; padding: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08); max-height: 70vh; overflow-y: auto;
+            background: #1e293b; border-radius: 10px; border: 1px solid #334155;
+            max-height: 55vh; overflow-y: auto;
         }}
-        .panel-title {{ font-weight: 700; font-size: 16px; margin-bottom: 12px; color: #1e3a5f; }}
-        .timeline-item {{
-            padding: 10px 12px; border-left: 3px solid #2563eb; margin-bottom: 8px;
-            background: #f9fafb; border-radius: 0 8px 8px 0; cursor: pointer;
-            transition: background 0.2s;
+        .panel-header {{
+            padding: 12px 16px; font-weight: 700; font-size: 14px; color: #f1f5f9;
+            border-bottom: 1px solid #334155; position: sticky; top: 0; background: #1e293b; z-index: 2;
         }}
-        .timeline-item:hover {{ background: #eff6ff; }}
-        .timeline-item.active {{ background: #dbeafe; border-left-color: #7c3aed; }}
-        .tl-action {{ font-weight: 600; font-size: 14px; }}
-        .tl-type {{ font-size: 11px; color: #2563eb; background: #dbeafe; padding: 2px 8px; border-radius: 4px; display: inline-block; }}
-        .tl-time {{ font-size: 12px; color: #999; margin-top: 2px; }}
-        .tl-hash {{ font-family: monospace; font-size: 11px; color: #bbb; }}
-        .detail-section {{ margin-bottom: 16px; }}
-        .detail-section h4 {{ color: #666; font-size: 13px; margin-bottom: 6px; }}
-        .detail-field {{ display: flex; padding: 4px 0; border-bottom: 1px solid #f3f4f6; }}
-        .detail-label {{ width: 120px; color: #999; font-size: 13px; }}
-        .detail-value {{ flex: 1; font-size: 13px; word-break: break-all; }}
-        .detail-value.mono {{ font-family: monospace; font-size: 12px; }}
-        .chain-link {{
-            display: inline-block; padding: 4px 10px; background: #f0fdf4; color: #16a34a;
-            border-radius: 6px; font-size: 12px; cursor: pointer; margin: 2px;
+        .panel-body {{ padding: 8px; }}
+
+        /* Timeline Items */
+        .tl-item {{
+            padding: 8px 12px; margin: 4px 0; border-left: 3px solid #334155;
+            border-radius: 0 6px 6px 0; cursor: pointer; transition: all 0.15s;
         }}
-        .chain-link:hover {{ background: #dcfce7; }}
+        .tl-item:hover {{ background: #334155; border-left-color: #60a5fa; }}
+        .tl-item.active {{ background: #1e3a5f; border-left-color: #3b82f6; }}
+        .tl-action {{ font-weight: 600; font-size: 13px; color: #e2e8f0; }}
+        .tl-badge {{
+            font-size: 10px; padding: 1px 6px; border-radius: 3px; display: inline-block;
+            margin-top: 2px; font-weight: 600;
+        }}
+        .badge-tool {{ background: #064e3b; color: #34d399; }}
+        .badge-decision {{ background: #7f1d1d; color: #fca5a5; }}
+        .badge-input {{ background: #312e81; color: #a5b4fc; }}
+        .badge-file {{ background: #713f12; color: #fcd34d; }}
+        .badge-llm {{ background: #164e63; color: #67e8f9; }}
+        .tl-time {{ font-size: 11px; color: #64748b; margin-top: 2px; }}
+        .tl-hash {{ font-family: monospace; font-size: 10px; color: #475569; }}
+
+        /* Detail Panel */
+        .detail-section {{ margin-bottom: 14px; padding: 0 8px; }}
+        .detail-section h4 {{
+            color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+            margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #1e293b;
+        }}
+        .detail-row {{ display: flex; padding: 3px 0; }}
+        .detail-label {{ width: 100px; color: #64748b; font-size: 12px; flex-shrink: 0; }}
+        .detail-value {{ flex: 1; font-size: 12px; word-break: break-all; color: #cbd5e1; }}
+        .detail-value.mono {{ font-family: monospace; font-size: 11px; color: #94a3b8; }}
+        .chain-nav {{
+            display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+            background: #0f172a; border-radius: 6px; cursor: pointer; font-size: 11px;
+            color: #60a5fa; border: 1px solid #1e3a5f; transition: all 0.15s;
+        }}
+        .chain-nav:hover {{ background: #1e3a5f; color: white; }}
+        .chain-current {{
+            padding: 4px 10px; background: #1e3a5f; border-radius: 6px;
+            font-size: 11px; font-weight: 700; color: #60a5fa;
+        }}
         .content-box {{
-            background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px;
-            font-family: monospace; font-size: 12px; white-space: pre-wrap;
-            max-height: 200px; overflow-y: auto; margin-top: 6px;
+            background: #0f172a; color: #94a3b8; padding: 10px; border-radius: 6px;
+            font-family: monospace; font-size: 11px; white-space: pre-wrap;
+            max-height: 180px; overflow-y: auto; border: 1px solid #1e293b; margin-top: 4px;
         }}
-        #graphCanvas {{
-            width: 100%; height: 400px; background: #0f172a; border-radius: 8px;
-            position: relative; overflow: hidden;
+        .empty-state {{ text-align: center; color: #475569; padding: 40px 20px; font-size: 13px; }}
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {{ width: 6px; }}
+        ::-webkit-scrollbar-track {{ background: #0f172a; }}
+        ::-webkit-scrollbar-thumb {{ background: #334155; border-radius: 3px; }}
+        ::-webkit-scrollbar-thumb:hover {{ background: #475569; }}
+
+        /* Help Panel */
+        .help-panel {{
+            margin-top: 10px; padding: 12px 16px; background: #0f172a; border-radius: 8px;
+            border: 1px solid #1e3a5f; font-size: 12px; color: #94a3b8; line-height: 1.6;
         }}
-        .graph-node {{
-            position: absolute; padding: 4px 10px; border-radius: 20px;
-            font-size: 11px; font-weight: 600; color: white; cursor: pointer;
-            white-space: nowrap; transition: transform 0.3s;
+        .help-panel b {{ color: #60a5fa; }}
+        .help-panel code {{
+            background: #1e293b; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #67e8f9;
         }}
-        .graph-node:hover {{ transform: scale(1.15); z-index: 10; }}
-        .node-record {{ background: #2563eb; }}
-        .node-tool {{ background: #16a34a; }}
-        .node-agent {{ background: #d97706; }}
-        .node-session {{ background: #7c3aed; }}
-        .node-decision {{ background: #dc2626; }}
-        .node-content {{ background: #0891b2; }}
-        .node-blockchain {{ background: #f59e0b; }}
-        .empty-state {{ text-align: center; color: #999; padding: 40px; }}
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="logo">InALign <span style="color:#93c5fd">| Trace</span></div>
+        <div class="logo">InALign <span>| Trace & Backtrack</span></div>
         <div class="nav">
             <a href="/dashboard">Dashboard</a>
             <a href="/trace">Trace</a>
@@ -549,64 +608,389 @@ TRACE_HTML = """
     </div>
 
     <div class="container">
+        <!-- Search Panel -->
         <div class="search-panel">
             <div class="search-row">
-                <input type="text" id="searchInput" placeholder="e.g. record_action, Edit, file_write, read_file...">
+                <input type="text" id="searchInput" placeholder="Search by action name (e.g. record_action, Edit, read_file...)">
                 <select id="typeFilter">
                     <option value="">All Types</option>
-                    <option value="user_input">User Input (prompts)</option>
-                    <option value="tool_call">Tool Call (actions)</option>
-                    <option value="decision">Decision (AI choices)</option>
+                    <option value="user_input">User Input</option>
+                    <option value="tool_call">Tool Call</option>
+                    <option value="decision">Decision</option>
                     <option value="llm_request">LLM Request</option>
                     <option value="file_read">File Read</option>
                     <option value="file_write">File Write</option>
                 </select>
                 <button class="btn btn-blue" onclick="searchActions()">Search</button>
-                <button class="btn btn-purple" onclick="loadGraph()">Graph View</button>
+                <button class="btn btn-purple" onclick="loadFullGraph()">Load Graph</button>
+                <button class="btn btn-gray" onclick="toggleHelp()">? Help</button>
             </div>
             <div class="quick-btns">
                 <button onclick="loadTimeline()">Full Timeline</button>
-                <button onclick="searchType('tool_call')">All Tool Calls</button>
-                <button onclick="searchType('decision')">All Decisions</button>
-                <button onclick="searchType('user_input')">All Prompts</button>
+                <button onclick="searchType('tool_call')">Tool Calls</button>
+                <button onclick="searchType('decision')">Decisions</button>
+                <button onclick="searchType('user_input')">Prompts</button>
                 <button onclick="searchType('file_write')">File Changes</button>
+                <button onclick="searchType('file_read')">File Reads</button>
             </div>
-            <div style="margin-top:14px; padding:14px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd;">
-                <div style="font-weight:600; font-size:13px; color:#0369a1; margin-bottom:6px;">How to Search</div>
-                <div style="font-size:12px; color:#475569; line-height:1.7;">
-                    <b>By name:</b> Type action name in search box (e.g. <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">record_action</code>, <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">Edit</code>, <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">read_file</code>)<br>
-                    <b>By type:</b> Select type from dropdown (User Input = prompts, Tool Call = agent actions)<br>
-                    <b>Quick filters:</b> Click buttons above to see all records of that type<br>
-                    <b>Detail view:</b> Click any record in timeline to see full details + hash chain navigation<br>
-                    <b>View content:</b> Click "View" button in detail panel to see stored prompt/response<br>
-                    <b>Graph:</b> Click "Graph View" to see all nodes and relationships visually
+            <div class="help-panel" id="helpPanel" style="display:none;">
+                <b>By name:</b> Type action name (<code>record_action</code>, <code>Edit</code>, <code>read_file</code>)<br>
+                <b>By type:</b> Select from dropdown (User Input = prompts, Tool Call = agent actions)<br>
+                <b>Quick filters:</b> Click buttons to filter by type<br>
+                <b>Graph:</b> Click "Load Graph" to see all nodes. Click nodes to see details.<br>
+                <b>Timeline + Graph sync:</b> Click any record in timeline to highlight in graph and vice versa<br>
+                <b>Chain nav:</b> Use the arrow buttons in detail panel to walk the hash chain<br>
+                <b>Double-click:</b> Double-click a graph node to zoom/focus on it
+            </div>
+        </div>
+
+        <!-- Graph Visualization -->
+        <div class="graph-panel">
+            <div class="graph-header">
+                <div class="graph-title">Provenance Graph</div>
+                <div class="graph-stats" id="graphStats">
+                    <span class="stat">Click "Load Graph" to visualize</span>
                 </div>
             </div>
+            <div id="graphContainer"></div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-shape" style="background:#3b82f6;border-radius:50%;"></div> Record</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#8b5cf6;transform:rotate(45deg);"></div> Session</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#f59e0b;clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);"></div> Agent</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#10b981;clip-path:polygon(50% 0%,100% 100%,0% 100%);"></div> Tool</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#ef4444;"></div> Decision</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#06b6d4;border-radius:50%;"></div> Content</div>
+                <div class="legend-item"><div class="legend-shape" style="background:#eab308;border-radius:3px;"></div> Blockchain</div>
+                <div style="margin-left:auto;font-size:11px;color:#475569;">Drag to pan | Scroll to zoom | Click node for details | Double-click to focus</div>
+            </div>
         </div>
 
-        <div class="layout">
-            <div class="panel" id="timelinePanel">
-                <div class="panel-title">Timeline</div>
-                <div id="timeline" class="empty-state">Click search or timeline to load records</div>
-            </div>
-
-            <div class="panel" id="detailPanel">
-                <div class="panel-title">Record Detail</div>
-                <div id="detail" class="empty-state">Click a record to see details</div>
-            </div>
-        </div>
-
-        <div style="margin-top:20px;">
+        <!-- Bottom: Timeline + Detail -->
+        <div class="bottom-layout">
             <div class="panel">
-                <div class="panel-title">Provenance Graph</div>
-                <div id="graphCanvas">
-                    <div class="empty-state" style="color:#666; padding-top:180px;">Click "Graph View" to load</div>
+                <div class="panel-header">Timeline <span id="timelineCount" style="font-weight:400;color:#64748b;font-size:12px;"></span></div>
+                <div class="panel-body" id="timeline">
+                    <div class="empty-state">Load timeline or search to see records</div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">Record Detail</div>
+                <div class="panel-body" id="detail">
+                    <div class="empty-state">Click a record in timeline or graph to see details</div>
                 </div>
             </div>
         </div>
     </div>
 
     <script>
+        // ============================================
+        // vis.js Network Graph
+        // ============================================
+        let network = null;
+        let graphNodes = null;
+        let graphEdges = null;
+        let allNodeData = {{}};
+        let selectedNodeId = null;
+        let highlightTimer = null;
+
+        const NODE_COLORS = {{
+            record:     {{ background: '#3b82f6', border: '#2563eb', highlight: {{ background: '#60a5fa', border: '#3b82f6' }}, hover: {{ background: '#60a5fa', border: '#3b82f6' }} }},
+            session:    {{ background: '#8b5cf6', border: '#7c3aed', highlight: {{ background: '#a78bfa', border: '#8b5cf6' }}, hover: {{ background: '#a78bfa', border: '#8b5cf6' }} }},
+            agent:      {{ background: '#f59e0b', border: '#d97706', highlight: {{ background: '#fbbf24', border: '#f59e0b' }}, hover: {{ background: '#fbbf24', border: '#f59e0b' }} }},
+            tool:       {{ background: '#10b981', border: '#059669', highlight: {{ background: '#34d399', border: '#10b981' }}, hover: {{ background: '#34d399', border: '#10b981' }} }},
+            decision:   {{ background: '#ef4444', border: '#dc2626', highlight: {{ background: '#f87171', border: '#ef4444' }}, hover: {{ background: '#f87171', border: '#ef4444' }} }},
+            content:    {{ background: '#06b6d4', border: '#0891b2', highlight: {{ background: '#22d3ee', border: '#06b6d4' }}, hover: {{ background: '#22d3ee', border: '#06b6d4' }} }},
+            blockchain: {{ background: '#eab308', border: '#ca8a04', highlight: {{ background: '#facc15', border: '#eab308' }}, hover: {{ background: '#facc15', border: '#eab308' }} }},
+        }};
+
+        const NODE_SHAPES = {{
+            record: 'dot', session: 'diamond', agent: 'star',
+            tool: 'triangle', decision: 'square', content: 'hexagon', blockchain: 'database',
+        }};
+
+        const NODE_SIZES = {{
+            record: 14, session: 20, agent: 22,
+            tool: 18, decision: 16, content: 11, blockchain: 20,
+        }};
+
+        const EDGE_STYLES = {{
+            FOLLOWS:      {{ color: '#475569', dashes: [8, 4], width: 2.0 }},
+            BELONGS_TO:   {{ color: '#8b5cf6', dashes: false, width: 1.0 }},
+            PERFORMED_BY: {{ color: '#f59e0b', dashes: false, width: 1.2 }},
+            CALLED:       {{ color: '#10b981', dashes: false, width: 1.5 }},
+            MADE:         {{ color: '#ef4444', dashes: false, width: 1.2 }},
+            HAS_CONTENT:  {{ color: '#06b6d4', dashes: [3, 3], width: 0.8 }},
+            ANCHORED_BY:  {{ color: '#eab308', dashes: false, width: 1.5 }},
+        }};
+
+        function initGraph() {{
+            const container = document.getElementById('graphContainer');
+            graphNodes = new vis.DataSet([]);
+            graphEdges = new vis.DataSet([]);
+
+            const options = {{
+                nodes: {{
+                    borderWidth: 2,
+                    shadow: {{ enabled: true, color: 'rgba(0,0,0,0.4)', size: 8, x: 2, y: 2 }},
+                    font: {{ size: 11, color: '#e2e8f0', face: 'Segoe UI, sans-serif', strokeWidth: 3, strokeColor: '#0f172a' }},
+                }},
+                edges: {{
+                    width: 1.2,
+                    shadow: false,
+                    smooth: {{ type: 'continuous', roundness: 0.2 }},
+                    arrows: {{ to: {{ enabled: true, scaleFactor: 0.5, type: 'arrow' }} }},
+                    font: {{ size: 8, color: '#475569', face: 'Segoe UI, sans-serif', strokeWidth: 2, strokeColor: '#0f172a', align: 'middle' }},
+                }},
+                physics: {{
+                    forceAtlas2Based: {{
+                        gravitationalConstant: -45,
+                        centralGravity: 0.008,
+                        springLength: 130,
+                        springConstant: 0.05,
+                        damping: 0.4,
+                        avoidOverlap: 0.3,
+                    }},
+                    solver: 'forceAtlas2Based',
+                    stabilization: {{ iterations: 200, fit: true }},
+                    maxVelocity: 40,
+                }},
+                interaction: {{
+                    hover: true,
+                    tooltipDelay: 100,
+                    zoomView: true,
+                    dragView: true,
+                    multiselect: false,
+                }},
+                layout: {{ improvedLayout: true }},
+            }};
+
+            network = new vis.Network(container, {{ nodes: graphNodes, edges: graphEdges }}, options);
+
+            // Click event - show details
+            network.on('click', function(params) {{
+                if (params.nodes.length > 0) {{
+                    const nodeId = params.nodes[0];
+                    const nodeData = allNodeData[nodeId];
+                    if (nodeData && nodeData.type === 'record') {{
+                        loadDetail(nodeId);
+                        highlightTimelineItem(nodeId);
+                    }}
+                    highlightConnected(nodeId);
+                }} else {{
+                    resetHighlight();
+                }}
+            }});
+
+            // Double-click to zoom/focus
+            network.on('doubleClick', function(params) {{
+                if (params.nodes.length > 0) {{
+                    network.focus(params.nodes[0], {{
+                        scale: 1.8,
+                        animation: {{ duration: 500, easingFunction: 'easeInOutQuad' }},
+                    }});
+                }}
+            }});
+
+            // Stabilization progress
+            network.on('stabilizationProgress', function(params) {{
+                const pct = Math.round(params.iterations / params.total * 100);
+                document.getElementById('graphStats').innerHTML = '<span class="stat">Stabilizing layout... ' + pct + '%</span>';
+            }});
+
+            network.on('stabilizationIterationsDone', function() {{
+                updateGraphStats();
+                network.fit({{ animation: {{ duration: 600, easingFunction: 'easeInOutQuad' }} }});
+            }});
+        }}
+
+        function loadFullGraph() {{
+            if (!network) initGraph();
+
+            document.getElementById('graphStats').innerHTML = '<span class="stat">Loading graph data...</span>';
+
+            fetch('/api/trace/graph')
+                .then(r => r.json())
+                .then(data => {{
+                    if (data.error) {{
+                        document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">' + data.error + '</span>';
+                        return;
+                    }}
+                    populateGraph(data);
+                }})
+                .catch(e => {{
+                    document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">Error: ' + e.message + '</span>';
+                }});
+        }}
+
+        function populateGraph(data) {{
+            const nodes = data.nodes || [];
+            const edges = data.edges || [];
+
+            graphNodes.clear();
+            graphEdges.clear();
+            allNodeData = {{}};
+
+            // Add nodes
+            const visNodes = nodes.map(n => {{
+                allNodeData[n.id] = n;
+                const type = n.type || 'record';
+                const color = NODE_COLORS[type] || NODE_COLORS.record;
+                const shape = NODE_SHAPES[type] || 'dot';
+                const size = NODE_SIZES[type] || 14;
+                const label = (n.label || '').length > 28 ? n.label.substring(0, 25) + '...' : (n.label || '');
+
+                // Build tooltip
+                let tooltip = '<div style="font-family:Segoe UI;font-size:12px;max-width:300px;">';
+                tooltip += '<b>' + escapeHtml(n.label || n.id) + '</b><br>';
+                tooltip += '<span style="color:#888;">Type:</span> ' + type + '<br>';
+                if (n.time) tooltip += '<span style="color:#888;">Time:</span> ' + n.time.substring(0, 19).replace('T', ' ') + '<br>';
+                if (n.hash) tooltip += '<span style="color:#888;">Hash:</span> <code>' + n.hash.substring(0, 20) + '...</code><br>';
+                tooltip += '<span style="color:#888;">ID:</span> ' + n.id.substring(0, 32) + (n.id.length > 32 ? '...' : '');
+                tooltip += '</div>';
+
+                return {{
+                    id: n.id,
+                    label: label,
+                    shape: shape,
+                    size: size,
+                    color: color,
+                    title: tooltip,
+                    font: {{ color: '#e2e8f0' }},
+                }};
+            }});
+            graphNodes.add(visNodes);
+
+            // Add edges
+            const visEdges = edges.map((e, i) => {{
+                const style = EDGE_STYLES[e.type] || EDGE_STYLES.FOLLOWS;
+                const isChain = e.type === 'FOLLOWS';
+
+                // Reverse FOLLOWS to show time flow (prev -> current)
+                const from = isChain ? e.target : e.source;
+                const to = isChain ? e.source : e.target;
+
+                return {{
+                    id: 'e' + i,
+                    from: from,
+                    to: to,
+                    label: isChain ? '' : e.type.replace('_', ' '),
+                    color: {{ color: style.color, opacity: 0.65, highlight: style.color, hover: style.color }},
+                    dashes: style.dashes,
+                    width: style.width,
+                    arrows: {{ to: {{ enabled: true, scaleFactor: isChain ? 0.7 : 0.4 }} }},
+                    smooth: isChain
+                        ? {{ type: 'curvedCW', roundness: 0.08 }}
+                        : {{ type: 'continuous', roundness: 0.2 }},
+                }};
+            }});
+            graphEdges.add(visEdges);
+
+            updateGraphStats();
+        }}
+
+        function updateGraphStats() {{
+            const nodeCount = graphNodes.length;
+            const edgeCount = graphEdges.length;
+            const types = {{}};
+            Object.values(allNodeData).forEach(n => {{
+                types[n.type] = (types[n.type] || 0) + 1;
+            }});
+
+            let html = '<span class="stat"><b>' + nodeCount + '</b> nodes</span>';
+            html += '<span class="stat"><b>' + edgeCount + '</b> edges</span>';
+            const typeOrder = ['record', 'session', 'agent', 'tool', 'decision', 'content', 'blockchain'];
+            for (const type of typeOrder) {{
+                const count = types[type];
+                if (!count) continue;
+                const color = (NODE_COLORS[type] || NODE_COLORS.record).background;
+                html += '<span class="stat"><span class="dot" style="background:' + color + '"></span>' + count + ' ' + type + '</span>';
+            }}
+            document.getElementById('graphStats').innerHTML = html;
+        }}
+
+        function highlightConnected(nodeId) {{
+            if (!network || !graphNodes.get(nodeId)) return;
+
+            clearTimeout(highlightTimer);
+
+            const connectedNodes = network.getConnectedNodes(nodeId);
+            const connectedEdges = network.getConnectedEdges(nodeId);
+            const connectedSet = new Set(connectedNodes);
+            connectedSet.add(nodeId);
+            const edgeSet = new Set(connectedEdges);
+
+            // Dim non-connected nodes
+            const updatedNodes = graphNodes.get().map(n => {{
+                const type = (allNodeData[n.id] || {{}}).type || 'record';
+                const baseColor = NODE_COLORS[type] || NODE_COLORS.record;
+                if (n.id === nodeId) {{
+                    return {{ id: n.id, borderWidth: 4, shadow: {{ enabled: true, size: 15, color: baseColor.background + '66' }},
+                        font: {{ color: '#ffffff', size: 13 }}, opacity: 1.0 }};
+                }} else if (connectedSet.has(n.id)) {{
+                    return {{ id: n.id, borderWidth: 2, opacity: 1.0, font: {{ color: '#e2e8f0', size: 11 }} }};
+                }} else {{
+                    return {{ id: n.id, borderWidth: 1, opacity: 0.12, font: {{ color: '#e2e8f066', size: 10 }} }};
+                }}
+            }});
+            graphNodes.update(updatedNodes);
+
+            // Dim non-connected edges
+            const updatedEdges = graphEdges.get().map(e => {{
+                if (edgeSet.has(e.id)) {{
+                    return {{ id: e.id, width: (e.width || 1.2) * 1.8, hidden: false }};
+                }} else {{
+                    return {{ id: e.id, hidden: true }};
+                }}
+            }});
+            graphEdges.update(updatedEdges);
+
+            selectedNodeId = nodeId;
+
+            // Auto-reset after 10 seconds
+            highlightTimer = setTimeout(resetHighlight, 10000);
+        }}
+
+        function resetHighlight() {{
+            if (!network) return;
+            clearTimeout(highlightTimer);
+
+            // Restore all nodes
+            const updatedNodes = graphNodes.get().map(n => {{
+                const type = (allNodeData[n.id] || {{}}).type || 'record';
+                const baseColor = NODE_COLORS[type] || NODE_COLORS.record;
+                return {{
+                    id: n.id, borderWidth: 2, opacity: 1.0,
+                    color: baseColor,
+                    shadow: {{ enabled: true, color: 'rgba(0,0,0,0.4)', size: 8, x: 2, y: 2 }},
+                    font: {{ color: '#e2e8f0', size: 11 }},
+                }};
+            }});
+            graphNodes.update(updatedNodes);
+
+            // Restore all edges
+            const updatedEdges = graphEdges.get().map(e => {{
+                const origStyle = EDGE_STYLES[e._type] || {{}};
+                return {{ id: e.id, hidden: false, width: origStyle.width || 1.2 }};
+            }});
+            graphEdges.update(updatedEdges);
+
+            selectedNodeId = null;
+        }}
+
+        function focusGraphNode(nodeId) {{
+            if (!network || !graphNodes.get(nodeId)) return;
+            network.selectNodes([nodeId]);
+            network.focus(nodeId, {{
+                scale: 1.3,
+                animation: {{ duration: 400, easingFunction: 'easeInOutQuad' }},
+            }});
+            highlightConnected(nodeId);
+        }}
+
+        // ============================================
+        // Timeline
+        // ============================================
+
         async function loadTimeline() {{
             const res = await fetch('/api/trace/timeline');
             const data = await res.json();
@@ -630,27 +1014,56 @@ TRACE_HTML = """
             searchActions();
         }}
 
+        function getBadgeClass(type) {{
+            return {{
+                'tool_call': 'badge-tool', 'decision': 'badge-decision',
+                'user_input': 'badge-input', 'file_read': 'badge-file',
+                'file_write': 'badge-file', 'llm_request': 'badge-llm',
+            }}[type] || 'badge-tool';
+        }}
+
         function renderTimeline(records) {{
             const div = document.getElementById('timeline');
+            document.getElementById('timelineCount').textContent = '(' + records.length + ' records)';
+
             if (!records.length) {{
                 div.innerHTML = '<div class="empty-state">No records found</div>';
                 return;
             }}
-            div.innerHTML = records.map(r => `
-                <div class="timeline-item" onclick="loadDetail('${{r.id}}')">
-                    <div class="tl-action">${{r.action || '-'}}</div>
-                    <span class="tl-type">${{r.type || r.tool || '-'}}</span>
-                    <div class="tl-time">${{(r.time || '').substring(0, 19)}}</div>
-                    <div class="tl-hash">${{(r.hash || '').substring(0, 24)}}...</div>
-                </div>
-            `).join('');
+
+            div.innerHTML = records.map(r => {{
+                const timeStr = (r.time || '').substring(0, 19).replace('T', ' ');
+                const hashStr = (r.hash || '').substring(0, 24);
+                return '<div class="tl-item" id="tl-' + r.id + '" onclick="onTimelineClick(\\'' + r.id + '\\', this)">' +
+                    '<div class="tl-action">' + escapeHtml(r.action || '-') + '</div>' +
+                    '<span class="tl-badge ' + getBadgeClass(r.type) + '">' + (r.type || r.tool || '-') + '</span>' +
+                    '<div class="tl-time">' + timeStr + '</div>' +
+                    '<div class="tl-hash">' + hashStr + '</div>' +
+                '</div>';
+            }}).join('');
         }}
 
-        async function loadDetail(recordId) {{
-            // Highlight active
-            document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget?.classList.add('active');
+        function onTimelineClick(recordId, el) {{
+            document.querySelectorAll('.tl-item').forEach(e => e.classList.remove('active'));
+            el.classList.add('active');
+            loadDetail(recordId);
+            focusGraphNode(recordId);
+        }}
 
+        function highlightTimelineItem(recordId) {{
+            document.querySelectorAll('.tl-item').forEach(e => e.classList.remove('active'));
+            const el = document.getElementById('tl-' + recordId);
+            if (el) {{
+                el.classList.add('active');
+                el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+            }}
+        }}
+
+        // ============================================
+        // Detail Panel
+        // ============================================
+
+        async function loadDetail(recordId) {{
             const res = await fetch('/api/trace/record/' + recordId);
             const data = await res.json();
 
@@ -660,56 +1073,89 @@ TRACE_HTML = """
             }}
 
             const r = data.record || {{}};
-            let html = `
-                <div class="detail-section">
-                    <h4>Record Info</h4>
-                    <div class="detail-field"><span class="detail-label">ID</span><span class="detail-value mono">${{r.id}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Action</span><span class="detail-value">${{r.activity_name}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Type</span><span class="detail-value">${{r.activity_type}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Time</span><span class="detail-value">${{r.timestamp}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Hash</span><span class="detail-value mono">${{r.hash}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Prev Hash</span><span class="detail-value mono">${{r.previous_hash || 'genesis'}}</span></div>
-                    <div class="detail-field"><span class="detail-label">Sequence</span><span class="detail-value">#${{r.sequence}}</span></div>
-                </div>
-            `;
-
-            if (data.agent) {{
-                html += `<div class="detail-section"><h4>Agent</h4>
-                    <div class="detail-field"><span class="detail-label">Name</span><span class="detail-value">${{data.agent.name}}</span></div>
-                </div>`;
-            }}
-            if (data.tool) {{
-                html += `<div class="detail-section"><h4>Tool Called</h4>
-                    <div class="detail-field"><span class="detail-label">Tool</span><span class="detail-value">${{data.tool}}</span></div>
-                </div>`;
-            }}
-            if (data.decision) {{
-                html += `<div class="detail-section"><h4>Decision Made</h4>
-                    <div class="detail-field"><span class="detail-label">Decision</span><span class="detail-value">${{data.decision}}</span></div>
-                </div>`;
-            }}
-
-            // Chain navigation
-            html += '<div class="detail-section"><h4>Hash Chain</h4>';
-            if (data.previous_record) {{
-                html += `<span class="chain-link" onclick="loadDetail('${{data.previous_record.id}}')">&larr; ${{data.previous_record.action}}</span> `;
-            }}
-            html += `<span style="padding:4px 10px; background:#dbeafe; border-radius:6px; font-size:12px; font-weight:bold;">CURRENT</span> `;
-            if (data.next_record) {{
-                html += `<span class="chain-link" onclick="loadDetail('${{data.next_record.id}}')">${{data.next_record.action}} &rarr;</span>`;
-            }}
+            let html = '<div class="detail-section"><h4>Record Info</h4>';
+            html += detailRow('ID', r.id, true);
+            html += detailRow('Action', r.activity_name);
+            html += '<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value"><span class="tl-badge ' + getBadgeClass(r.activity_type) + '">' + r.activity_type + '</span></span></div>';
+            html += detailRow('Time', (r.timestamp || '').replace('T', ' '));
+            html += detailRow('Hash', r.hash, true);
+            html += detailRow('Prev Hash', r.previous_hash || 'genesis (first record)', true);
+            html += detailRow('Sequence', '#' + r.sequence);
             html += '</div>';
 
-            // Contents
+            if (data.agent) {{
+                html += '<div class="detail-section"><h4>Agent</h4>';
+                html += detailRow('Name', data.agent.name);
+                html += detailRow('ID', data.agent.id, true);
+                html += '</div>';
+            }}
+            if (data.tool) {{
+                html += '<div class="detail-section"><h4>Tool Called</h4>';
+                html += '<div class="detail-row"><span class="detail-label">Tool</span><span class="detail-value" style="color:#34d399;font-weight:600;">' + escapeHtml(data.tool) + '</span></div>';
+                html += '</div>';
+            }}
+            if (data.decision) {{
+                html += '<div class="detail-section"><h4>Decision</h4>';
+                html += '<div class="detail-row"><span class="detail-label">Decision</span><span class="detail-value" style="color:#fca5a5;font-weight:600;">' + escapeHtml(data.decision) + '</span></div>';
+                html += '</div>';
+            }}
+            if (data.session) {{
+                html += '<div class="detail-section"><h4>Session</h4>';
+                html += detailRow('Session', data.session.id, true);
+                html += detailRow('Client', data.session.client_id || '-', true);
+                html += '</div>';
+            }}
+
+            // Hash Chain Navigation
+            html += '<div class="detail-section"><h4>Hash Chain Navigation</h4>';
+            html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+            if (data.previous_record) {{
+                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.previous_record.id + '\\')">&larr; ' + escapeHtml(data.previous_record.action) + '</span>';
+            }}
+            html += '<span class="chain-current">CURRENT #' + r.sequence + '</span>';
+            if (data.next_record) {{
+                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.next_record.id + '\\')">' + escapeHtml(data.next_record.action) + ' &rarr;</span>';
+            }}
+            html += '</div></div>';
+
+            // Stored Content
             if (data.contents && data.contents.length > 0) {{
                 html += '<div class="detail-section"><h4>Stored Content</h4>';
                 for (const c of data.contents) {{
-                    html += `<div class="detail-field"><span class="detail-label">${{c.type}}</span><span class="detail-value">${{c.size}} bytes <button class="btn btn-gray" style="padding:2px 8px;font-size:11px;" onclick="loadContent('${{r.id}}')">View</button></span></div>`;
+                    html += '<div class="detail-row"><span class="detail-label">' + c.type + '</span><span class="detail-value">' + c.size + ' bytes ';
+                    html += '<button class="btn btn-gray" style="padding:2px 8px;font-size:10px;margin-left:6px;" onclick="loadContent(\\'' + r.id + '\\')">View</button>';
+                    html += '</span></div>';
                 }}
                 html += '</div>';
             }}
 
+            // Entities
+            if (data.used_entities && data.used_entities.length > 0) {{
+                html += '<div class="detail-section"><h4>Used Entities</h4>';
+                data.used_entities.forEach(function(e) {{
+                    html += detailRow(e.type, e.id, true);
+                }});
+                html += '</div>';
+            }}
+            if (data.generated_entities && data.generated_entities.length > 0) {{
+                html += '<div class="detail-section"><h4>Generated Entities</h4>';
+                data.generated_entities.forEach(function(e) {{
+                    html += detailRow(e.type, e.id, true);
+                }});
+                html += '</div>';
+            }}
+
             document.getElementById('detail').innerHTML = html;
+        }}
+
+        function navigateChain(recordId) {{
+            loadDetail(recordId);
+            highlightTimelineItem(recordId);
+            focusGraphNode(recordId);
+        }}
+
+        function detailRow(label, value, mono) {{
+            return '<div class="detail-row"><span class="detail-label">' + label + '</span><span class="detail-value' + (mono ? ' mono' : '') + '">' + escapeHtml(String(value || '-')) + '</span></div>';
         }}
 
         async function loadContent(recordId) {{
@@ -717,89 +1163,40 @@ TRACE_HTML = """
             const data = await res.json();
             let html = '';
             for (const [type, info] of Object.entries(data)) {{
-                html += `<div class="detail-section"><h4>${{type}}</h4><div class="content-box">${{escapeHtml(info.content || '')}}</div></div>`;
+                html += '<div class="detail-section"><h4>Content: ' + type + '</h4><div class="content-box">' + escapeHtml(info.content || '') + '</div></div>';
             }}
             if (!html) html = '<div class="empty-state">No content stored</div>';
 
-            // Append to detail panel
             const panel = document.getElementById('detail');
             const contentDiv = document.createElement('div');
             contentDiv.innerHTML = html;
             panel.appendChild(contentDiv);
         }}
 
-        async function loadGraph() {{
-            const res = await fetch('/api/trace/graph');
-            const data = await res.json();
-            renderGraph(data);
-        }}
+        // ============================================
+        // Helpers
+        // ============================================
 
-        function renderGraph(data) {{
-            const canvas = document.getElementById('graphCanvas');
-            if (!data.nodes || !data.nodes.length) {{
-                canvas.innerHTML = '<div class="empty-state" style="color:#666;padding-top:180px;">No data</div>';
-                return;
-            }}
-
-            const w = canvas.offsetWidth;
-            const h = canvas.offsetHeight;
-            let html = '';
-
-            // Simple force-like layout
-            const nodePositions = {{}};
-            const typeGroups = {{}};
-
-            data.nodes.forEach((n, i) => {{
-                if (!typeGroups[n.type]) typeGroups[n.type] = [];
-                typeGroups[n.type].push(n);
-            }});
-
-            const typeOrder = ['session', 'agent', 'record', 'tool', 'decision', 'content', 'blockchain'];
-            let yOffset = 30;
-
-            typeOrder.forEach(type => {{
-                const group = typeGroups[type] || [];
-                group.forEach((n, i) => {{
-                    const x = 40 + (i % 8) * (w / 8.5);
-                    const y = yOffset + Math.floor(i / 8) * 40;
-                    nodePositions[n.id] = {{ x, y }};
-                }});
-                if (group.length > 0) yOffset += Math.ceil(group.length / 8) * 40 + 20;
-            }});
-
-            // Draw edges as SVG lines
-            let svgLines = '';
-            data.edges.forEach(e => {{
-                const from = nodePositions[e.source];
-                const to = nodePositions[e.target];
-                if (from && to) {{
-                    svgLines += `<line x1="${{from.x+30}}" y1="${{from.y+10}}" x2="${{to.x+30}}" y2="${{to.y+10}}" stroke="#334155" stroke-width="1" opacity="0.4"/>`;
-                }}
-            }});
-
-            html += `<svg style="position:absolute;width:100%;height:100%;pointer-events:none;">${{svgLines}}</svg>`;
-
-            // Draw nodes
-            data.nodes.forEach(n => {{
-                const pos = nodePositions[n.id];
-                if (pos) {{
-                    const cls = 'node-' + n.type;
-                    const label = (n.label || '').substring(0, 20);
-                    html += `<div class="graph-node ${{cls}}" style="left:${{pos.x}}px;top:${{pos.y}}px;" title="${{n.id}}">${{label}}</div>`;
-                }}
-            }});
-
-            canvas.innerHTML = html;
-            canvas.style.height = Math.max(400, yOffset + 50) + 'px';
+        function toggleHelp() {{
+            const panel = document.getElementById('helpPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }}
 
         function escapeHtml(text) {{
-            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }}
+
+        // Enter key triggers search
+        document.addEventListener('DOMContentLoaded', function() {{
+            document.getElementById('searchInput').addEventListener('keydown', function(e) {{
+                if (e.key === 'Enter') searchActions();
+            }});
+        }});
     </script>
 </body>
 </html>
 """
+
 
 
 # ============================================
