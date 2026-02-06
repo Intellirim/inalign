@@ -456,7 +456,6 @@ TRACE_HTML = """
 <html>
 <head>
     <title>InALign - Trace & Backtrack</title>
-    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }}
@@ -513,13 +512,26 @@ TRACE_HTML = """
         .graph-stats {{ display: flex; gap: 16px; font-size: 12px; color: #94a3b8; }}
         .graph-stats .stat {{ display: flex; align-items: center; gap: 4px; }}
         .graph-stats .dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
-        #graphContainer {{ width: 100%; height: 520px; background: #0f172a; }}
+        #graphContainer {{ width: 100%; height: 520px; background: #0d1117; position: relative; overflow: hidden; cursor: grab; }}
+        #graphContainer.dragging {{ cursor: grabbing; }}
+        #graphCanvas {{ width: 100%; height: 100%; display: block; }}
+        .zoom-controls {{
+            position: absolute; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 4px; z-index: 10;
+        }}
+        .zoom-btn {{
+            width: 32px; height: 32px; border-radius: 6px; border: 1px solid #334155;
+            background: rgba(30, 41, 59, 0.9); color: #94a3b8; font-size: 16px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+            backdrop-filter: blur(8px);
+        }}
+        .zoom-btn:hover {{ background: rgba(51, 65, 85, 0.95); color: white; border-color: #60a5fa; }}
+        .zoom-btn svg {{ width: 16px; height: 16px; }}
         .legend {{
             padding: 8px 20px; display: flex; gap: 16px; border-top: 1px solid #334155;
-            flex-wrap: wrap;
+            flex-wrap: wrap; align-items: center;
         }}
         .legend-item {{ display: flex; align-items: center; gap: 5px; font-size: 11px; color: #94a3b8; }}
-        .legend-shape {{ width: 12px; height: 12px; display: inline-block; }}
+        .legend-dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px rgba(255,255,255,0.15); }}
 
         /* Bottom Panels */
         .bottom-layout {{ display: grid; grid-template-columns: 380px 1fr; gap: 16px; }}
@@ -595,6 +607,20 @@ TRACE_HTML = """
         .help-panel code {{
             background: #1e293b; padding: 1px 5px; border-radius: 3px; font-size: 11px; color: #67e8f9;
         }}
+
+        /* Node tooltip */
+        .node-tooltip {{
+            position: absolute; pointer-events: none; z-index: 20;
+            background: rgba(15, 23, 42, 0.95); border: 1px solid #334155;
+            border-radius: 8px; padding: 10px 14px; font-size: 12px;
+            color: #e2e8f0; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            backdrop-filter: blur(12px); max-width: 320px; display: none;
+            transform: translate(-50%, -100%); margin-top: -12px;
+        }}
+        .node-tooltip .tt-label {{ font-weight: 700; font-size: 13px; margin-bottom: 4px; }}
+        .node-tooltip .tt-type {{ font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; margin-bottom: 6px; }}
+        .node-tooltip .tt-row {{ font-size: 11px; color: #94a3b8; margin: 2px 0; }}
+        .node-tooltip .tt-row b {{ color: #cbd5e1; font-weight: 500; }}
     </style>
 </head>
 <body>
@@ -640,7 +666,7 @@ TRACE_HTML = """
                 <b>Graph:</b> Click "Load Graph" to see all nodes. Click nodes to see details.<br>
                 <b>Timeline + Graph sync:</b> Click any record in timeline to highlight in graph and vice versa<br>
                 <b>Chain nav:</b> Use the arrow buttons in detail panel to walk the hash chain<br>
-                <b>Double-click:</b> Double-click a graph node to zoom/focus on it
+                <b>Scroll:</b> Mouse wheel to zoom, drag to pan
             </div>
         </div>
 
@@ -652,16 +678,30 @@ TRACE_HTML = """
                     <span class="stat">Click "Load Graph" to visualize</span>
                 </div>
             </div>
-            <div id="graphContainer"></div>
+            <div id="graphContainer">
+                <canvas id="graphCanvas"></canvas>
+                <div class="zoom-controls">
+                    <button class="zoom-btn" onclick="zoomIn()" title="Zoom In">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    <button class="zoom-btn" onclick="zoomOut()" title="Zoom Out">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    </button>
+                    <button class="zoom-btn" onclick="zoomFit()" title="Fit to View">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                    </button>
+                </div>
+                <div class="node-tooltip" id="nodeTooltip"></div>
+            </div>
             <div class="legend">
-                <div class="legend-item"><div class="legend-shape" style="background:#3b82f6;border-radius:50%;"></div> Record</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#8b5cf6;transform:rotate(45deg);"></div> Session</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#f59e0b;clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);"></div> Agent</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#10b981;clip-path:polygon(50% 0%,100% 100%,0% 100%);"></div> Tool</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#ef4444;"></div> Decision</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#06b6d4;border-radius:50%;"></div> Content</div>
-                <div class="legend-item"><div class="legend-shape" style="background:#eab308;border-radius:3px;"></div> Blockchain</div>
-                <div style="margin-left:auto;font-size:11px;color:#475569;">Drag to pan | Scroll to zoom | Click node for details | Double-click to focus</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#4C8EDA;"></div> Record</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#8b5cf6;"></div> Session</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#F79767;"></div> Agent</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#8DCC93;"></div> Tool</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#F16667;"></div> Decision</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#57C7E3;"></div> Content</div>
+                <div class="legend-item"><div class="legend-dot" style="background:#ECB83D;"></div> Blockchain</div>
+                <div style="margin-left:auto;font-size:11px;color:#475569;">Scroll to zoom | Drag to pan | Click node for details</div>
             </div>
         </div>
 
@@ -684,307 +724,661 @@ TRACE_HTML = """
 
     <script>
         // ============================================
-        // vis.js Network Graph
+        // Canvas Graph - Neo4j Bloom Style
         // ============================================
-        let network = null;
-        let graphNodes = null;
-        let graphEdges = null;
+
+        let canvas, ctx, containerEl;
+        let graphWidth = 0, graphHeight = 0;
+        let positions = new Map();
+        let graphData = {{ nodes: [], edges: [] }};
         let allNodeData = {{}};
+        let hoveredNodeId = null;
         let selectedNodeId = null;
-        let highlightTimer = null;
+        let scale = 1;
+        let panX = 0, panY = 0;
+        let isDragging = false;
+        let dragStartX = 0, dragStartY = 0;
+        let dragStartPanX = 0, dragStartPanY = 0;
+        let isSimulating = false;
+        let animationId = null;
+        let simulationSteps = 0;
+        const MAX_SIM_STEPS = 300;
 
+        // Neo4j Bloom colors for InALign node types
         const NODE_COLORS = {{
-            record:     {{ background: '#3b82f6', border: '#2563eb', highlight: {{ background: '#60a5fa', border: '#3b82f6' }}, hover: {{ background: '#60a5fa', border: '#3b82f6' }} }},
-            session:    {{ background: '#8b5cf6', border: '#7c3aed', highlight: {{ background: '#a78bfa', border: '#8b5cf6' }}, hover: {{ background: '#a78bfa', border: '#8b5cf6' }} }},
-            agent:      {{ background: '#f59e0b', border: '#d97706', highlight: {{ background: '#fbbf24', border: '#f59e0b' }}, hover: {{ background: '#fbbf24', border: '#f59e0b' }} }},
-            tool:       {{ background: '#10b981', border: '#059669', highlight: {{ background: '#34d399', border: '#10b981' }}, hover: {{ background: '#34d399', border: '#10b981' }} }},
-            decision:   {{ background: '#ef4444', border: '#dc2626', highlight: {{ background: '#f87171', border: '#ef4444' }}, hover: {{ background: '#f87171', border: '#ef4444' }} }},
-            content:    {{ background: '#06b6d4', border: '#0891b2', highlight: {{ background: '#22d3ee', border: '#06b6d4' }}, hover: {{ background: '#22d3ee', border: '#06b6d4' }} }},
-            blockchain: {{ background: '#eab308', border: '#ca8a04', highlight: {{ background: '#facc15', border: '#eab308' }}, hover: {{ background: '#facc15', border: '#eab308' }} }},
+            record:     {{ bg: '#4C8EDA', border: '#3A7BC8' }},
+            session:    {{ bg: '#8b5cf6', border: '#7c3aed' }},
+            agent:      {{ bg: '#F79767', border: '#E08050' }},
+            tool:       {{ bg: '#8DCC93', border: '#76B57C' }},
+            decision:   {{ bg: '#F16667', border: '#D94F50' }},
+            content:    {{ bg: '#57C7E3', border: '#40B0CC' }},
+            blockchain: {{ bg: '#ECB83D', border: '#D4A12E' }},
+        }};
+        const DEFAULT_COLOR = {{ bg: '#A5ABB6', border: '#8E9AA6' }};
+
+        const NODE_RADII = {{
+            record: 14, session: 22, agent: 20,
+            tool: 16, decision: 14, content: 11, blockchain: 18,
         }};
 
-        const NODE_SHAPES = {{
-            record: 'dot', session: 'diamond', agent: 'star',
-            tool: 'triangle', decision: 'square', content: 'hexagon', blockchain: 'database',
-        }};
+        // ============================================
+        // Force-Directed Physics (from ontix-web)
+        // ============================================
 
-        const NODE_SIZES = {{
-            record: 14, session: 20, agent: 22,
-            tool: 18, decision: 16, content: 11, blockchain: 20,
-        }};
+        function runSimulation() {{
+            const centerX = graphWidth / 2;
+            const centerY = graphHeight / 2;
+            const nodeCount = positions.size;
+            if (nodeCount === 0) return 0;
+            const k = Math.sqrt((graphWidth * graphHeight) / Math.max(nodeCount, 1)) * 0.6;
 
-        const EDGE_STYLES = {{
-            FOLLOWS:      {{ color: '#475569', dashes: [8, 4], width: 2.0 }},
-            BELONGS_TO:   {{ color: '#8b5cf6', dashes: false, width: 1.0 }},
-            PERFORMED_BY: {{ color: '#f59e0b', dashes: false, width: 1.2 }},
-            CALLED:       {{ color: '#10b981', dashes: false, width: 1.5 }},
-            MADE:         {{ color: '#ef4444', dashes: false, width: 1.2 }},
-            HAS_CONTENT:  {{ color: '#06b6d4', dashes: [3, 3], width: 0.8 }},
-            ANCHORED_BY:  {{ color: '#eab308', dashes: false, width: 1.5 }},
-        }};
+            // Repulsion between all nodes
+            const posArr = Array.from(positions.entries());
+            for (let i = 0; i < posArr.length; i++) {{
+                const [idA, posA] = posArr[i];
+                for (let j = i + 1; j < posArr.length; j++) {{
+                    const [idB, posB] = posArr[j];
+                    const dx = posA.x - posB.x;
+                    const dy = posA.y - posB.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    const minDist = posA.radius + posB.radius + 20;
 
-        function initGraph() {{
-            const container = document.getElementById('graphContainer');
-            graphNodes = new vis.DataSet([]);
-            graphEdges = new vis.DataSet([]);
-
-            const options = {{
-                nodes: {{
-                    borderWidth: 2,
-                    shadow: {{ enabled: true, color: 'rgba(0,0,0,0.4)', size: 8, x: 2, y: 2 }},
-                    font: {{ size: 11, color: '#e2e8f0', face: 'Segoe UI, sans-serif', strokeWidth: 3, strokeColor: '#0f172a' }},
-                }},
-                edges: {{
-                    width: 1.2,
-                    shadow: false,
-                    smooth: {{ type: 'continuous', roundness: 0.2 }},
-                    arrows: {{ to: {{ enabled: true, scaleFactor: 0.5, type: 'arrow' }} }},
-                    font: {{ size: 8, color: '#475569', face: 'Segoe UI, sans-serif', strokeWidth: 2, strokeColor: '#0f172a', align: 'middle' }},
-                }},
-                physics: {{
-                    forceAtlas2Based: {{
-                        gravitationalConstant: -45,
-                        centralGravity: 0.008,
-                        springLength: 130,
-                        springConstant: 0.05,
-                        damping: 0.4,
-                        avoidOverlap: 0.3,
-                    }},
-                    solver: 'forceAtlas2Based',
-                    stabilization: {{ iterations: 200, fit: true }},
-                    maxVelocity: 40,
-                }},
-                interaction: {{
-                    hover: true,
-                    tooltipDelay: 100,
-                    zoomView: true,
-                    dragView: true,
-                    multiselect: false,
-                }},
-                layout: {{ improvedLayout: true }},
-            }};
-
-            network = new vis.Network(container, {{ nodes: graphNodes, edges: graphEdges }}, options);
-
-            // Click event - show details
-            network.on('click', function(params) {{
-                if (params.nodes.length > 0) {{
-                    const nodeId = params.nodes[0];
-                    const nodeData = allNodeData[nodeId];
-                    if (nodeData && nodeData.type === 'record') {{
-                        loadDetail(nodeId);
-                        highlightTimelineItem(nodeId);
+                    if (dist < minDist * 3) {{
+                        const force = (k * k) / dist;
+                        const fx = (dx / dist) * force * 0.015;
+                        const fy = (dy / dist) * force * 0.015;
+                        posA.vx += fx;
+                        posA.vy += fy;
+                        posB.vx -= fx;
+                        posB.vy -= fy;
                     }}
-                    highlightConnected(nodeId);
+                }}
+            }}
+
+            // Attraction along edges
+            graphData.edges.forEach(function(edge) {{
+                const source = positions.get(edge.source);
+                const target = positions.get(edge.target);
+                if (!source || !target) return;
+
+                const dx = target.x - source.x;
+                const dy = target.y - source.y;
+                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                const idealDist = k * 1.2;
+                const force = (dist - idealDist) * 0.01;
+
+                source.vx += (dx / dist) * force;
+                source.vy += (dy / dist) * force;
+                target.vx -= (dx / dist) * force;
+                target.vy -= (dy / dist) * force;
+            }});
+
+            // Center gravity
+            positions.forEach(function(pos) {{
+                const dx = centerX - pos.x;
+                const dy = centerY - pos.y;
+                pos.vx += dx * 0.0008;
+                pos.vy += dy * 0.0008;
+            }});
+
+            // Apply velocities with damping
+            let totalMovement = 0;
+            const margin = 50;
+            positions.forEach(function(pos) {{
+                pos.vx *= 0.88;
+                pos.vy *= 0.88;
+                pos.x += pos.vx;
+                pos.y += pos.vy;
+                pos.x = Math.max(margin, Math.min(graphWidth - margin, pos.x));
+                pos.y = Math.max(margin, Math.min(graphHeight - margin, pos.y));
+                totalMovement += Math.abs(pos.vx) + Math.abs(pos.vy);
+            }});
+
+            return totalMovement;
+        }}
+
+        // ============================================
+        // Canvas Rendering
+        // ============================================
+
+        function getConnectedEdges(nodeId) {{
+            return graphData.edges.filter(function(e) {{ return e.source === nodeId || e.target === nodeId; }});
+        }}
+
+        function render() {{
+            if (!ctx) return;
+            const dpr = window.devicePixelRatio || 1;
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            // Dark background with radial gradient
+            const bgGrad = ctx.createRadialGradient(
+                graphWidth / 2, graphHeight / 2, 0,
+                graphWidth / 2, graphHeight / 2, Math.max(graphWidth, graphHeight) / 2
+            );
+            bgGrad.addColorStop(0, '#1a1f2e');
+            bgGrad.addColorStop(1, '#0d1117');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, graphWidth, graphHeight);
+
+            // Apply pan + zoom transform
+            ctx.save();
+            ctx.translate(graphWidth / 2 + panX, graphHeight / 2 + panY);
+            ctx.scale(scale, scale);
+            ctx.translate(-graphWidth / 2, -graphHeight / 2);
+
+            // Run simulation
+            if (isSimulating && simulationSteps < MAX_SIM_STEPS) {{
+                const movement = runSimulation();
+                simulationSteps++;
+                if (movement < 0.3 || simulationSteps >= MAX_SIM_STEPS) {{
+                    isSimulating = false;
+                }}
+            }}
+
+            var activeNode = selectedNodeId || hoveredNodeId;
+            var connectedSet = new Set();
+            if (activeNode) {{
+                getConnectedEdges(activeNode).forEach(function(e) {{
+                    connectedSet.add(e.source);
+                    connectedSet.add(e.target);
+                }});
+                connectedSet.add(activeNode);
+            }}
+
+            // ---- Draw Edges ----
+            graphData.edges.forEach(function(edge) {{
+                var source = positions.get(edge.source);
+                var target = positions.get(edge.target);
+                if (!source || !target) return;
+
+                var isHighlighted = activeNode && (edge.source === activeNode || edge.target === activeNode);
+                var isDimmed = activeNode && !isHighlighted;
+
+                // Edge line
+                ctx.beginPath();
+                ctx.moveTo(source.x, source.y);
+                ctx.lineTo(target.x, target.y);
+
+                if (isHighlighted) {{
+                    ctx.strokeStyle = 'rgba(96, 165, 250, 0.85)';
+                    ctx.lineWidth = 2.5 / scale;
+                }} else if (isDimmed) {{
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+                    ctx.lineWidth = 0.5 / scale;
                 }} else {{
-                    resetHighlight();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+                    ctx.lineWidth = 1 / scale;
+                }}
+                ctx.stroke();
+
+                // Arrow head
+                if (!isDimmed) {{
+                    var dx = target.x - source.x;
+                    var dy = target.y - source.y;
+                    var dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    var targetR = target.radius + 4;
+                    var arrowX = target.x - (dx / dist) * targetR;
+                    var arrowY = target.y - (dy / dist) * targetR;
+                    var angle = Math.atan2(dy, dx);
+                    var arrowLen = isHighlighted ? 10 / scale : 7 / scale;
+                    var arrowWidth = Math.PI / 7;
+
+                    ctx.beginPath();
+                    ctx.moveTo(arrowX, arrowY);
+                    ctx.lineTo(arrowX - arrowLen * Math.cos(angle - arrowWidth), arrowY - arrowLen * Math.sin(angle - arrowWidth));
+                    ctx.lineTo(arrowX - arrowLen * Math.cos(angle + arrowWidth), arrowY - arrowLen * Math.sin(angle + arrowWidth));
+                    ctx.closePath();
+                    ctx.fillStyle = isHighlighted ? 'rgba(96, 165, 250, 0.85)' : 'rgba(255, 255, 255, 0.2)';
+                    ctx.fill();
+                }}
+
+                // Edge label (only when highlighted or zoomed in)
+                if (isHighlighted || (scale > 1.2 && !isDimmed)) {{
+                    var midX = (source.x + target.x) / 2;
+                    var midY = (source.y + target.y) / 2;
+                    var label = (edge.type || '').replace('_', ' ');
+                    if (label) {{
+                        ctx.font = (9 / scale) + 'px Segoe UI, sans-serif';
+                        var tw = ctx.measureText(label).width;
+                        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+                        ctx.fillRect(midX - tw / 2 - 3, midY - 6, tw + 6, 12);
+                        ctx.fillStyle = isHighlighted ? '#93c5fd' : '#64748b';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(label, midX, midY);
+                    }}
                 }}
             }});
 
-            // Double-click to zoom/focus
-            network.on('doubleClick', function(params) {{
-                if (params.nodes.length > 0) {{
-                    network.focus(params.nodes[0], {{
-                        scale: 1.8,
-                        animation: {{ duration: 500, easingFunction: 'easeInOutQuad' }},
-                    }});
+            // ---- Draw Nodes ----
+            positions.forEach(function(pos, nodeId) {{
+                var node = pos.node;
+                var isHovered = hoveredNodeId === nodeId;
+                var isSelected = selectedNodeId === nodeId;
+                var isConnected = activeNode && connectedSet.has(nodeId) && nodeId !== activeNode;
+                var isActive = isHovered || isSelected;
+                var isDimmed = activeNode && !connectedSet.has(nodeId);
+
+                var colors = NODE_COLORS[node.type] || DEFAULT_COLOR;
+                var radius = pos.radius;
+                if (isHovered) radius *= 1.25;
+
+                // Dimmed nodes
+                if (isDimmed) {{
+                    ctx.globalAlpha = 0.12;
                 }}
+
+                // Glow effect for active/connected nodes
+                if (isActive || isConnected) {{
+                    var glow = ctx.createRadialGradient(pos.x, pos.y, radius * 0.5, pos.x, pos.y, radius * 3);
+                    glow.addColorStop(0, colors.bg + '50');
+                    glow.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, radius * 3, 0, Math.PI * 2);
+                    ctx.fillStyle = glow;
+                    ctx.fill();
+                }}
+
+                // Node shadow
+                ctx.beginPath();
+                ctx.arc(pos.x + 2, pos.y + 2, radius, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+                ctx.fill();
+
+                // Node fill with radial gradient
+                var nodeGrad = ctx.createRadialGradient(
+                    pos.x - radius * 0.3, pos.y - radius * 0.3, 0,
+                    pos.x, pos.y, radius
+                );
+                nodeGrad.addColorStop(0, colors.bg);
+                nodeGrad.addColorStop(1, colors.border);
+
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = nodeGrad;
+                ctx.fill();
+
+                // Node border
+                ctx.strokeStyle = (isActive || isConnected) ? '#ffffff' : colors.border;
+                ctx.lineWidth = (isActive ? 3 : isConnected ? 2 : 1.5) / scale;
+                ctx.stroke();
+
+                // Node icon character (type abbreviation inside the node)
+                var iconChar = {{ record: 'R', session: 'S', agent: 'A', tool: 'T', decision: 'D', content: 'C', blockchain: 'B' }}[node.type] || '?';
+                ctx.font = 'bold ' + (radius * 0.8) + 'px Segoe UI, sans-serif';
+                ctx.fillStyle = 'rgba(255,255,255,0.85)';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(iconChar, pos.x, pos.y + 0.5);
+
+                // Always show label for session/agent nodes, or when zoomed in
+                if (!isDimmed && (node.type === 'session' || node.type === 'agent' || scale > 1.5)) {{
+                    var lbl = (node.label || '').length > 20 ? node.label.substring(0, 18) + '..' : (node.label || '');
+                    ctx.font = (10 / scale) + 'px Segoe UI, sans-serif';
+                    ctx.fillStyle = 'rgba(226, 232, 240, 0.7)';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(lbl, pos.x, pos.y + radius + 4);
+                }}
+
+                ctx.globalAlpha = 1;
             }});
 
-            // Stabilization progress
-            network.on('stabilizationProgress', function(params) {{
-                const pct = Math.round(params.iterations / params.total * 100);
-                document.getElementById('graphStats').innerHTML = '<span class="stat">Stabilizing layout... ' + pct + '%</span>';
-            }});
+            // ---- Hovered/Selected label popup (on top) ----
+            if (hoveredNodeId || selectedNodeId) {{
+                var targetId = hoveredNodeId || selectedNodeId;
+                var pos = positions.get(targetId);
+                if (pos) {{
+                    var node = pos.node;
+                    var colors = NODE_COLORS[node.type] || DEFAULT_COLOR;
+                    var radius = pos.radius;
+                    var label = (node.label || '').length > 30 ? node.label.substring(0, 28) + '...' : (node.label || '');
 
-            network.on('stabilizationIterationsDone', function() {{
-                updateGraphStats();
-                network.fit({{ animation: {{ duration: 600, easingFunction: 'easeInOutQuad' }} }});
-            }});
+                    ctx.font = 'bold ' + (12 / scale) + 'px Segoe UI, sans-serif';
+                    var textW = ctx.measureText(label).width;
+
+                    // Label background pill
+                    var labelY = pos.y - radius - (16 / scale);
+                    ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+                    ctx.beginPath();
+                    var pillX = pos.x - textW / 2 - 10;
+                    var pillY = labelY - (14 / scale);
+                    var pillW = textW + 20;
+                    var pillH = 26 / scale;
+                    var pillR = 6 / scale;
+                    ctx.moveTo(pillX + pillR, pillY);
+                    ctx.lineTo(pillX + pillW - pillR, pillY);
+                    ctx.quadraticCurveTo(pillX + pillW, pillY, pillX + pillW, pillY + pillR);
+                    ctx.lineTo(pillX + pillW, pillY + pillH - pillR);
+                    ctx.quadraticCurveTo(pillX + pillW, pillY + pillH, pillX + pillW - pillR, pillY + pillH);
+                    ctx.lineTo(pillX + pillR, pillY + pillH);
+                    ctx.quadraticCurveTo(pillX, pillY + pillH, pillX, pillY + pillH - pillR);
+                    ctx.lineTo(pillX, pillY + pillR);
+                    ctx.quadraticCurveTo(pillX, pillY, pillX + pillR, pillY);
+                    ctx.closePath();
+                    ctx.fill();
+                    ctx.strokeStyle = colors.bg + '60';
+                    ctx.lineWidth = 1 / scale;
+                    ctx.stroke();
+
+                    // Label text
+                    ctx.fillStyle = '#ffffff';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(label, pos.x, labelY - (1 / scale));
+
+                    // Type badge below
+                    ctx.font = (9 / scale) + 'px Segoe UI, sans-serif';
+                    ctx.fillStyle = colors.bg;
+                    ctx.textBaseline = 'top';
+                    ctx.fillText(node.type.toUpperCase(), pos.x, pos.y + radius + (4 / scale));
+                }}
+            }}
+
+            ctx.restore();
+
+            // Continue animation
+            animationId = requestAnimationFrame(render);
+        }}
+
+        // ============================================
+        // Graph Init & Data Loading
+        // ============================================
+
+        function initCanvas() {{
+            canvas = document.getElementById('graphCanvas');
+            containerEl = document.getElementById('graphContainer');
+            ctx = canvas.getContext('2d');
+
+            var rect = containerEl.getBoundingClientRect();
+            var dpr = window.devicePixelRatio || 1;
+            graphWidth = rect.width;
+            graphHeight = rect.height;
+            canvas.width = graphWidth * dpr;
+            canvas.height = graphHeight * dpr;
+            canvas.style.width = graphWidth + 'px';
+            canvas.style.height = graphHeight + 'px';
+            ctx.scale(dpr, dpr);
         }}
 
         function loadFullGraph() {{
-            if (!network) initGraph();
-
             document.getElementById('graphStats').innerHTML = '<span class="stat">Loading graph data...</span>';
 
             fetch('/api/trace/graph')
-                .then(r => r.json())
-                .then(data => {{
+                .then(function(r) {{ return r.json(); }})
+                .then(function(data) {{
                     if (data.error) {{
                         document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">' + data.error + '</span>';
                         return;
                     }}
                     populateGraph(data);
                 }})
-                .catch(e => {{
+                .catch(function(e) {{
                     document.getElementById('graphStats').innerHTML = '<span class="stat" style="color:#ef4444;">Error: ' + e.message + '</span>';
                 }});
         }}
 
         function populateGraph(data) {{
-            const nodes = data.nodes || [];
-            const edges = data.edges || [];
+            if (!canvas) initCanvas();
 
-            graphNodes.clear();
-            graphEdges.clear();
+            graphData.nodes = data.nodes || [];
+            graphData.edges = data.edges || [];
+            positions.clear();
             allNodeData = {{}};
 
-            // Add nodes
-            const visNodes = nodes.map(n => {{
-                allNodeData[n.id] = n;
-                const type = n.type || 'record';
-                const color = NODE_COLORS[type] || NODE_COLORS.record;
-                const shape = NODE_SHAPES[type] || 'dot';
-                const size = NODE_SIZES[type] || 14;
-                const label = (n.label || '').length > 28 ? n.label.substring(0, 25) + '...' : (n.label || '');
+            var centerX = graphWidth / 2;
+            var centerY = graphHeight / 2;
 
-                // Build tooltip
-                let tooltip = '<div style="font-family:Segoe UI;font-size:12px;max-width:300px;">';
-                tooltip += '<b>' + escapeHtml(n.label || n.id) + '</b><br>';
-                tooltip += '<span style="color:#888;">Type:</span> ' + type + '<br>';
-                if (n.time) tooltip += '<span style="color:#888;">Time:</span> ' + n.time.substring(0, 19).replace('T', ' ') + '<br>';
-                if (n.hash) tooltip += '<span style="color:#888;">Hash:</span> <code>' + n.hash.substring(0, 20) + '...</code><br>';
-                tooltip += '<span style="color:#888;">ID:</span> ' + n.id.substring(0, 32) + (n.id.length > 32 ? '...' : '');
-                tooltip += '</div>';
-
-                return {{
-                    id: n.id,
-                    label: label,
-                    shape: shape,
-                    size: size,
-                    color: color,
-                    title: tooltip,
-                    font: {{ color: '#e2e8f0' }},
-                }};
+            // Group nodes by type
+            var nodesByType = {{}};
+            graphData.nodes.forEach(function(node) {{
+                allNodeData[node.id] = node;
+                if (!nodesByType[node.type]) nodesByType[node.type] = [];
+                nodesByType[node.type].push(node);
             }});
-            graphNodes.add(visNodes);
 
-            // Add edges
-            const visEdges = edges.map((e, i) => {{
-                const style = EDGE_STYLES[e.type] || EDGE_STYLES.FOLLOWS;
-                const isChain = e.type === 'FOLLOWS';
-
-                // Reverse FOLLOWS to show time flow (prev -> current)
-                const from = isChain ? e.target : e.source;
-                const to = isChain ? e.source : e.target;
-
-                return {{
-                    id: 'e' + i,
-                    from: from,
-                    to: to,
-                    label: isChain ? '' : e.type.replace('_', ' '),
-                    color: {{ color: style.color, opacity: 0.65, highlight: style.color, hover: style.color }},
-                    dashes: style.dashes,
-                    width: style.width,
-                    arrows: {{ to: {{ enabled: true, scaleFactor: isChain ? 0.7 : 0.4 }} }},
-                    smooth: isChain
-                        ? {{ type: 'curvedCW', roundness: 0.08 }}
-                        : {{ type: 'continuous', roundness: 0.2 }},
-                }};
+            // Place session node at center (largest)
+            var sessionNodes = nodesByType['session'] || [];
+            sessionNodes.forEach(function(node, i) {{
+                var angle = (i / Math.max(sessionNodes.length, 1)) * Math.PI * 2;
+                var r = sessionNodes.length > 1 ? 50 : 0;
+                positions.set(node.id, {{
+                    x: centerX + Math.cos(angle) * r,
+                    y: centerY + Math.sin(angle) * r,
+                    vx: 0, vy: 0,
+                    node: node,
+                    radius: NODE_RADII['session'] || 22,
+                }});
             }});
-            graphEdges.add(visEdges);
+
+            // Place other nodes in orbital rings by type
+            var types = Object.keys(nodesByType).filter(function(t) {{ return t !== 'session'; }});
+            var typeIndex = 0;
+            types.forEach(function(type) {{
+                var typeNodes = nodesByType[type];
+                var baseAngle = (typeIndex / types.length) * Math.PI * 2 - Math.PI / 2;
+                var ringRadius = Math.min(graphWidth, graphHeight) * 0.3;
+
+                typeNodes.forEach(function(node, i) {{
+                    var angleSpread = (Math.PI * 0.5) / Math.max(typeNodes.length, 1);
+                    var angle = baseAngle + (i - (typeNodes.length - 1) / 2) * angleSpread;
+                    var r = ringRadius + (Math.random() - 0.5) * 40;
+
+                    positions.set(node.id, {{
+                        x: centerX + Math.cos(angle) * r,
+                        y: centerY + Math.sin(angle) * r,
+                        vx: 0, vy: 0,
+                        node: node,
+                        radius: NODE_RADII[type] || 14,
+                    }});
+                }});
+                typeIndex++;
+            }});
+
+            // Start simulation
+            isSimulating = true;
+            simulationSteps = 0;
+            scale = 1;
+            panX = 0;
+            panY = 0;
+
+            // Start animation loop if not running
+            if (!animationId) {{
+                render();
+            }}
 
             updateGraphStats();
         }}
 
         function updateGraphStats() {{
-            const nodeCount = graphNodes.length;
-            const edgeCount = graphEdges.length;
-            const types = {{}};
-            Object.values(allNodeData).forEach(n => {{
+            var nodeCount = graphData.nodes.length;
+            var edgeCount = graphData.edges.length;
+            var types = {{}};
+            graphData.nodes.forEach(function(n) {{
                 types[n.type] = (types[n.type] || 0) + 1;
             }});
 
-            let html = '<span class="stat"><b>' + nodeCount + '</b> nodes</span>';
+            var html = '<span class="stat"><b>' + nodeCount + '</b> nodes</span>';
             html += '<span class="stat"><b>' + edgeCount + '</b> edges</span>';
-            const typeOrder = ['record', 'session', 'agent', 'tool', 'decision', 'content', 'blockchain'];
-            for (const type of typeOrder) {{
-                const count = types[type];
+            var typeOrder = ['record', 'session', 'agent', 'tool', 'decision', 'content', 'blockchain'];
+            for (var i = 0; i < typeOrder.length; i++) {{
+                var type = typeOrder[i];
+                var count = types[type];
                 if (!count) continue;
-                const color = (NODE_COLORS[type] || NODE_COLORS.record).background;
+                var color = (NODE_COLORS[type] || DEFAULT_COLOR).bg;
                 html += '<span class="stat"><span class="dot" style="background:' + color + '"></span>' + count + ' ' + type + '</span>';
             }}
             document.getElementById('graphStats').innerHTML = html;
         }}
 
-        function highlightConnected(nodeId) {{
-            if (!network || !graphNodes.get(nodeId)) return;
+        // ============================================
+        // Mouse Interaction
+        // ============================================
 
-            clearTimeout(highlightTimer);
+        function screenToGraph(sx, sy) {{
+            return {{
+                x: (sx - graphWidth / 2 - panX) / scale + graphWidth / 2,
+                y: (sy - graphHeight / 2 - panY) / scale + graphHeight / 2,
+            }};
+        }}
 
-            const connectedNodes = network.getConnectedNodes(nodeId);
-            const connectedEdges = network.getConnectedEdges(nodeId);
-            const connectedSet = new Set(connectedNodes);
-            connectedSet.add(nodeId);
-            const edgeSet = new Set(connectedEdges);
-
-            // Dim non-connected nodes
-            const updatedNodes = graphNodes.get().map(n => {{
-                const type = (allNodeData[n.id] || {{}}).type || 'record';
-                const baseColor = NODE_COLORS[type] || NODE_COLORS.record;
-                if (n.id === nodeId) {{
-                    return {{ id: n.id, borderWidth: 4, shadow: {{ enabled: true, size: 15, color: baseColor.background + '66' }},
-                        font: {{ color: '#ffffff', size: 13 }}, opacity: 1.0 }};
-                }} else if (connectedSet.has(n.id)) {{
-                    return {{ id: n.id, borderWidth: 2, opacity: 1.0, font: {{ color: '#e2e8f0', size: 11 }} }};
-                }} else {{
-                    return {{ id: n.id, borderWidth: 1, opacity: 0.12, font: {{ color: '#e2e8f066', size: 10 }} }};
+        function findNodeAt(gx, gy) {{
+            var found = null;
+            var minDist = Infinity;
+            positions.forEach(function(pos, nodeId) {{
+                var dx = gx - pos.x;
+                var dy = gy - pos.y;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < pos.radius + 5 && dist < minDist) {{
+                    found = nodeId;
+                    minDist = dist;
                 }}
             }});
-            graphNodes.update(updatedNodes);
+            return found;
+        }}
 
-            // Dim non-connected edges
-            const updatedEdges = graphEdges.get().map(e => {{
-                if (edgeSet.has(e.id)) {{
-                    return {{ id: e.id, width: (e.width || 1.2) * 1.8, hidden: false }};
+        document.addEventListener('DOMContentLoaded', function() {{
+            var container = document.getElementById('graphContainer');
+            var tooltip = document.getElementById('nodeTooltip');
+
+            container.addEventListener('mousemove', function(e) {{
+                if (isDragging) {{
+                    panX = dragStartPanX + (e.clientX - dragStartX);
+                    panY = dragStartPanY + (e.clientY - dragStartY);
+                    return;
+                }}
+
+                var rect = container.getBoundingClientRect();
+                var sx = e.clientX - rect.left;
+                var sy = e.clientY - rect.top;
+                var gp = screenToGraph(sx, sy);
+                var found = findNodeAt(gp.x, gp.y);
+
+                hoveredNodeId = found;
+                canvas.style.cursor = found ? 'pointer' : (isDragging ? 'grabbing' : 'grab');
+
+                // Tooltip
+                if (found) {{
+                    var node = allNodeData[found];
+                    if (node) {{
+                        var colors = NODE_COLORS[node.type] || DEFAULT_COLOR;
+                        var html = '<div class="tt-label" style="color:' + colors.bg + ';">' + escapeHtml(node.label || node.id) + '</div>';
+                        html += '<div class="tt-type">' + (node.type || 'unknown') + '</div>';
+                        if (node.time) html += '<div class="tt-row"><b>Time:</b> ' + node.time.substring(0, 19).replace('T', ' ') + '</div>';
+                        if (node.hash) html += '<div class="tt-row"><b>Hash:</b> ' + node.hash.substring(0, 24) + '...</div>';
+                        tooltip.innerHTML = html;
+                        tooltip.style.display = 'block';
+                        tooltip.style.left = sx + 'px';
+                        tooltip.style.top = sy + 'px';
+                    }}
                 }} else {{
-                    return {{ id: e.id, hidden: true }};
+                    tooltip.style.display = 'none';
                 }}
             }});
-            graphEdges.update(updatedEdges);
+
+            container.addEventListener('mousedown', function(e) {{
+                isDragging = true;
+                dragStartX = e.clientX;
+                dragStartY = e.clientY;
+                dragStartPanX = panX;
+                dragStartPanY = panY;
+                container.classList.add('dragging');
+                e.preventDefault();
+            }});
+
+            window.addEventListener('mouseup', function() {{
+                if (isDragging) {{
+                    isDragging = false;
+                    containerEl && containerEl.classList.remove('dragging');
+                }}
+            }});
+
+            container.addEventListener('click', function(e) {{
+                // Only trigger click if not dragging significantly
+                var movedX = Math.abs(e.clientX - dragStartX);
+                var movedY = Math.abs(e.clientY - dragStartY);
+                if (movedX > 5 || movedY > 5) return;
+
+                var rect = container.getBoundingClientRect();
+                var sx = e.clientX - rect.left;
+                var sy = e.clientY - rect.top;
+                var gp = screenToGraph(sx, sy);
+                var found = findNodeAt(gp.x, gp.y);
+
+                if (found) {{
+                    selectedNodeId = found === selectedNodeId ? null : found;
+                    var nodeData = allNodeData[found];
+                    if (nodeData && (nodeData.type === 'record' || nodeData.group === 'record')) {{
+                        loadDetail(found);
+                        highlightTimelineItem(found);
+                    }}
+                }} else {{
+                    selectedNodeId = null;
+                }}
+            }});
+
+            container.addEventListener('wheel', function(e) {{
+                e.preventDefault();
+                var delta = e.deltaY > 0 ? 0.9 : 1.1;
+                var newScale = Math.max(0.3, Math.min(5, scale * delta));
+
+                // Zoom toward mouse position
+                var rect = container.getBoundingClientRect();
+                var mx = e.clientX - rect.left;
+                var my = e.clientY - rect.top;
+
+                panX = mx - (mx - panX) * (newScale / scale);
+                panY = my - (my - panY) * (newScale / scale);
+                panX += (graphWidth / 2 - mx) * (newScale / scale - 1) * 0;
+
+                scale = newScale;
+            }}, {{ passive: false }});
+
+            container.addEventListener('mouseleave', function() {{
+                hoveredNodeId = null;
+                tooltip.style.display = 'none';
+            }});
+
+            // Keyboard enter for search
+            document.getElementById('searchInput').addEventListener('keydown', function(e) {{
+                if (e.key === 'Enter') searchActions();
+            }});
+        }});
+
+        // Zoom controls
+        function zoomIn() {{ scale = Math.min(5, scale * 1.3); }}
+        function zoomOut() {{ scale = Math.max(0.3, scale * 0.7); }}
+        function zoomFit() {{ scale = 1; panX = 0; panY = 0; }}
+
+        // Focus on a specific node (called from timeline click)
+        function focusGraphNode(nodeId) {{
+            var pos = positions.get(nodeId);
+            if (!pos) return;
 
             selectedNodeId = nodeId;
 
-            // Auto-reset after 10 seconds
-            highlightTimer = setTimeout(resetHighlight, 10000);
-        }}
+            // Smooth zoom to node
+            var targetScale = 1.8;
+            var targetPanX = -(pos.x - graphWidth / 2) * targetScale;
+            var targetPanY = -(pos.y - graphHeight / 2) * targetScale;
 
-        function resetHighlight() {{
-            if (!network) return;
-            clearTimeout(highlightTimer);
+            // Animate to target
+            var startScale = scale;
+            var startPanX = panX;
+            var startPanY = panY;
+            var startTime = performance.now();
+            var duration = 500;
 
-            // Restore all nodes
-            const updatedNodes = graphNodes.get().map(n => {{
-                const type = (allNodeData[n.id] || {{}}).type || 'record';
-                const baseColor = NODE_COLORS[type] || NODE_COLORS.record;
-                return {{
-                    id: n.id, borderWidth: 2, opacity: 1.0,
-                    color: baseColor,
-                    shadow: {{ enabled: true, color: 'rgba(0,0,0,0.4)', size: 8, x: 2, y: 2 }},
-                    font: {{ color: '#e2e8f0', size: 11 }},
-                }};
-            }});
-            graphNodes.update(updatedNodes);
-
-            // Restore all edges
-            const updatedEdges = graphEdges.get().map(e => {{
-                const origStyle = EDGE_STYLES[e._type] || {{}};
-                return {{ id: e.id, hidden: false, width: origStyle.width || 1.2 }};
-            }});
-            graphEdges.update(updatedEdges);
-
-            selectedNodeId = null;
-        }}
-
-        function focusGraphNode(nodeId) {{
-            if (!network || !graphNodes.get(nodeId)) return;
-            network.selectNodes([nodeId]);
-            network.focus(nodeId, {{
-                scale: 1.3,
-                animation: {{ duration: 400, easingFunction: 'easeInOutQuad' }},
-            }});
-            highlightConnected(nodeId);
+            function animateZoom(now) {{
+                var t = Math.min(1, (now - startTime) / duration);
+                // ease in-out
+                t = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+                scale = startScale + (targetScale - startScale) * t;
+                panX = startPanX + (targetPanX - startPanX) * t;
+                panY = startPanY + (targetPanY - startPanY) * t;
+                if (t < 1) requestAnimationFrame(animateZoom);
+            }}
+            requestAnimationFrame(animateZoom);
         }}
 
         // ============================================
@@ -992,19 +1386,19 @@ TRACE_HTML = """
         // ============================================
 
         async function loadTimeline() {{
-            const res = await fetch('/api/trace/timeline');
-            const data = await res.json();
+            var res = await fetch('/api/trace/timeline');
+            var data = await res.json();
             renderTimeline(data.timeline || []);
         }}
 
         async function searchActions() {{
-            const name = document.getElementById('searchInput').value;
-            const type = document.getElementById('typeFilter').value;
-            let url = '/api/trace/action?';
+            var name = document.getElementById('searchInput').value;
+            var type = document.getElementById('typeFilter').value;
+            var url = '/api/trace/action?';
             if (name) url += 'name=' + encodeURIComponent(name) + '&';
             if (type) url += 'type=' + type + '&';
-            const res = await fetch(url);
-            const data = await res.json();
+            var res = await fetch(url);
+            var data = await res.json();
             renderTimeline(data.records || []);
         }}
 
@@ -1023,7 +1417,7 @@ TRACE_HTML = """
         }}
 
         function renderTimeline(records) {{
-            const div = document.getElementById('timeline');
+            var div = document.getElementById('timeline');
             document.getElementById('timelineCount').textContent = '(' + records.length + ' records)';
 
             if (!records.length) {{
@@ -1031,10 +1425,10 @@ TRACE_HTML = """
                 return;
             }}
 
-            div.innerHTML = records.map(r => {{
-                const timeStr = (r.time || '').substring(0, 19).replace('T', ' ');
-                const hashStr = (r.hash || '').substring(0, 24);
-                return '<div class="tl-item" id="tl-' + r.id + '" onclick="onTimelineClick(\\'' + r.id + '\\', this)">' +
+            div.innerHTML = records.map(function(r) {{
+                var timeStr = (r.time || '').substring(0, 19).replace('T', ' ');
+                var hashStr = (r.hash || '').substring(0, 24);
+                return '<div class="tl-item" id="tl-' + r.id + '" onclick="onTimelineClick(\'' + r.id + '\', this)">' +
                     '<div class="tl-action">' + escapeHtml(r.action || '-') + '</div>' +
                     '<span class="tl-badge ' + getBadgeClass(r.type) + '">' + (r.type || r.tool || '-') + '</span>' +
                     '<div class="tl-time">' + timeStr + '</div>' +
@@ -1044,15 +1438,15 @@ TRACE_HTML = """
         }}
 
         function onTimelineClick(recordId, el) {{
-            document.querySelectorAll('.tl-item').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.tl-item').forEach(function(e) {{ e.classList.remove('active'); }});
             el.classList.add('active');
             loadDetail(recordId);
             focusGraphNode(recordId);
         }}
 
         function highlightTimelineItem(recordId) {{
-            document.querySelectorAll('.tl-item').forEach(e => e.classList.remove('active'));
-            const el = document.getElementById('tl-' + recordId);
+            document.querySelectorAll('.tl-item').forEach(function(e) {{ e.classList.remove('active'); }});
+            var el = document.getElementById('tl-' + recordId);
             if (el) {{
                 el.classList.add('active');
                 el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
@@ -1064,16 +1458,16 @@ TRACE_HTML = """
         // ============================================
 
         async function loadDetail(recordId) {{
-            const res = await fetch('/api/trace/record/' + recordId);
-            const data = await res.json();
+            var res = await fetch('/api/trace/record/' + recordId);
+            var data = await res.json();
 
             if (data.error) {{
                 document.getElementById('detail').innerHTML = '<div class="empty-state">' + data.error + '</div>';
                 return;
             }}
 
-            const r = data.record || {{}};
-            let html = '<div class="detail-section"><h4>Record Info</h4>';
+            var r = data.record || {{}};
+            var html = '<div class="detail-section"><h4>Record Info</h4>';
             html += detailRow('ID', r.id, true);
             html += detailRow('Action', r.activity_name);
             html += '<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value"><span class="tl-badge ' + getBadgeClass(r.activity_type) + '">' + r.activity_type + '</span></span></div>';
@@ -1110,20 +1504,21 @@ TRACE_HTML = """
             html += '<div class="detail-section"><h4>Hash Chain Navigation</h4>';
             html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
             if (data.previous_record) {{
-                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.previous_record.id + '\\')">&larr; ' + escapeHtml(data.previous_record.action) + '</span>';
+                html += '<span class="chain-nav" onclick="navigateChain(\'' + data.previous_record.id + '\')">&larr; ' + escapeHtml(data.previous_record.action) + '</span>';
             }}
             html += '<span class="chain-current">CURRENT #' + r.sequence + '</span>';
             if (data.next_record) {{
-                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.next_record.id + '\\')">' + escapeHtml(data.next_record.action) + ' &rarr;</span>';
+                html += '<span class="chain-nav" onclick="navigateChain(\'' + data.next_record.id + '\')">' + escapeHtml(data.next_record.action) + ' &rarr;</span>';
             }}
             html += '</div></div>';
 
             // Stored Content
             if (data.contents && data.contents.length > 0) {{
                 html += '<div class="detail-section"><h4>Stored Content</h4>';
-                for (const c of data.contents) {{
+                for (var ci = 0; ci < data.contents.length; ci++) {{
+                    var c = data.contents[ci];
                     html += '<div class="detail-row"><span class="detail-label">' + c.type + '</span><span class="detail-value">' + c.size + ' bytes ';
-                    html += '<button class="btn btn-gray" style="padding:2px 8px;font-size:10px;margin-left:6px;" onclick="loadContent(\\'' + r.id + '\\')">View</button>';
+                    html += '<button class="btn btn-gray" style="padding:2px 8px;font-size:10px;margin-left:6px;" onclick="loadContent(\'' + r.id + '\')">View</button>';
                     html += '</span></div>';
                 }}
                 html += '</div>';
@@ -1159,16 +1554,17 @@ TRACE_HTML = """
         }}
 
         async function loadContent(recordId) {{
-            const res = await fetch('/api/trace/content/' + recordId);
-            const data = await res.json();
-            let html = '';
-            for (const [type, info] of Object.entries(data)) {{
+            var res = await fetch('/api/trace/content/' + recordId);
+            var data = await res.json();
+            var html = '';
+            for (var type in data) {{
+                var info = data[type];
                 html += '<div class="detail-section"><h4>Content: ' + type + '</h4><div class="content-box">' + escapeHtml(info.content || '') + '</div></div>';
             }}
             if (!html) html = '<div class="empty-state">No content stored</div>';
 
-            const panel = document.getElementById('detail');
-            const contentDiv = document.createElement('div');
+            var panel = document.getElementById('detail');
+            var contentDiv = document.createElement('div');
             contentDiv.innerHTML = html;
             panel.appendChild(contentDiv);
         }}
@@ -1178,20 +1574,13 @@ TRACE_HTML = """
         // ============================================
 
         function toggleHelp() {{
-            const panel = document.getElementById('helpPanel');
+            var panel = document.getElementById('helpPanel');
             panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
         }}
 
         function escapeHtml(text) {{
             return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }}
-
-        // Enter key triggers search
-        document.addEventListener('DOMContentLoaded', function() {{
-            document.getElementById('searchInput').addEventListener('keydown', function(e) {{
-                if (e.key === 'Enter') searchActions();
-            }});
-        }});
     </script>
 </body>
 </html>
