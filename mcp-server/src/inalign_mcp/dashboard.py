@@ -28,6 +28,7 @@ from .polygon_anchor import anchor_to_polygon, get_anchor_status, verify_anchor,
 from .provenance_graph import (
     trace_record, trace_chain_path, trace_by_action,
     trace_full_graph, trace_timeline, get_record_content,
+    init_neo4j as init_provenance_neo4j,
 )
 
 app = FastAPI(title="InALign Dashboard")
@@ -38,6 +39,21 @@ app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "in
 
 # Initialize
 manager = get_client_manager()
+
+# Initialize Neo4j for provenance graph (trace page)
+_provenance_neo4j_initialized = False
+
+def ensure_provenance_neo4j():
+    """Lazy-initialize Neo4j connection for provenance graph queries."""
+    global _provenance_neo4j_initialized
+    if _provenance_neo4j_initialized:
+        return
+    _provenance_neo4j_initialized = True
+    uri = os.getenv("NEO4J_URI")
+    user = os.getenv("NEO4J_USERNAME", "neo4j")
+    password = os.getenv("NEO4J_PASSWORD", "")
+    if uri:
+        init_provenance_neo4j(uri, user, password)
 
 
 # ============================================
@@ -263,7 +279,13 @@ DASHBOARD_HTML = """
 <body>
     <div class="header">
         <div class="logo">InALign <span class="company">| {company}</span></div>
-        <a href="/logout" class="logout">Logout</a>
+        <div style="display:flex;align-items:center;gap:16px;">
+            <a href="/trace" style="padding:8px 20px;background:#7c3aed;color:white;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;transition:background 0.2s;display:flex;align-items:center;gap:6px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                Trace & Graph
+            </a>
+            <a href="/logout" class="logout">Logout</a>
+        </div>
     </div>
 
     <div class="container">
@@ -1343,6 +1365,10 @@ TRACE_HTML = """
             document.getElementById('searchInput').addEventListener('keydown', function(e) {{
                 if (e.key === 'Enter') searchActions();
             }});
+
+            // Auto-load graph and timeline on page open
+            loadFullGraph();
+            loadTimeline();
         }});
 
         // Zoom controls
@@ -2221,6 +2247,7 @@ async def api_trace_record(record_id: str, request: Request):
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(trace_record(record_id))
 
 
@@ -2230,6 +2257,7 @@ async def api_trace_chain(record_id: str, request: Request, direction: str = "bo
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(trace_chain_path(record_id, direction, depth))
 
 
@@ -2239,6 +2267,7 @@ async def api_trace_action(request: Request, name: str = None, type: str = None,
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(trace_by_action(client.client_id, name, type, limit))
 
 
@@ -2248,6 +2277,7 @@ async def api_trace_graph(request: Request, limit: int = 100):
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(trace_full_graph(client.client_id, limit))
 
 
@@ -2257,6 +2287,7 @@ async def api_trace_timeline(request: Request, limit: int = 200):
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(trace_timeline(client.client_id, limit))
 
 
@@ -2266,6 +2297,7 @@ async def api_trace_content(record_id: str, request: Request):
     client = get_current_client(request)
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    ensure_provenance_neo4j()
     return JSONResponse(get_record_content(record_id))
 
 
