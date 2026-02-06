@@ -1575,7 +1575,7 @@ TRACE_HTML = """
             div.innerHTML = records.map(function(r) {{
                 var timeStr = (r.time || '').substring(0, 19).replace('T', ' ');
                 var hashStr = (r.hash || '').substring(0, 24);
-                return '<div class="tl-item" id="tl-' + r.id + '" onclick="onTimelineClick(\'' + r.id + '\', this)">' +
+                return '<div class="tl-item" id="tl-' + r.id + '" onclick="onTimelineClick(\\'' + r.id + '\\', this)">' +
                     '<div class="tl-action">' + escapeHtml(r.action || '-') + '</div>' +
                     '<span class="tl-badge ' + getBadgeClass(r.type) + '">' + (r.type || r.tool || '-') + '</span>' +
                     '<div class="tl-time">' + timeStr + '</div>' +
@@ -1651,11 +1651,11 @@ TRACE_HTML = """
             html += '<div class="detail-section"><h4>Hash Chain Navigation</h4>';
             html += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
             if (data.previous_record) {{
-                html += '<span class="chain-nav" onclick="navigateChain(\'' + data.previous_record.id + '\')">&larr; ' + escapeHtml(data.previous_record.action) + '</span>';
+                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.previous_record.id + '\\')">&larr; ' + escapeHtml(data.previous_record.action) + '</span>';
             }}
             html += '<span class="chain-current">CURRENT #' + r.sequence + '</span>';
             if (data.next_record) {{
-                html += '<span class="chain-nav" onclick="navigateChain(\'' + data.next_record.id + '\')">' + escapeHtml(data.next_record.action) + ' &rarr;</span>';
+                html += '<span class="chain-nav" onclick="navigateChain(\\'' + data.next_record.id + '\\')">' + escapeHtml(data.next_record.action) + ' &rarr;</span>';
             }}
             html += '</div></div>';
 
@@ -1665,7 +1665,7 @@ TRACE_HTML = """
                 for (var ci = 0; ci < data.contents.length; ci++) {{
                     var c = data.contents[ci];
                     html += '<div class="detail-row"><span class="detail-label">' + c.type + '</span><span class="detail-value">' + c.size + ' bytes ';
-                    html += '<button class="btn btn-gray" style="padding:2px 8px;font-size:10px;margin-left:6px;" onclick="loadContent(\'' + r.id + '\')">View</button>';
+                    html += '<button class="btn btn-gray" style="padding:2px 8px;font-size:10px;margin-left:6px;" onclick="loadContent(\\'' + r.id + '\\')">View</button>';
                     html += '</span></div>';
                 }}
                 html += '</div>';
