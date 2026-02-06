@@ -596,6 +596,7 @@
                 document.getElementById('apiKeyResult').style.display = 'block';
                 document.getElementById('apiKeyDisplay').textContent = data.api_key;
                 document.getElementById('keyInConfig').textContent = data.api_key;
+                document.getElementById('downloadBtn').href = '/api/download/install-script?api_key=' + encodeURIComponent(data.api_key);
             } else {
                 alert(data.error || 'Signup failed');
             }

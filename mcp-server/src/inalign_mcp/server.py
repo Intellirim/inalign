@@ -662,23 +662,49 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     # ============================================
 
     elif name == "analyze_risk":
-        session_id = arguments.get("session_id", SESSION_ID)
+        session_id = arguments.get("session_id")
 
-        if GRAPHRAG_AVAILABLE:
+        if GRAPHRAG_AVAILABLE and is_neo4j_available():
             try:
-                from .provenance_graph import _neo4j_driver
-                risk = analyze_session_risk(session_id, _neo4j_driver)
+                from .provenance_graph import _neo4j_driver as driver
+
+                if not driver:
+                    return [TextContent(type="text", text=json.dumps({
+                        "error": "Neo4j driver is None despite is_neo4j_available()",
+                    }))]
+
+                # If no session_id specified, find latest session for this client
+                if not session_id:
+                    with driver.session() as neo_session:
+                        result = neo_session.run(
+                            "MATCH (r:ProvenanceRecord)-[:BELONGS_TO]->(s:Session) "
+                            "WHERE r.client_id = $client_id "
+                            "RETURN s.session_id as sid, count(r) as cnt "
+                            "ORDER BY cnt DESC LIMIT 1",
+                            client_id=CLIENT_ID,
+                        )
+                        row = result.single()
+                        if row:
+                            session_id = row["sid"]
+                        else:
+                            session_id = SESSION_ID
+
+                risk = analyze_session_risk(session_id, driver)
                 return [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
+                import traceback
                 return [TextContent(type="text", text=json.dumps({
                     "error": str(e),
+                    "traceback": traceback.format_exc(),
                     "session_id": session_id,
                 }))]
         else:
             return [TextContent(type="text", text=json.dumps({
-                "message": "GraphRAG not available",
+                "message": "GraphRAG not available" if not GRAPHRAG_AVAILABLE else "Neo4j not connected",
                 "session_id": session_id,
                 "risk_level": "unknown",
+                "graphrag_available": GRAPHRAG_AVAILABLE,
+                "neo4j_available": is_neo4j_available() if GRAPHRAG_AVAILABLE else False,
             }))]
 
     elif name == "get_behavior_profile":

@@ -131,7 +131,7 @@ class GraphRAGAnalyzer:
 
     # Detect rapid succession of sensitive file reads
     PATTERN_MASS_FILE_READ = """
-    MATCH (a:Activity {activity_type: 'file_read'})-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord {activity_type: 'file_read'})-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     WITH a, s
     ORDER BY a.timestamp
     WITH collect(a) as activities, s
@@ -143,13 +143,13 @@ class GraphRAGAnalyzer:
     WHERE any(gap IN gaps WHERE gap < 1)
     RETURN 'MASS_FILE_READ' as pattern,
            size(activities) as count,
-           [a IN activities | a.id] as activity_ids
+           [a IN activities | a.record_id] as activity_ids
     """
 
     # Detect potential data exfiltration (file read followed by network/external call)
     PATTERN_DATA_EXFILTRATION = """
-    MATCH (read:Activity {activity_type: 'file_read'})-[:PART_OF]->(s:Session {session_id: $session_id})
-    MATCH (send:Activity)-[:PART_OF]->(s)
+    MATCH (read:ProvenanceRecord {activity_type: 'file_read'})-[:BELONGS_TO]->(s:Session {session_id: $session_id})
+    MATCH (send:ProvenanceRecord)-[:BELONGS_TO]->(s)
     WHERE send.activity_type IN ['tool_call', 'llm_request']
       AND send.timestamp > read.timestamp
       AND duration.between(datetime(read.timestamp), datetime(send.timestamp)).seconds < 60
@@ -164,7 +164,7 @@ class GraphRAGAnalyzer:
 
     # Detect privilege escalation patterns (accessing increasingly sensitive files)
     PATTERN_PRIVILEGE_ESCALATION = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     WHERE a.activity_type = 'file_read'
       AND (a.activity_name CONTAINS '.env'
            OR a.activity_name CONTAINS '.ssh'
@@ -174,17 +174,17 @@ class GraphRAGAnalyzer:
            OR a.activity_name CONTAINS '.key'
            OR a.activity_name CONTAINS '.pem')
     RETURN 'PRIVILEGE_ESCALATION' as pattern,
-           collect(a.id) as activity_ids,
+           collect(a.record_id) as activity_ids,
            collect(a.activity_name) as files_accessed
     """
 
     # Detect tool call chains that match known attack patterns
     PATTERN_SUSPICIOUS_TOOL_CHAIN = """
-    MATCH path = (a1:Activity)-[:FOLLOWS*1..5]->(a2:Activity)
+    MATCH path = (a1:ProvenanceRecord)-[:FOLLOWS*1..5]->(a2:ProvenanceRecord)
     WHERE a1.session_id = $session_id
       AND a2.session_id = $session_id
     WITH [n IN nodes(path) | n.activity_name] as tool_chain,
-         [n IN nodes(path) | n.id] as activity_ids
+         [n IN nodes(path) | n.record_id] as activity_ids
     WHERE tool_chain = $attack_pattern
     RETURN 'SUSPICIOUS_TOOL_CHAIN' as pattern,
            tool_chain,
@@ -193,10 +193,10 @@ class GraphRAGAnalyzer:
 
     # Detect repeated failures (potential brute force or probing)
     PATTERN_REPEATED_FAILURES = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a)
     WHERE se.event_type = 'blocked'
-    WITH count(se) as failure_count, collect(a.id) as activity_ids
+    WITH count(se) as failure_count, collect(a.record_id) as activity_ids
     WHERE failure_count >= $threshold
     RETURN 'REPEATED_FAILURES' as pattern,
            failure_count,
@@ -205,17 +205,17 @@ class GraphRAGAnalyzer:
 
     # Detect unusual timing patterns (actions at odd hours or rapid succession)
     PATTERN_UNUSUAL_TIMING = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     WITH a, datetime(a.timestamp).hour as hour
     WHERE hour < 6 OR hour > 22
     RETURN 'UNUSUAL_TIMING' as pattern,
            count(a) as off_hours_count,
-           collect(a.id) as activity_ids
+           collect(a.record_id) as activity_ids
     """
 
     # Detect chain manipulation attempts (gaps in sequence numbers)
     PATTERN_CHAIN_MANIPULATION = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     WITH a ORDER BY a.sequence_number
     WITH collect(a) as activities
     WITH activities,
@@ -224,8 +224,8 @@ class GraphRAGAnalyzer:
     WHERE any(gap IN gaps WHERE gap > 1)
     RETURN 'CHAIN_MANIPULATION' as pattern,
            [i IN range(0, size(gaps)) WHERE gaps[i] > 1 | {
-               before: activities[i].id,
-               after: activities[i+1].id,
+               before: activities[i].record_id,
+               after: activities[i+1].record_id,
                gap: gaps[i]
            }] as anomalies
     """
@@ -235,7 +235,7 @@ class GraphRAGAnalyzer:
     # ==========================================
 
     GET_TOOL_FREQUENCY = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     RETURN a.activity_type as tool_type,
            a.activity_name as tool_name,
            count(*) as count
@@ -243,7 +243,7 @@ class GraphRAGAnalyzer:
     """
 
     GET_ACTIVITY_TIMELINE = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     RETURN a.timestamp as timestamp,
            a.activity_type as type,
            a.activity_name as name
@@ -251,17 +251,17 @@ class GraphRAGAnalyzer:
     """
 
     GET_DATA_FLOW_GRAPH = """
-    MATCH (a1:Activity)-[:GENERATED]->(e:Entity)<-[:USED]-(a2:Activity)
+    MATCH (a1:ProvenanceRecord)-[:GENERATED]->(e:Entity)<-[:USED]-(a2:ProvenanceRecord)
     WHERE a1.session_id = $session_id AND a2.session_id = $session_id
-    RETURN a1.id as source, a2.id as target, e.value_hash as data_hash
+    RETURN a1.record_id as source, a2.record_id as target, e.value_hash as data_hash
     """
 
     GET_SECURITY_EVENTS = """
-    MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a:Activity)-[:PART_OF]->(s:Session {session_id: $session_id})
+    MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $session_id})
     RETURN se.event_type as type,
            se.severity as severity,
            se.description as description,
-           a.id as activity_id,
+           a.record_id as activity_id,
            se.detected_at as timestamp
     ORDER BY se.detected_at DESC
     """
@@ -272,7 +272,7 @@ class GraphRAGAnalyzer:
 
     # Find similar attack patterns across all sessions
     FIND_SIMILAR_PATTERNS = """
-    MATCH (a:Activity)-[:PART_OF]->(s:Session)
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session)
     WHERE a.activity_type = $activity_type
       AND a.activity_name = $activity_name
     WITH s.session_id as session, count(*) as occurrences
@@ -284,7 +284,7 @@ class GraphRAGAnalyzer:
 
     # Get global tool usage statistics for anomaly baseline
     GET_GLOBAL_TOOL_STATS = """
-    MATCH (a:Activity)
+    MATCH (a:ProvenanceRecord)
     WITH a.activity_name as tool, count(*) as total
     RETURN tool, total,
            toFloat(total) / sum(total) as frequency
@@ -293,9 +293,9 @@ class GraphRAGAnalyzer:
 
     # Find sessions with similar behavior profiles
     FIND_SIMILAR_SESSIONS = """
-    MATCH (a:Activity)-[:PART_OF]->(s1:Session {session_id: $session_id})
+    MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s1:Session {session_id: $session_id})
     WITH s1, collect(DISTINCT a.activity_name) as tools1
-    MATCH (a2:Activity)-[:PART_OF]->(s2:Session)
+    MATCH (a2:ProvenanceRecord)-[:BELONGS_TO]->(s2:Session)
     WHERE s2.session_id <> $session_id
     WITH s1, tools1, s2, collect(DISTINCT a2.activity_name) as tools2
     WITH s1, s2, tools1, tools2,
@@ -313,9 +313,9 @@ class GraphRAGAnalyzer:
 
     # Get agent's long-term profile across all sessions
     GET_AGENT_PROFILE = """
-    MATCH (ag:Agent {id: $agent_id})
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
-    MATCH (a)-[:PART_OF]->(s:Session)
+    MATCH (ag:Agent {agent_id: $agent_id})
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
+    MATCH (a)-[:BELONGS_TO]->(s:Session)
     WITH ag, s, a
     ORDER BY a.timestamp
     WITH ag,
@@ -324,7 +324,7 @@ class GraphRAGAnalyzer:
          min(a.timestamp) as first_seen,
          max(a.timestamp) as last_seen,
          collect(a.activity_name) as all_tools
-    RETURN ag.id as agent_id,
+    RETURN ag.agent_id as agent_id,
            ag.name as agent_name,
            total_sessions,
            total_activities,
@@ -335,8 +335,8 @@ class GraphRAGAnalyzer:
 
     # Get agent's security events across all sessions
     GET_AGENT_SECURITY_EVENTS = """
-    MATCH (ag:Agent {id: $agent_id})
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
+    MATCH (ag:Agent {agent_id: $agent_id})
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
     OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a)
     WITH ag, se
     WHERE se IS NOT NULL
@@ -348,9 +348,9 @@ class GraphRAGAnalyzer:
 
     # Get agent's risk trend over time
     GET_AGENT_RISK_TREND = """
-    MATCH (ag:Agent {id: $agent_id})
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
-    MATCH (a)-[:PART_OF]->(s:Session)
+    MATCH (ag:Agent {agent_id: $agent_id})
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
+    MATCH (a)-[:BELONGS_TO]->(s:Session)
     OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a)
     WITH s, count(se) as security_events
     ORDER BY s.created_at
@@ -360,11 +360,11 @@ class GraphRAGAnalyzer:
 
     # Get sessions by agent
     GET_AGENT_SESSIONS = """
-    MATCH (ag:Agent {id: $agent_id})
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
-    MATCH (a)-[:PART_OF]->(s:Session)
+    MATCH (ag:Agent {agent_id: $agent_id})
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
+    MATCH (a)-[:BELONGS_TO]->(s:Session)
     WITH s, count(a) as activity_count
-    OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(:Activity)-[:PART_OF]->(s)
+    OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(:ProvenanceRecord)-[:BELONGS_TO]->(s)
     WITH s, activity_count, count(se) as security_events
     RETURN s.session_id as session_id,
            s.created_at as created_at,
@@ -377,12 +377,12 @@ class GraphRAGAnalyzer:
     # Get user's risk profile across their agents
     GET_USER_PROFILE = """
     MATCH (ag:Agent)
-    WHERE ag.id STARTS WITH $user_prefix
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
-    MATCH (a)-[:PART_OF]->(s:Session)
+    WHERE ag.agent_id STARTS WITH $user_prefix
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
+    MATCH (a)-[:BELONGS_TO]->(s:Session)
     OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a)
     WITH ag, s, count(a) as activities, count(se) as events
-    WITH ag.id as agent_id,
+    WITH ag.agent_id as agent_id,
          count(DISTINCT s) as sessions,
          sum(activities) as total_activities,
          sum(events) as security_events
@@ -396,14 +396,14 @@ class GraphRAGAnalyzer:
     # Get all agents with their risk summary
     GET_ALL_AGENTS_RISK = """
     MATCH (ag:Agent)
-    MATCH (a:Activity)-[:PERFORMED_BY]->(ag)
-    MATCH (a)-[:PART_OF]->(s:Session)
+    MATCH (a:ProvenanceRecord)-[:PERFORMED_BY]->(ag)
+    MATCH (a)-[:BELONGS_TO]->(s:Session)
     OPTIONAL MATCH (se:SecurityEvent)-[:DETECTED_IN]->(a)
     WITH ag,
          count(DISTINCT s) as sessions,
          count(a) as activities,
          count(se) as security_events
-    RETURN ag.id as agent_id,
+    RETURN ag.agent_id as agent_id,
            ag.name as agent_name,
            sessions,
            activities,
@@ -640,6 +640,7 @@ class GraphRAGAnalyzer:
         total_activities = 0
         security_events = 0
         timestamps = []
+        anomalies = []
 
         try:
             with self.store.session() as session:
@@ -660,7 +661,9 @@ class GraphRAGAnalyzer:
                 security_events = len(list(result))
 
         except Exception as e:
-            logger.error(f"Error getting behavior profile: {e}")
+            logger.error(f"Error getting behavior profile: {e}", exc_info=True)
+            # Surface error in anomalies so it's visible
+            anomalies.append(f"_debug_error: {type(e).__name__}: {e}")
 
         # Calculate average time between actions
         avg_time = 0.0
@@ -685,7 +688,6 @@ class GraphRAGAnalyzer:
         ))
 
         # Detect anomalies
-        anomalies = []
         if avg_time < 0.5 and total_activities > 10:
             anomalies.append("Unusually rapid activity")
         if security_events > 5:
@@ -989,6 +991,25 @@ def analyze_session_risk(session_id: str, graph_store) -> dict[str, Any]:
     Convenience function to run full risk analysis on a session.
     Returns comprehensive risk report.
     """
+    _debug = {
+        "graph_store_type": str(type(graph_store)),
+        "graph_store_is_none": graph_store is None,
+        "session_id": session_id,
+    }
+
+    # Quick connectivity test
+    if graph_store is not None:
+        try:
+            with graph_store.session() as test_session:
+                result = test_session.run(
+                    "MATCH (a:ProvenanceRecord)-[:BELONGS_TO]->(s:Session {session_id: $sid}) RETURN count(a) as cnt",
+                    sid=session_id
+                )
+                row = result.single()
+                _debug["neo4j_direct_count"] = row["cnt"] if row else 0
+        except Exception as e:
+            _debug["neo4j_test_error"] = f"{type(e).__name__}: {e}"
+
     analyzer = GraphRAGAnalyzer(graph_store)
 
     patterns = analyzer.analyze_session(session_id)
@@ -1028,6 +1049,7 @@ def analyze_session_risk(session_id: str, graph_store) -> dict[str, Any]:
             'anomalies': profile.anomalies,
         },
         'similar_sessions': similar[:3],
+        '_debug': _debug,
     }
 
 
