@@ -868,3 +868,385 @@ def get_visualization_data(
     if graph:
         return graph.to_dict()
     return {"error": "Failed to generate graph"}
+
+
+# ============================================
+# Trace & Backtrack Functions (역추적)
+# ============================================
+
+def trace_record(record_id: str) -> dict:
+    """
+    특정 레코드에서 연결된 모든 노드를 역추적.
+
+    Returns:
+        record 정보 + 연결된 session, agent, tool, decision,
+        이전/이후 체인, 저장된 콘텐츠 전부
+    """
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord {record_id: $record_id})
+                OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
+                OPTIONAL MATCH (r)-[:PERFORMED_BY]->(a:Agent)
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                OPTIONAL MATCH (r)-[:USED]->(ue:Entity)
+                OPTIONAL MATCH (r)-[:GENERATED]->(ge:Entity)
+                OPTIONAL MATCH (r)-[:FOLLOWS]->(prev:ProvenanceRecord)
+                OPTIONAL MATCH (next:ProvenanceRecord)-[:FOLLOWS]->(r)
+                OPTIONAL MATCH (r)-[:HAS_CONTENT]->(c:ContentStore)
+                RETURN r, s, a, t, d,
+                       collect(DISTINCT ue) as used_entities,
+                       collect(DISTINCT ge) as generated_entities,
+                       prev, next,
+                       collect(DISTINCT {type: c.content_type, hash: c.content_hash, size: c.original_size}) as contents
+            """, record_id=record_id)
+
+            row = result.single()
+            if not row or not row["r"]:
+                return {"error": "Record not found"}
+
+            r = row["r"]
+            trace = {
+                "record": {
+                    "id": r["record_id"],
+                    "timestamp": r["timestamp"],
+                    "activity_type": r["activity_type"],
+                    "activity_name": r["activity_name"],
+                    "hash": r["record_hash"],
+                    "previous_hash": r["previous_hash"],
+                    "sequence": r["sequence_number"],
+                },
+                "session": None,
+                "agent": None,
+                "tool": None,
+                "decision": None,
+                "used_entities": [],
+                "generated_entities": [],
+                "previous_record": None,
+                "next_record": None,
+                "contents": [],
+            }
+
+            if row["s"]:
+                trace["session"] = {
+                    "id": row["s"]["session_id"],
+                    "client_id": row["s"].get("client_id"),
+                }
+            if row["a"]:
+                trace["agent"] = {
+                    "id": row["a"]["agent_id"],
+                    "name": row["a"]["name"],
+                }
+            if row["t"]:
+                trace["tool"] = row["t"]["name"]
+            if row["d"]:
+                trace["decision"] = row["d"]["name"]
+            if row["prev"]:
+                trace["previous_record"] = {
+                    "id": row["prev"]["record_id"],
+                    "action": row["prev"]["activity_name"],
+                    "timestamp": row["prev"]["timestamp"],
+                }
+            if row["next"]:
+                trace["next_record"] = {
+                    "id": row["next"]["record_id"],
+                    "action": row["next"]["activity_name"],
+                    "timestamp": row["next"]["timestamp"],
+                }
+
+            for e in row["used_entities"]:
+                if e and e.get("entity_id"):
+                    trace["used_entities"].append({
+                        "id": e["entity_id"],
+                        "type": e["entity_type"],
+                    })
+            for e in row["generated_entities"]:
+                if e and e.get("entity_id"):
+                    trace["generated_entities"].append({
+                        "id": e["entity_id"],
+                        "type": e["entity_type"],
+                    })
+
+            for c in row["contents"]:
+                if c and c.get("hash"):
+                    trace["contents"].append({
+                        "type": c["type"],
+                        "hash": c["hash"],
+                        "size": c["size"],
+                    })
+
+            return trace
+
+    except Exception as e:
+        logger.error(f"Failed to trace record: {e}")
+        return {"error": str(e)}
+
+
+def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20) -> dict:
+    """
+    해시 체인을 따라 이전/이후 레코드 전체 경로 추적.
+
+    Args:
+        record_id: 시작 레코드
+        direction: "backward" (이전), "forward" (이후), "both"
+        depth: 최대 추적 깊이
+    """
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            chain = {"start": record_id, "backward": [], "forward": []}
+
+            if direction in ("backward", "both"):
+                result = session.run("""
+                    MATCH path = (start:ProvenanceRecord {record_id: $record_id})-[:FOLLOWS*1..{depth}]->(prev:ProvenanceRecord)
+                    UNWIND nodes(path) as n
+                    WITH DISTINCT n
+                    WHERE n.record_id <> $record_id
+                    RETURN n.record_id as id, n.activity_name as action,
+                           n.activity_type as type, n.timestamp as time,
+                           n.record_hash as hash
+                    ORDER BY n.sequence_number ASC
+                """.replace("{depth}", str(depth)), record_id=record_id)
+
+                chain["backward"] = [dict(row) for row in result]
+
+            if direction in ("forward", "both"):
+                result = session.run("""
+                    MATCH path = (next:ProvenanceRecord)-[:FOLLOWS*1..{depth}]->(start:ProvenanceRecord {record_id: $record_id})
+                    UNWIND nodes(path) as n
+                    WITH DISTINCT n
+                    WHERE n.record_id <> $record_id
+                    RETURN n.record_id as id, n.activity_name as action,
+                           n.activity_type as type, n.timestamp as time,
+                           n.record_hash as hash
+                    ORDER BY n.sequence_number ASC
+                """.replace("{depth}", str(depth)), record_id=record_id)
+
+                chain["forward"] = [dict(row) for row in result]
+
+            chain["total_path_length"] = len(chain["backward"]) + 1 + len(chain["forward"])
+            return chain
+
+    except Exception as e:
+        logger.error(f"Failed to trace chain path: {e}")
+        return {"error": str(e)}
+
+
+def trace_by_action(client_id: str, action_name: str = None,
+                    action_type: str = None, limit: int = 50) -> dict:
+    """
+    특정 액션/도구/결정으로 모든 관련 기록 추적.
+
+    Args:
+        client_id: 고객 ID
+        action_name: 액션 이름 (부분 매칭)
+        action_type: 액션 타입 (tool_call, decision, user_input 등)
+    """
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            conditions = ["r.client_id = $client_id"]
+            params = {"client_id": client_id, "limit": limit}
+
+            if action_name:
+                conditions.append("toLower(r.activity_name) CONTAINS toLower($action_name)")
+                params["action_name"] = action_name
+
+            if action_type:
+                conditions.append("r.activity_type = $action_type")
+                params["action_type"] = action_type
+
+            where = " AND ".join(conditions)
+
+            result = session.run(f"""
+                MATCH (r:ProvenanceRecord)
+                WHERE {where}
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
+                RETURN r.record_id as id, r.timestamp as time,
+                       r.activity_type as type, r.activity_name as action,
+                       r.record_hash as hash,
+                       t.name as tool, d.name as decision,
+                       s.session_id as session_id
+                ORDER BY r.timestamp DESC
+                LIMIT $limit
+            """, **params)
+
+            records = [dict(row) for row in result]
+
+            return {
+                "query": {
+                    "client_id": client_id,
+                    "action_name": action_name,
+                    "action_type": action_type,
+                },
+                "count": len(records),
+                "records": records,
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to trace by action: {e}")
+        return {"error": str(e)}
+
+
+def trace_full_graph(client_id: str, limit: int = 100) -> dict:
+    """
+    고객의 전체 프로비넌스 그래프를 추적.
+    모든 노드와 관계를 반환 (시각화용).
+    """
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord {client_id: $client_id})
+                OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
+                OPTIONAL MATCH (r)-[:PERFORMED_BY]->(a:Agent)
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:MADE]->(d:Decision)
+                OPTIONAL MATCH (r)-[:FOLLOWS]->(prev:ProvenanceRecord)
+                OPTIONAL MATCH (r)-[:HAS_CONTENT]->(c:ContentStore)
+                OPTIONAL MATCH (r)-[:ANCHORED_BY]->(ba:BlockchainAnchor)
+                RETURN r, s, a, t, d, prev, c, ba
+                ORDER BY r.sequence_number DESC
+                LIMIT $limit
+            """, client_id=client_id, limit=limit)
+
+            nodes = []
+            edges = []
+            seen = set()
+
+            for row in result:
+                r = row["r"]
+                rid = r["record_id"]
+
+                # Record node
+                if rid not in seen:
+                    nodes.append({
+                        "id": rid,
+                        "label": r["activity_name"],
+                        "type": "record",
+                        "group": r["activity_type"],
+                        "time": r["timestamp"],
+                        "hash": r["record_hash"],
+                    })
+                    seen.add(rid)
+
+                # Session
+                if row["s"]:
+                    sid = row["s"]["session_id"]
+                    if sid not in seen:
+                        nodes.append({"id": sid, "label": sid[:12], "type": "session", "group": "session"})
+                        seen.add(sid)
+                    edges.append({"source": rid, "target": sid, "type": "BELONGS_TO"})
+
+                # Agent
+                if row["a"]:
+                    aid = row["a"]["agent_id"]
+                    if aid not in seen:
+                        nodes.append({"id": aid, "label": row["a"]["name"], "type": "agent", "group": "agent"})
+                        seen.add(aid)
+                    edges.append({"source": rid, "target": aid, "type": "PERFORMED_BY"})
+
+                # Tool
+                if row["t"]:
+                    tid = "tool:" + row["t"]["name"]
+                    if tid not in seen:
+                        nodes.append({"id": tid, "label": row["t"]["name"], "type": "tool", "group": "tool"})
+                        seen.add(tid)
+                    edges.append({"source": rid, "target": tid, "type": "CALLED"})
+
+                # Decision
+                if row["d"]:
+                    did = "decision:" + row["d"]["name"]
+                    if did not in seen:
+                        nodes.append({"id": did, "label": row["d"]["name"], "type": "decision", "group": "decision"})
+                        seen.add(did)
+                    edges.append({"source": rid, "target": did, "type": "MADE"})
+
+                # Chain
+                if row["prev"]:
+                    edges.append({"source": rid, "target": row["prev"]["record_id"], "type": "FOLLOWS"})
+
+                # Content
+                if row["c"]:
+                    cid = "content:" + (row["c"].get("content_hash") or "")[:12]
+                    if cid not in seen and row["c"].get("content_hash"):
+                        nodes.append({"id": cid, "label": row["c"]["content_type"], "type": "content", "group": "content"})
+                        seen.add(cid)
+                    if row["c"].get("content_hash"):
+                        edges.append({"source": rid, "target": cid, "type": "HAS_CONTENT"})
+
+                # Blockchain
+                if row["ba"]:
+                    baid = "anchor:" + (row["ba"].get("transaction_hash") or "")[:12]
+                    if baid not in seen and row["ba"].get("transaction_hash"):
+                        nodes.append({"id": baid, "label": "Polygon Anchor", "type": "blockchain", "group": "blockchain"})
+                        seen.add(baid)
+                    if row["ba"].get("transaction_hash"):
+                        edges.append({"source": rid, "target": baid, "type": "ANCHORED_BY"})
+
+            return {
+                "nodes": nodes,
+                "edges": edges,
+                "stats": {
+                    "total_nodes": len(nodes),
+                    "total_edges": len(edges),
+                    "records": len([n for n in nodes if n["type"] == "record"]),
+                    "tools": len([n for n in nodes if n["type"] == "tool"]),
+                    "sessions": len([n for n in nodes if n["type"] == "session"]),
+                },
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to get full trace graph: {e}")
+        return {"error": str(e)}
+
+
+def trace_timeline(client_id: str, limit: int = 200) -> dict:
+    """
+    고객의 전체 타임라인 (시간순 모든 기록).
+    """
+    if not _neo4j_driver:
+        return {"error": "Neo4j not available"}
+
+    try:
+        with _neo4j_driver.session() as session:
+            result = session.run("""
+                MATCH (r:ProvenanceRecord {client_id: $client_id})
+                OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
+                OPTIONAL MATCH (r)-[:HAS_CONTENT]->(c:ContentStore)
+                RETURN r.record_id as id,
+                       r.timestamp as time,
+                       r.activity_type as type,
+                       r.activity_name as action,
+                       r.record_hash as hash,
+                       r.sequence_number as seq,
+                       t.name as tool,
+                       c.content_type as content_type,
+                       c.original_size as content_size
+                ORDER BY r.sequence_number ASC
+                LIMIT $limit
+            """, client_id=client_id, limit=limit)
+
+            records = [dict(row) for row in result]
+
+            return {
+                "client_id": client_id,
+                "count": len(records),
+                "timeline": records,
+            }
+
+    except Exception as e:
+        logger.error(f"Failed to get timeline: {e}")
+        return {"error": str(e)}

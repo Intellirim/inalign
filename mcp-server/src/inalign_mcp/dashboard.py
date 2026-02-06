@@ -25,6 +25,10 @@ from .audit_export import export_session_json, export_session_summary
 from .auto_anchor import generate_certificate
 from .payments import router as payments_router
 from .polygon_anchor import anchor_to_polygon, get_anchor_status, verify_anchor, setup_instructions
+from .provenance_graph import (
+    trace_record, trace_chain_path, trace_by_action,
+    trace_full_graph, trace_timeline, get_record_content,
+)
 
 app = FastAPI(title="InALign Dashboard")
 
@@ -437,6 +441,346 @@ DASHBOARD_HTML = """
                 (r.action || r.decision || '-') +
                 '</div>'
             ).join('');
+        }}
+    </script>
+</body>
+</html>
+"""
+
+
+TRACE_HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>InALign - Trace & Backtrack</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: 'Segoe UI', sans-serif; background: #f3f4f6; }}
+        .header {{
+            background: linear-gradient(135deg, #1e3a5f 0%, #0d1b2a 100%);
+            color: white; padding: 16px 40px;
+            display: flex; justify-content: space-between; align-items: center;
+        }}
+        .logo {{ font-size: 22px; font-weight: bold; }}
+        .nav a {{ color: #93c5fd; text-decoration: none; margin-left: 20px; }}
+        .container {{ max-width: 1400px; margin: 0 auto; padding: 20px; }}
+        .search-panel {{
+            background: white; border-radius: 12px; padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }}
+        .search-row {{ display: flex; gap: 12px; margin-bottom: 12px; }}
+        .search-row input, .search-row select {{
+            padding: 10px 14px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;
+        }}
+        .search-row input {{ flex: 1; }}
+        .search-row select {{ min-width: 160px; }}
+        .btn {{ padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }}
+        .btn-blue {{ background: #2563eb; color: white; }}
+        .btn-purple {{ background: #7c3aed; color: white; }}
+        .btn-gray {{ background: #e5e7eb; color: #333; }}
+        .btn:hover {{ opacity: 0.9; }}
+        .quick-btns {{ display: flex; gap: 8px; flex-wrap: wrap; }}
+        .quick-btns button {{ padding: 6px 14px; background: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 6px; cursor: pointer; font-size: 13px; }}
+        .quick-btns button:hover {{ background: #e5e7eb; }}
+        .layout {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }}
+        .panel {{
+            background: white; border-radius: 12px; padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); max-height: 70vh; overflow-y: auto;
+        }}
+        .panel-title {{ font-weight: 700; font-size: 16px; margin-bottom: 12px; color: #1e3a5f; }}
+        .timeline-item {{
+            padding: 10px 12px; border-left: 3px solid #2563eb; margin-bottom: 8px;
+            background: #f9fafb; border-radius: 0 8px 8px 0; cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .timeline-item:hover {{ background: #eff6ff; }}
+        .timeline-item.active {{ background: #dbeafe; border-left-color: #7c3aed; }}
+        .tl-action {{ font-weight: 600; font-size: 14px; }}
+        .tl-type {{ font-size: 11px; color: #2563eb; background: #dbeafe; padding: 2px 8px; border-radius: 4px; display: inline-block; }}
+        .tl-time {{ font-size: 12px; color: #999; margin-top: 2px; }}
+        .tl-hash {{ font-family: monospace; font-size: 11px; color: #bbb; }}
+        .detail-section {{ margin-bottom: 16px; }}
+        .detail-section h4 {{ color: #666; font-size: 13px; margin-bottom: 6px; }}
+        .detail-field {{ display: flex; padding: 4px 0; border-bottom: 1px solid #f3f4f6; }}
+        .detail-label {{ width: 120px; color: #999; font-size: 13px; }}
+        .detail-value {{ flex: 1; font-size: 13px; word-break: break-all; }}
+        .detail-value.mono {{ font-family: monospace; font-size: 12px; }}
+        .chain-link {{
+            display: inline-block; padding: 4px 10px; background: #f0fdf4; color: #16a34a;
+            border-radius: 6px; font-size: 12px; cursor: pointer; margin: 2px;
+        }}
+        .chain-link:hover {{ background: #dcfce7; }}
+        .content-box {{
+            background: #1e293b; color: #e2e8f0; padding: 12px; border-radius: 8px;
+            font-family: monospace; font-size: 12px; white-space: pre-wrap;
+            max-height: 200px; overflow-y: auto; margin-top: 6px;
+        }}
+        #graphCanvas {{
+            width: 100%; height: 400px; background: #0f172a; border-radius: 8px;
+            position: relative; overflow: hidden;
+        }}
+        .graph-node {{
+            position: absolute; padding: 4px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600; color: white; cursor: pointer;
+            white-space: nowrap; transition: transform 0.3s;
+        }}
+        .graph-node:hover {{ transform: scale(1.15); z-index: 10; }}
+        .node-record {{ background: #2563eb; }}
+        .node-tool {{ background: #16a34a; }}
+        .node-agent {{ background: #d97706; }}
+        .node-session {{ background: #7c3aed; }}
+        .node-decision {{ background: #dc2626; }}
+        .node-content {{ background: #0891b2; }}
+        .node-blockchain {{ background: #f59e0b; }}
+        .empty-state {{ text-align: center; color: #999; padding: 40px; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">InALign <span style="color:#93c5fd">| Trace</span></div>
+        <div class="nav">
+            <a href="/dashboard">Dashboard</a>
+            <a href="/trace">Trace</a>
+            <a href="/logout">Logout</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="search-panel">
+            <div class="search-row">
+                <input type="text" id="searchInput" placeholder="Search actions, tools, prompts...">
+                <select id="typeFilter">
+                    <option value="">All Types</option>
+                    <option value="user_input">User Input</option>
+                    <option value="tool_call">Tool Call</option>
+                    <option value="decision">Decision</option>
+                    <option value="llm_request">LLM Request</option>
+                    <option value="file_read">File Read</option>
+                    <option value="file_write">File Write</option>
+                </select>
+                <button class="btn btn-blue" onclick="searchActions()">Search</button>
+                <button class="btn btn-purple" onclick="loadGraph()">Graph View</button>
+            </div>
+            <div class="quick-btns">
+                <button onclick="loadTimeline()">Full Timeline</button>
+                <button onclick="searchType('tool_call')">All Tool Calls</button>
+                <button onclick="searchType('decision')">All Decisions</button>
+                <button onclick="searchType('user_input')">All Prompts</button>
+                <button onclick="searchType('file_write')">File Changes</button>
+            </div>
+        </div>
+
+        <div class="layout">
+            <div class="panel" id="timelinePanel">
+                <div class="panel-title">Timeline</div>
+                <div id="timeline" class="empty-state">Click search or timeline to load records</div>
+            </div>
+
+            <div class="panel" id="detailPanel">
+                <div class="panel-title">Record Detail</div>
+                <div id="detail" class="empty-state">Click a record to see details</div>
+            </div>
+        </div>
+
+        <div style="margin-top:20px;">
+            <div class="panel">
+                <div class="panel-title">Provenance Graph</div>
+                <div id="graphCanvas">
+                    <div class="empty-state" style="color:#666; padding-top:180px;">Click "Graph View" to load</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadTimeline() {{
+            const res = await fetch('/api/trace/timeline');
+            const data = await res.json();
+            renderTimeline(data.timeline || []);
+        }}
+
+        async function searchActions() {{
+            const name = document.getElementById('searchInput').value;
+            const type = document.getElementById('typeFilter').value;
+            let url = '/api/trace/action?';
+            if (name) url += 'name=' + encodeURIComponent(name) + '&';
+            if (type) url += 'type=' + type + '&';
+            const res = await fetch(url);
+            const data = await res.json();
+            renderTimeline(data.records || []);
+        }}
+
+        function searchType(type) {{
+            document.getElementById('typeFilter').value = type;
+            document.getElementById('searchInput').value = '';
+            searchActions();
+        }}
+
+        function renderTimeline(records) {{
+            const div = document.getElementById('timeline');
+            if (!records.length) {{
+                div.innerHTML = '<div class="empty-state">No records found</div>';
+                return;
+            }}
+            div.innerHTML = records.map(r => `
+                <div class="timeline-item" onclick="loadDetail('${{r.id}}')">
+                    <div class="tl-action">${{r.action || '-'}}</div>
+                    <span class="tl-type">${{r.type || r.tool || '-'}}</span>
+                    <div class="tl-time">${{(r.time || '').substring(0, 19)}}</div>
+                    <div class="tl-hash">${{(r.hash || '').substring(0, 24)}}...</div>
+                </div>
+            `).join('');
+        }}
+
+        async function loadDetail(recordId) {{
+            // Highlight active
+            document.querySelectorAll('.timeline-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget?.classList.add('active');
+
+            const res = await fetch('/api/trace/record/' + recordId);
+            const data = await res.json();
+
+            if (data.error) {{
+                document.getElementById('detail').innerHTML = '<div class="empty-state">' + data.error + '</div>';
+                return;
+            }}
+
+            const r = data.record || {{}};
+            let html = `
+                <div class="detail-section">
+                    <h4>Record Info</h4>
+                    <div class="detail-field"><span class="detail-label">ID</span><span class="detail-value mono">${{r.id}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Action</span><span class="detail-value">${{r.activity_name}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Type</span><span class="detail-value">${{r.activity_type}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Time</span><span class="detail-value">${{r.timestamp}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Hash</span><span class="detail-value mono">${{r.hash}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Prev Hash</span><span class="detail-value mono">${{r.previous_hash || 'genesis'}}</span></div>
+                    <div class="detail-field"><span class="detail-label">Sequence</span><span class="detail-value">#${{r.sequence}}</span></div>
+                </div>
+            `;
+
+            if (data.agent) {{
+                html += `<div class="detail-section"><h4>Agent</h4>
+                    <div class="detail-field"><span class="detail-label">Name</span><span class="detail-value">${{data.agent.name}}</span></div>
+                </div>`;
+            }}
+            if (data.tool) {{
+                html += `<div class="detail-section"><h4>Tool Called</h4>
+                    <div class="detail-field"><span class="detail-label">Tool</span><span class="detail-value">${{data.tool}}</span></div>
+                </div>`;
+            }}
+            if (data.decision) {{
+                html += `<div class="detail-section"><h4>Decision Made</h4>
+                    <div class="detail-field"><span class="detail-label">Decision</span><span class="detail-value">${{data.decision}}</span></div>
+                </div>`;
+            }}
+
+            // Chain navigation
+            html += '<div class="detail-section"><h4>Hash Chain</h4>';
+            if (data.previous_record) {{
+                html += `<span class="chain-link" onclick="loadDetail('${{data.previous_record.id}}')">&larr; ${{data.previous_record.action}}</span> `;
+            }}
+            html += `<span style="padding:4px 10px; background:#dbeafe; border-radius:6px; font-size:12px; font-weight:bold;">CURRENT</span> `;
+            if (data.next_record) {{
+                html += `<span class="chain-link" onclick="loadDetail('${{data.next_record.id}}')">${{data.next_record.action}} &rarr;</span>`;
+            }}
+            html += '</div>';
+
+            // Contents
+            if (data.contents && data.contents.length > 0) {{
+                html += '<div class="detail-section"><h4>Stored Content</h4>';
+                for (const c of data.contents) {{
+                    html += `<div class="detail-field"><span class="detail-label">${{c.type}}</span><span class="detail-value">${{c.size}} bytes <button class="btn btn-gray" style="padding:2px 8px;font-size:11px;" onclick="loadContent('${{r.id}}')">View</button></span></div>`;
+                }}
+                html += '</div>';
+            }}
+
+            document.getElementById('detail').innerHTML = html;
+        }}
+
+        async function loadContent(recordId) {{
+            const res = await fetch('/api/trace/content/' + recordId);
+            const data = await res.json();
+            let html = '';
+            for (const [type, info] of Object.entries(data)) {{
+                html += `<div class="detail-section"><h4>${{type}}</h4><div class="content-box">${{escapeHtml(info.content || '')}}</div></div>`;
+            }}
+            if (!html) html = '<div class="empty-state">No content stored</div>';
+
+            // Append to detail panel
+            const panel = document.getElementById('detail');
+            const contentDiv = document.createElement('div');
+            contentDiv.innerHTML = html;
+            panel.appendChild(contentDiv);
+        }}
+
+        async function loadGraph() {{
+            const res = await fetch('/api/trace/graph');
+            const data = await res.json();
+            renderGraph(data);
+        }}
+
+        function renderGraph(data) {{
+            const canvas = document.getElementById('graphCanvas');
+            if (!data.nodes || !data.nodes.length) {{
+                canvas.innerHTML = '<div class="empty-state" style="color:#666;padding-top:180px;">No data</div>';
+                return;
+            }}
+
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+            let html = '';
+
+            // Simple force-like layout
+            const nodePositions = {{}};
+            const typeGroups = {{}};
+
+            data.nodes.forEach((n, i) => {{
+                if (!typeGroups[n.type]) typeGroups[n.type] = [];
+                typeGroups[n.type].push(n);
+            }});
+
+            const typeOrder = ['session', 'agent', 'record', 'tool', 'decision', 'content', 'blockchain'];
+            let yOffset = 30;
+
+            typeOrder.forEach(type => {{
+                const group = typeGroups[type] || [];
+                group.forEach((n, i) => {{
+                    const x = 40 + (i % 8) * (w / 8.5);
+                    const y = yOffset + Math.floor(i / 8) * 40;
+                    nodePositions[n.id] = {{ x, y }};
+                }});
+                if (group.length > 0) yOffset += Math.ceil(group.length / 8) * 40 + 20;
+            }});
+
+            // Draw edges as SVG lines
+            let svgLines = '';
+            data.edges.forEach(e => {{
+                const from = nodePositions[e.source];
+                const to = nodePositions[e.target];
+                if (from && to) {{
+                    svgLines += `<line x1="${{from.x+30}}" y1="${{from.y+10}}" x2="${{to.x+30}}" y2="${{to.y+10}}" stroke="#334155" stroke-width="1" opacity="0.4"/>`;
+                }}
+            }});
+
+            html += `<svg style="position:absolute;width:100%;height:100%;pointer-events:none;">${{svgLines}}</svg>`;
+
+            // Draw nodes
+            data.nodes.forEach(n => {{
+                const pos = nodePositions[n.id];
+                if (pos) {{
+                    const cls = 'node-' + n.type;
+                    const label = (n.label || '').substring(0, 20);
+                    html += `<div class="graph-node ${{cls}}" style="left:${{pos.x}}px;top:${{pos.y}}px;" title="${{n.id}}">${{label}}</div>`;
+                }}
+            }});
+
+            canvas.innerHTML = html;
+            canvas.style.height = Math.max(400, yOffset + 50) + 'px';
+        }}
+
+        function escapeHtml(text) {{
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }}
     </script>
 </body>
@@ -1065,6 +1409,73 @@ async def export_certificate(request: Request, session_id: str = None):
         """
 
     return "<h1>No sessions found</h1>"
+
+
+# ============================================
+# Trace & Backtrack API (역추적)
+# ============================================
+
+@app.get("/api/trace/record/{record_id}")
+async def api_trace_record(record_id: str, request: Request):
+    """특정 레코드 역추적 - 연결된 모든 노드 반환."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(trace_record(record_id))
+
+
+@app.get("/api/trace/chain/{record_id}")
+async def api_trace_chain(record_id: str, request: Request, direction: str = "both", depth: int = 20):
+    """해시체인 경로 추적 - 이전/이후 레코드 경로."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(trace_chain_path(record_id, direction, depth))
+
+
+@app.get("/api/trace/action")
+async def api_trace_action(request: Request, name: str = None, type: str = None, limit: int = 50):
+    """액션/도구/결정별 추적."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(trace_by_action(client.client_id, name, type, limit))
+
+
+@app.get("/api/trace/graph")
+async def api_trace_graph(request: Request, limit: int = 100):
+    """전체 프로비넌스 그래프 (시각화용)."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(trace_full_graph(client.client_id, limit))
+
+
+@app.get("/api/trace/timeline")
+async def api_trace_timeline(request: Request, limit: int = 200):
+    """시간순 타임라인."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(trace_timeline(client.client_id, limit))
+
+
+@app.get("/api/trace/content/{record_id}")
+async def api_trace_content(record_id: str, request: Request):
+    """레코드에 저장된 전체 내용 조회 (프롬프트/응답)."""
+    client = get_current_client(request)
+    if not client:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    return JSONResponse(get_record_content(record_id))
+
+
+@app.get("/trace", response_class=HTMLResponse)
+async def trace_page(request: Request):
+    """역추적 전용 페이지."""
+    client = get_current_client(request)
+    if not client:
+        return RedirectResponse("/login")
+    return TRACE_HTML.format(company=getattr(client, 'email', getattr(client, 'name', 'User')))
 
 
 # ============================================
