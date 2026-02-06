@@ -347,8 +347,11 @@ DASHBOARD_HTML = """
                         <a href="/export/certificate" class="btn btn-secondary" style="width:100%; margin-bottom:10px; text-align:center;">
                             Download Certificate
                         </a>
-                        <a href="/export/csv" class="btn btn-secondary" style="width:100%; text-align:center;">
+                        <a href="/export/csv" class="btn btn-secondary" style="width:100%; margin-bottom:10px; text-align:center;">
                             Export to CSV
+                        </a>
+                        <a href="/trace" class="btn btn-primary" style="width:100%; text-align:center; background:#7c3aed;">
+                            Trace & Backtrack
                         </a>
                     </div>
                 </div>
@@ -548,12 +551,12 @@ TRACE_HTML = """
     <div class="container">
         <div class="search-panel">
             <div class="search-row">
-                <input type="text" id="searchInput" placeholder="Search actions, tools, prompts...">
+                <input type="text" id="searchInput" placeholder="e.g. record_action, Edit, file_write, read_file...">
                 <select id="typeFilter">
                     <option value="">All Types</option>
-                    <option value="user_input">User Input</option>
-                    <option value="tool_call">Tool Call</option>
-                    <option value="decision">Decision</option>
+                    <option value="user_input">User Input (prompts)</option>
+                    <option value="tool_call">Tool Call (actions)</option>
+                    <option value="decision">Decision (AI choices)</option>
                     <option value="llm_request">LLM Request</option>
                     <option value="file_read">File Read</option>
                     <option value="file_write">File Write</option>
@@ -567,6 +570,17 @@ TRACE_HTML = """
                 <button onclick="searchType('decision')">All Decisions</button>
                 <button onclick="searchType('user_input')">All Prompts</button>
                 <button onclick="searchType('file_write')">File Changes</button>
+            </div>
+            <div style="margin-top:14px; padding:14px; background:#f0f9ff; border-radius:8px; border:1px solid #bae6fd;">
+                <div style="font-weight:600; font-size:13px; color:#0369a1; margin-bottom:6px;">How to Search</div>
+                <div style="font-size:12px; color:#475569; line-height:1.7;">
+                    <b>By name:</b> Type action name in search box (e.g. <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">record_action</code>, <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">Edit</code>, <code style="background:#e0f2fe;padding:1px 4px;border-radius:3px;">read_file</code>)<br>
+                    <b>By type:</b> Select type from dropdown (User Input = prompts, Tool Call = agent actions)<br>
+                    <b>Quick filters:</b> Click buttons above to see all records of that type<br>
+                    <b>Detail view:</b> Click any record in timeline to see full details + hash chain navigation<br>
+                    <b>View content:</b> Click "View" button in detail panel to see stored prompt/response<br>
+                    <b>Graph:</b> Click "Graph View" to see all nodes and relationships visually
+                </div>
             </div>
         </div>
 
