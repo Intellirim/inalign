@@ -191,13 +191,11 @@ Access at `http://localhost:8080` with your API key.
 ## Environment Variables
 
 ```bash
-# Neo4j
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USERNAME=neo4j
-NEO4J_PASSWORD=your-password
+# Required (get from https://in-a-lign.com)
+API_KEY=ial_your_api_key_here
 
-# API
-API_PORT=8080
+# Optional: Self-hosted API endpoint
+API_URL=http://localhost:8080
 ```
 
 ## Development
@@ -219,5 +217,6 @@ MIT License
 
 ## Contact
 
-- Website: https://inalign.dev
-- GitHub: https://github.com/inalign/mcp-server
+- Website: [https://in-a-lign.com](https://in-a-lign.com)
+- GitHub: [https://github.com/Intellirim/inalign](https://github.com/Intellirim/inalign)
+- PyPI: [https://pypi.org/project/inalign-mcp/](https://pypi.org/project/inalign-mcp/)

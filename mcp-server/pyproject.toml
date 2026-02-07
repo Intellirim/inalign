@@ -85,8 +85,9 @@ inalign-dashboard = "inalign_mcp.dashboard:run_dashboard"
 
 [project.urls]
 Homepage = "https://in-a-lign.com"
-Documentation = "https://docs.in-a-lign.com"
-Repository = "https://github.com/in-a-lign/mcp-server"
+Documentation = "https://github.com/Intellirim/inalign#readme"
+Repository = "https://github.com/Intellirim/inalign"
+Issues = "https://github.com/Intellirim/inalign/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/inalign_mcp"]
