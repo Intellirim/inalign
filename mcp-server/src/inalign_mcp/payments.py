@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import stripe
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Header
 from fastapi.responses import RedirectResponse, JSONResponse
 
 # Initialize Stripe
@@ -152,8 +152,7 @@ async def signup_starter(request: Request):
         if email in CUSTOMERS:
             return JSONResponse({
                 "success": False,
-                "error": "Email already registered",
-                "api_key": CUSTOMERS[email]["api_key"]
+                "error": "Email already registered. Check your email or log in with your existing API key.",
             })
 
         api_key = generate_api_key()
@@ -186,8 +185,11 @@ async def signup_starter(request: Request):
             "message": "Welcome to InALign! Add this to your Claude Code settings."
         })
 
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[SIGNUP ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/api/checkout/pro")
@@ -232,9 +234,11 @@ async def create_pro_checkout(request: Request):
         })
 
     except stripe.error.StripeError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"[STRIPE ERROR] {e}")
+        raise HTTPException(status_code=400, detail="Payment processing error")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[CHECKOUT ERROR] {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/payment/success")
@@ -340,8 +344,13 @@ async def stripe_webhook(request: Request):
 
 
 @router.get("/api/customer/{email}")
-async def get_customer(email: str):
-    """Get customer info by email."""
+async def get_customer(email: str, request: Request):
+    """Get customer info by email (requires valid session)."""
+    # Auth: only logged-in users can query, and only their own email
+    session_email = request.session.get("email")
+    if not session_email or session_email != email:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     if email not in CUSTOMERS:
         raise HTTPException(status_code=404, detail="Customer not found")
 
@@ -349,39 +358,45 @@ async def get_customer(email: str):
     return JSONResponse({
         "email": email,
         "plan": customer["plan"],
-        "api_key": customer["api_key"][:20] + "...",  # Partial for security
-        "created_at": customer["created_at"],
+        "created_at": customer.get("created_at", ""),
     })
 
 
-@router.get("/api/verify-key/{api_key}")
-async def verify_api_key(api_key: str):
+@router.post("/api/verify-key")
+async def verify_api_key(request: Request):
     """Verify if API key is valid and get plan info."""
-    for email, data in CUSTOMERS.items():
-        if data["api_key"] == api_key:
-            plan = PLANS.get(data["plan"], PLANS["starter"])
+    data = await request.json()
+    api_key = data.get("api_key", "")
+
+    for _email, cust in CUSTOMERS.items():
+        if cust["api_key"] == api_key:
+            plan = PLANS.get(cust["plan"], PLANS["starter"])
             return JSONResponse({
                 "valid": True,
-                "plan": data["plan"],
+                "plan": cust["plan"],
                 "actions_per_month": plan["actions_per_month"],
-                "retention_days": plan["retention_days"],
             })
 
-    raise HTTPException(status_code=404, detail="Invalid API key")
+    # Constant-time-ish: don't reveal whether key format is valid
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-@router.get("/api/usage/{api_key}")
-async def get_usage(api_key: str):
-    """Get usage statistics for an API key."""
+@router.get("/api/usage")
+async def get_usage(request: Request, x_api_key: str = Header(None)):
+    """Get usage statistics (requires API key in header or session)."""
+    api_key = x_api_key or request.session.get("api_key")
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     # Find customer
     customer = None
-    for email, data in CUSTOMERS.items():
+    for _email, data in CUSTOMERS.items():
         if data["api_key"] == api_key:
             customer = data
             break
 
     if not customer:
-        raise HTTPException(status_code=404, detail="Invalid API key")
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     # Get usage from limiter
     try:
@@ -393,5 +408,4 @@ async def get_usage(api_key: str):
         return JSONResponse({
             "plan": customer["plan"],
             "actions_limit": plan["actions_per_month"],
-            "message": "Usage tracking not available"
         })

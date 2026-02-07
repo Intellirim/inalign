@@ -11,6 +11,7 @@ Features:
 
 import os
 import json
+import secrets
 from datetime import datetime
 from typing import Optional
 from fastapi import FastAPI, Request, Form, HTTPException, Depends
@@ -35,7 +36,8 @@ app = FastAPI(title="InALign Dashboard")
 
 # Include payment routes
 app.include_router(payments_router)
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "inalign-secret-key-change-me"))
+_session_secret = os.getenv("SESSION_SECRET") or secrets.token_hex(32)
+app.add_middleware(SessionMiddleware, secret_key=_session_secret)
 
 # Initialize
 manager = get_client_manager()
@@ -2553,13 +2555,12 @@ def _validate_api_key(api_key: str) -> str:
     """Validate API key and return client_id. Raises HTTPException if invalid."""
     from .payments import CUSTOMERS, get_client_id
     if not api_key or not api_key.startswith("ial_"):
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    # Check against registered customers
-    for email, data in CUSTOMERS.items():
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # Check against registered customers only
+    for _email, data in CUSTOMERS.items():
         if data.get("api_key") == api_key:
             return data.get("client_id") or get_client_id(api_key)
-    # Accept any ial_ prefixed key (for self-service signups not yet in CUSTOMERS)
-    return get_client_id(api_key)
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.post("/api/v1/provenance/store")
