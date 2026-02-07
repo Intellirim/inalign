@@ -146,7 +146,8 @@ async def signup_starter(request: Request):
             raise HTTPException(status_code=400, detail="Email required")
 
         if not company_name:
-            raise HTTPException(status_code=400, detail="Company name required")
+            # Auto-generate from email domain
+            company_name = email.split("@")[1].split(".")[0].title() if "@" in email else "Unknown"
 
         if email in CUSTOMERS:
             return JSONResponse({
