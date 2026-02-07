@@ -8,13 +8,14 @@ Handles:
 """
 
 import os
+import hmac
 import secrets
 import hashlib
 import json
 import threading
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 import stripe
 from fastapi import APIRouter, Request, HTTPException, Header
@@ -37,15 +38,52 @@ _CUSTOMERS_FILE = os.getenv(
 )
 _save_lock = threading.Lock()
 
-# Default test user
+# Default test user (hashed)
 _DEFAULT_CUSTOMERS = {
     "test@inalign.ai": {
-        "api_key": "ial_EBSooXgFz6FJ-hdmf3yAntE3xlWAPIAKwI9PfwdCres",
+        "api_key_hash": "cf75cd3fa6c7b6c0c7c1b7652fa86ef34fc976578b22b517be0e115214c6502c",
+        "api_key_prefix": "ial_EBSo",
         "client_id": "ial_EBSooXgF",
         "plan": "starter",
         "created_at": "2026-02-05"
     }
 }
+
+
+def _hash_api_key(api_key: str) -> str:
+    """Hash an API key with SHA-256."""
+    return hashlib.sha256(api_key.encode()).hexdigest()
+
+
+def _verify_key(api_key: str, stored_hash: str) -> bool:
+    """Constant-time comparison of API key against stored hash."""
+    return hmac.compare_digest(_hash_api_key(api_key), stored_hash)
+
+
+def find_customer_by_key(api_key: str) -> Tuple[Optional[str], Optional[dict]]:
+    """Find customer by API key (hash comparison). Returns (email, data) or (None, None)."""
+    key_hash = _hash_api_key(api_key)
+    for email, data in CUSTOMERS.items():
+        stored = data.get("api_key_hash", "")
+        if stored and hmac.compare_digest(key_hash, stored):
+            return email, data
+    return None, None
+
+
+def _migrate_plaintext_keys(data: dict) -> bool:
+    """Migrate any plaintext api_key fields to api_key_hash. Returns True if migrated."""
+    migrated = False
+    for email, info in data.items():
+        if "api_key" in info and "api_key_hash" not in info:
+            plain_key = info["api_key"]
+            info["api_key_hash"] = _hash_api_key(plain_key)
+            info["api_key_prefix"] = plain_key[:8]
+            if not info.get("client_id"):
+                info["client_id"] = get_client_id(plain_key)
+            del info["api_key"]
+            migrated = True
+            print(f"[CUSTOMERS] Migrated {email} to hashed key")
+    return migrated
 
 
 def _load_customers() -> dict:
@@ -58,25 +96,38 @@ def _load_customers() -> dict:
                 # Ensure default test user exists
                 for email, info in _DEFAULT_CUSTOMERS.items():
                     if email not in data:
-                        data[email] = info
+                        data[email] = dict(info)
+                # Auto-migrate plaintext keys
+                if _migrate_plaintext_keys(data):
+                    _save_customers_data(data)
                 return data
     except Exception as e:
         print(f"[CUSTOMERS] Error loading {_CUSTOMERS_FILE}: {e}")
 
     print(f"[CUSTOMERS] Using defaults ({len(_DEFAULT_CUSTOMERS)} customers)")
-    return dict(_DEFAULT_CUSTOMERS)
+    return {k: dict(v) for k, v in _DEFAULT_CUSTOMERS.items()}
+
+
+def _save_customers_data(data: dict):
+    """Save customer data to JSON file (no lock, for internal use during load)."""
+    try:
+        os.makedirs(os.path.dirname(_CUSTOMERS_FILE) or ".", exist_ok=True)
+        with open(_CUSTOMERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        # Restrict file permissions (owner-only on Unix)
+        try:
+            os.chmod(_CUSTOMERS_FILE, 0o600)
+        except (OSError, AttributeError):
+            pass  # Windows doesn't support Unix permissions
+        print(f"[CUSTOMERS] Saved {len(data)} customers to {_CUSTOMERS_FILE}")
+    except Exception as e:
+        print(f"[CUSTOMERS] Error saving: {e}")
 
 
 def _save_customers():
     """Save customers to JSON file (thread-safe)."""
     with _save_lock:
-        try:
-            os.makedirs(os.path.dirname(_CUSTOMERS_FILE) or ".", exist_ok=True)
-            with open(_CUSTOMERS_FILE, "w", encoding="utf-8") as f:
-                json.dump(CUSTOMERS, f, indent=2, ensure_ascii=False)
-            print(f"[CUSTOMERS] Saved {len(CUSTOMERS)} customers to {_CUSTOMERS_FILE}")
-        except Exception as e:
-            print(f"[CUSTOMERS] Error saving: {e}")
+        _save_customers_data(CUSTOMERS)
 
 
 CUSTOMERS = _load_customers()
@@ -108,11 +159,12 @@ PLANS = {
 }
 
 
-def generate_api_key() -> str:
-    """Generate a secure API key."""
-    random_bytes = secrets.token_bytes(32)
+def generate_api_key() -> Tuple[str, str, str]:
+    """Generate a secure API key. Returns (plaintext_key, key_hash, key_prefix)."""
     key = f"ial_{secrets.token_urlsafe(32)}"
-    return key
+    key_hash = _hash_api_key(key)
+    key_prefix = key[:8]
+    return key, key_hash, key_prefix
 
 
 def get_client_id(api_key: str) -> str:
@@ -134,6 +186,12 @@ def sync_usage_limiter(client_id: str, plan: str):
 @router.post("/api/signup/starter")
 async def signup_starter(request: Request):
     """Sign up for free Starter plan."""
+    # Rate limit: 3 signups per minute per IP
+    try:
+        from .dashboard import rate_limit_or_429
+        rate_limit_or_429(request, max_req=3, window=60, prefix="signup")
+    except ImportError:
+        pass
     try:
         data = await request.json()
         email = data.get("email")
@@ -155,16 +213,16 @@ async def signup_starter(request: Request):
                 "error": "Email already registered. Check your email or log in with your existing API key.",
             })
 
-        api_key = generate_api_key()
+        api_key, key_hash, key_prefix = generate_api_key()
 
         client_id = get_client_id(api_key)
         CUSTOMERS[email] = {
-            "api_key": api_key,
+            "api_key_hash": key_hash,
+            "api_key_prefix": key_prefix,
             "client_id": client_id,
             "plan": "starter",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "stripe_customer_id": None,
-            # Company info
             "company_name": company_name,
             "contact_name": contact_name,
             "use_case": use_case,
@@ -174,15 +232,16 @@ async def signup_starter(request: Request):
         # Sync to usage limiter
         sync_usage_limiter(client_id, "starter")
 
-        # Persist to disk
+        # Persist to disk (hash only)
         _save_customers()
 
+        # Return plaintext key ONCE (never stored)
         return JSONResponse({
             "success": True,
             "api_key": api_key,
             "plan": "starter",
             "company": company_name,
-            "message": "Welcome to InALign! Add this to your Claude Code settings."
+            "message": "Save this API key now! It will not be shown again."
         })
 
     except HTTPException:
@@ -257,28 +316,26 @@ async def payment_success(session_id: str):
 
         # Generate API key if not exists
         if email not in CUSTOMERS:
-            api_key = generate_api_key()
+            api_key, key_hash, key_prefix = generate_api_key()
             CUSTOMERS[email] = {
-                "api_key": api_key,
+                "api_key_hash": key_hash,
+                "api_key_prefix": key_prefix,
                 "client_id": get_client_id(api_key),
                 "plan": "pro",
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "stripe_customer_id": session.customer,
                 "subscription_id": session.subscription,
             }
+            _save_customers()
+            # Show key once after payment
+            return RedirectResponse(url=f"/dashboard?api_key={api_key}&plan=pro")
         else:
             # Upgrade existing customer
             CUSTOMERS[email]["plan"] = "pro"
             CUSTOMERS[email]["stripe_customer_id"] = session.customer
             CUSTOMERS[email]["subscription_id"] = session.subscription
-
-        api_key = CUSTOMERS[email]["api_key"]
-
-        # Persist to disk
-        _save_customers()
-
-        # Redirect to dashboard with API key shown
-        return RedirectResponse(url=f"/dashboard?api_key={api_key}&plan=pro")
+            _save_customers()
+            return RedirectResponse(url="/dashboard?plan=pro&upgraded=true")
 
     except Exception as e:
         return RedirectResponse(url=f"/dashboard?error={str(e)}")
@@ -315,9 +372,10 @@ async def stripe_webhook(request: Request):
         email = session.get("customer_email")
 
         if email and email not in CUSTOMERS:
-            api_key = generate_api_key()
+            api_key, key_hash, key_prefix = generate_api_key()
             CUSTOMERS[email] = {
-                "api_key": api_key,
+                "api_key_hash": key_hash,
+                "api_key_prefix": key_prefix,
                 "client_id": get_client_id(api_key),
                 "plan": "pro",
                 "created_at": datetime.now(timezone.utc).isoformat(),
@@ -363,38 +421,44 @@ async def get_customer(email: str, request: Request):
 
 
 @router.post("/api/verify-key")
-async def verify_api_key(request: Request):
+async def verify_api_key_endpoint(request: Request):
     """Verify if API key is valid and get plan info."""
     data = await request.json()
     api_key = data.get("api_key", "")
 
-    for _email, cust in CUSTOMERS.items():
-        if cust["api_key"] == api_key:
-            plan = PLANS.get(cust["plan"], PLANS["starter"])
-            return JSONResponse({
-                "valid": True,
-                "plan": cust["plan"],
-                "actions_per_month": plan["actions_per_month"],
-            })
+    _email, cust = find_customer_by_key(api_key)
+    if cust:
+        plan = PLANS.get(cust["plan"], PLANS["starter"])
+        return JSONResponse({
+            "valid": True,
+            "plan": cust["plan"],
+            "actions_per_month": plan["actions_per_month"],
+        })
 
-    # Constant-time-ish: don't reveal whether key format is valid
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @router.get("/api/usage")
 async def get_usage(request: Request, x_api_key: str = Header(None)):
     """Get usage statistics (requires API key in header or session)."""
-    api_key = x_api_key or request.session.get("api_key")
+    api_key = x_api_key
     if not api_key:
+        # Fallback: find by client_id in session
+        client_id = request.session.get("client_id")
+        if client_id:
+            for _e, d in CUSTOMERS.items():
+                if d.get("client_id") == client_id:
+                    customer = d
+                    break
+            else:
+                customer = None
+            if customer:
+                plan = PLANS.get(customer["plan"], PLANS["starter"])
+                return JSONResponse({"plan": customer["plan"], "actions_limit": plan["actions_per_month"]})
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    # Find customer
-    customer = None
-    for _email, data in CUSTOMERS.items():
-        if data["api_key"] == api_key:
-            customer = data
-            break
-
+    # Find customer by API key hash
+    _email, customer = find_customer_by_key(api_key)
     if not customer:
         raise HTTPException(status_code=401, detail="Unauthorized")
 

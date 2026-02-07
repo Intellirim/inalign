@@ -11,14 +11,47 @@ Features:
 
 import os
 import json
+import time
 import secrets
+import collections
 from datetime import datetime
 from typing import Optional
-from fastapi import FastAPI, Request, Form, HTTPException, Depends
+from fastapi import FastAPI, Request, Form, HTTPException, Depends, Header
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 import uvicorn
+
+
+# ============================================
+# Rate Limiter (in-memory, no external deps)
+# ============================================
+_rate_buckets: dict = {}  # {key: deque([timestamp, ...])}
+_rate_lock = __import__("threading").Lock()
+
+
+def _check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
+    """Check rate limit. Returns True if allowed, False if exceeded."""
+    now = time.monotonic()
+    with _rate_lock:
+        if key not in _rate_buckets:
+            _rate_buckets[key] = collections.deque()
+        bucket = _rate_buckets[key]
+        # Remove expired entries
+        while bucket and bucket[0] < now - window_seconds:
+            bucket.popleft()
+        if len(bucket) >= max_requests:
+            return False
+        bucket.append(now)
+        return True
+
+
+def rate_limit_or_429(request: Request, max_req: int, window: int, prefix: str = ""):
+    """Raise 429 if rate limit exceeded."""
+    ip = request.client.host if request.client else "unknown"
+    key = f"{prefix}:{ip}"
+    if not _check_rate_limit(key, max_req, window):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
 
 from .client_manager import get_client_manager, Client
 from .trace_finder import init_trace_db, trace_agent, trace_decision, trace_session, quick_search
@@ -1762,10 +1795,9 @@ def get_current_client(request: Request) -> Optional[Client]:
         return client
 
     # Fallback for payments-based users (session has client_id but manager doesn't know about it)
-    api_key = request.session.get("api_key", "")
     email = request.session.get("email", "")
     plan = request.session.get("plan", "starter")
-    return SimpleClient(client_id, api_key, email, plan)
+    return SimpleClient(client_id, "", email, plan)
 
 
 # ============================================
@@ -1805,32 +1837,24 @@ async def login_page(error: str = ""):
 
 @app.post("/login")
 async def login(request: Request, api_key: str = Form(...)):
-    # Debug logging
-    print(f"[LOGIN] Received API key: '{api_key}' (length: {len(api_key)})")
-
+    rate_limit_or_429(request, max_req=5, window=60, prefix="login")
     # First try client_manager
     valid, client, error = manager.validate_api_key(api_key)
 
     if not valid or not client:
-        # Try payments CUSTOMERS
-        from .payments import CUSTOMERS, get_client_id
-        print(f"[LOGIN] Checking against {len(CUSTOMERS)} customers")
-        for email, data in CUSTOMERS.items():
-            stored_key = data.get("api_key")
-            print(f"[LOGIN] Comparing with {email}: '{stored_key}' == '{api_key}' ? {stored_key == api_key}")
-            if stored_key == api_key:
-                # Create a temporary client object
-                client_id = data.get("client_id") or get_client_id(api_key)
-                request.session["client_id"] = client_id
-                request.session["api_key"] = api_key
-                request.session["email"] = email
-                request.session["plan"] = data.get("plan", "starter")
-                return RedirectResponse("/dashboard", status_code=303)
+        # Try payments CUSTOMERS (hash-based lookup)
+        from .payments import find_customer_by_key, get_client_id
+        email, data = find_customer_by_key(api_key)
+        if email and data:
+            client_id = data.get("client_id") or get_client_id(api_key)
+            request.session["client_id"] = client_id
+            request.session["email"] = email
+            request.session["plan"] = data.get("plan", "starter")
+            return RedirectResponse("/dashboard", status_code=303)
 
-        return RedirectResponse(f"/login?error={error or 'Invalid API key'}", status_code=303)
+        return RedirectResponse("/login?error=Invalid API key", status_code=303)
 
     request.session["client_id"] = client.client_id
-    request.session["api_key"] = api_key
     return RedirectResponse("/dashboard", status_code=303)
 
 
@@ -2553,19 +2577,19 @@ class _AgentsListBody(BaseModel):
 
 def _validate_api_key(api_key: str) -> str:
     """Validate API key and return client_id. Raises HTTPException if invalid."""
-    from .payments import CUSTOMERS, get_client_id
+    from .payments import find_customer_by_key, get_client_id
     if not api_key or not api_key.startswith("ial_"):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    # Check against registered customers only
-    for _email, data in CUSTOMERS.items():
-        if data.get("api_key") == api_key:
-            return data.get("client_id") or get_client_id(api_key)
+    _email, data = find_customer_by_key(api_key)
+    if data:
+        return data.get("client_id") or get_client_id(api_key)
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 @app.post("/api/v1/provenance/store")
-async def api_v1_store_record(body: _StoreRecordBody, x_api_key: str = Header(...)):
+async def api_v1_store_record(request: Request, body: _StoreRecordBody, x_api_key: str = Header(...)):
     """Store a provenance record from a remote MCP server."""
+    rate_limit_or_429(request, max_req=120, window=60, prefix="api_store")
     client_id = _validate_api_key(x_api_key)
     ensure_provenance_neo4j()
 
@@ -2665,7 +2689,8 @@ async def api_v1_store_record(body: _StoreRecordBody, x_api_key: str = Header(..
 
 
 @app.post("/api/v1/risk/analyze")
-async def api_v1_risk_analyze(body: _RiskAnalyzeBody, x_api_key: str = Header(...)):
+async def api_v1_risk_analyze(request: Request, body: _RiskAnalyzeBody, x_api_key: str = Header(...)):
+    rate_limit_or_429(request, max_req=30, window=60, prefix="api_risk")
     """Run GraphRAG risk analysis for a session."""
     client_id = _validate_api_key(x_api_key)
     ensure_provenance_neo4j()
