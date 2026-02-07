@@ -267,17 +267,47 @@
             text-align: center;
         }
 
+        /* Top Nav */
+        .top-nav {
+            position: absolute; top: 0; left: 0; right: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 20px 40px;
+        }
+        .top-nav .nav-logo { font-size: 22px; font-weight: 800; color: white; text-decoration: none; }
+        .top-nav .nav-logo span { color: #60a5fa; }
+        .top-nav .nav-links { display: flex; gap: 12px; align-items: center; }
+        .top-nav .nav-links a {
+            color: #94a3b8; text-decoration: none; font-size: 15px; font-weight: 500; transition: color 0.2s;
+        }
+        .top-nav .nav-links a:hover { color: white; }
+        .btn-login {
+            padding: 10px 24px; background: transparent; color: white; border: 2px solid #475569;
+            border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none; transition: all 0.2s;
+        }
+        .btn-login:hover { border-color: #60a5fa; color: #60a5fa; }
+
         /* Responsive */
         @media (max-width: 768px) {
             .headline { font-size: 36px; }
             .section-title { font-size: 28px; }
             .pricing-card.featured { transform: none; }
+            .top-nav { padding: 16px 20px; }
         }
     </style>
 </head>
 <body>
+    <!-- Top Nav -->
+    <nav class="top-nav">
+        <a href="/" class="nav-logo">In<span>A</span>Lign</a>
+        <div class="nav-links">
+            <a href="#how-it-works">How It Works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="/login" class="btn-login">Login</a>
+        </div>
+    </nav>
+
     <!-- Hero -->
-    <section class="hero">
+    <section class="hero" style="position: relative; padding-top: 120px;">
         <div class="hero-content">
             <div class="logo">InALign</div>
             <div class="tagline">AI Agent Governance Platform</div>
@@ -288,7 +318,7 @@
             </p>
             <div class="cta-buttons">
                 <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
-                <a href="#how-it-works" class="btn btn-secondary">See How It Works</a>
+                <a href="/login" class="btn btn-secondary">Login</a>
             </div>
         </div>
     </section>
@@ -492,6 +522,8 @@
             <form id="signupForm">
                 <input type="email" id="signupEmail" placeholder="Enter your email" required
                     style="width:100%; padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px; font-size:16px; margin-bottom:16px;">
+                <input type="password" id="signupPassword" placeholder="Create a password (min 8 chars)" required minlength="8"
+                    style="width:100%; padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px; font-size:16px; margin-bottom:16px;">
 
                 <div id="planSelect" style="margin-bottom:20px;">
                     <label style="display:flex; align-items:center; padding:16px; border:2px solid #e5e7eb; border-radius:8px; margin-bottom:8px; cursor:pointer;">
@@ -563,32 +595,38 @@
         document.getElementById('signupForm').onsubmit = async (e) => {
             e.preventDefault();
             const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
             const plan = document.querySelector('input[name="plan"]:checked').value;
+
+            if (password.length < 8) {
+                alert('Password must be at least 8 characters');
+                return;
+            }
 
             if (plan === 'pro') {
                 // Redirect to Stripe checkout
                 const res = await fetch('/api/checkout/pro', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email})
+                    body: JSON.stringify({email, password})
                 });
                 const data = await res.json();
                 if (data.checkout_url) {
                     window.location.href = data.checkout_url;
                 } else {
                     alert(data.error || 'Payment setup failed. Using free tier.');
-                    signupStarter(email);
+                    signupStarter(email, password);
                 }
             } else {
-                signupStarter(email);
+                signupStarter(email, password);
             }
         };
 
-        async function signupStarter(email) {
+        async function signupStarter(email, password) {
             const res = await fetch('/api/signup/starter', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email})
+                body: JSON.stringify({email, password})
             });
             const data = await res.json();
             if (data.api_key) {

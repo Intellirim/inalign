@@ -17,6 +17,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
+import bcrypt
 import stripe
 from fastapi import APIRouter, Request, HTTPException, Header
 from fastapi.responses import RedirectResponse, JSONResponse
@@ -53,6 +54,21 @@ _DEFAULT_CUSTOMERS = {
 def _hash_api_key(api_key: str) -> str:
     """Hash an API key with SHA-256."""
     return hashlib.sha256(api_key.encode()).hexdigest()
+
+
+def hash_password(password: str) -> str:
+    """Hash password with bcrypt."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify password against bcrypt hash."""
+    return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def find_customer_by_email(email: str) -> Optional[dict]:
+    """Find customer by email. Returns customer data or None."""
+    return CUSTOMERS.get(email)
 
 
 def _verify_key(api_key: str, stored_hash: str) -> bool:
@@ -195,6 +211,7 @@ async def signup_starter(request: Request):
     try:
         data = await request.json()
         email = data.get("email")
+        password = data.get("password", "")
         company_name = data.get("company_name", "")
         contact_name = data.get("contact_name", "")
         use_case = data.get("use_case", "")
@@ -203,6 +220,9 @@ async def signup_starter(request: Request):
         if not email:
             raise HTTPException(status_code=400, detail="Email required")
 
+        if not password or len(password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
         if not company_name:
             # Auto-generate from email domain
             company_name = email.split("@")[1].split(".")[0].title() if "@" in email else "Unknown"
@@ -210,7 +230,7 @@ async def signup_starter(request: Request):
         if email in CUSTOMERS:
             return JSONResponse({
                 "success": False,
-                "error": "Email already registered. Check your email or log in with your existing API key.",
+                "error": "Email already registered. Use your email and password to log in.",
             })
 
         api_key, key_hash, key_prefix = generate_api_key()
@@ -219,6 +239,7 @@ async def signup_starter(request: Request):
         CUSTOMERS[email] = {
             "api_key_hash": key_hash,
             "api_key_prefix": key_prefix,
+            "password_hash": hash_password(password),
             "client_id": client_id,
             "plan": "starter",
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -473,3 +494,94 @@ async def get_usage(request: Request, x_api_key: str = Header(None)):
             "plan": customer["plan"],
             "actions_limit": plan["actions_per_month"],
         })
+
+
+@router.post("/api/regenerate-key")
+async def regenerate_api_key(request: Request):
+    """Regenerate API key for authenticated user. Old key is immediately invalidated."""
+    try:
+        from .dashboard import rate_limit_or_429
+        rate_limit_or_429(request, max_req=3, window=300, prefix="regen")
+    except ImportError:
+        pass
+
+    # Must be logged in (session auth)
+    email = request.session.get("email")
+    if not email or email not in CUSTOMERS:
+        raise HTTPException(status_code=401, detail="Login required")
+
+    # Require password confirmation if account has password
+    customer = CUSTOMERS[email]
+    if customer.get("password_hash"):
+        try:
+            data = await request.json()
+            password = data.get("password", "")
+        except Exception:
+            password = ""
+        if not password or not verify_password(password, customer["password_hash"]):
+            return JSONResponse({"success": False, "error": "Password confirmation required"}, status_code=403)
+
+    # Generate new key, invalidate old
+    new_key, key_hash, key_prefix = generate_api_key()
+    new_client_id = get_client_id(new_key)
+
+    old_client_id = customer.get("client_id", "")
+
+    customer["api_key_hash"] = key_hash
+    customer["api_key_prefix"] = key_prefix
+    customer["client_id"] = new_client_id
+
+    _save_customers()
+
+    return JSONResponse({
+        "success": True,
+        "api_key": new_key,
+        "client_id": new_client_id,
+        "old_client_id": old_client_id,
+        "message": "Save this API key now! The old key has been invalidated.",
+    })
+
+
+@router.post("/api/change-password")
+async def change_password(request: Request):
+    """Change password for authenticated user."""
+    try:
+        from .dashboard import rate_limit_or_429
+        rate_limit_or_429(request, max_req=5, window=300, prefix="chpw")
+    except ImportError:
+        pass
+
+    # Must be logged in
+    email = request.session.get("email")
+    if not email or email not in CUSTOMERS:
+        raise HTTPException(status_code=401, detail="Login required")
+
+    customer = CUSTOMERS[email]
+
+    try:
+        data = await request.json()
+        current_password = data.get("current_password", "")
+        new_password = data.get("new_password", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request")
+
+    # Verify current password
+    if customer.get("password_hash"):
+        if not current_password or not verify_password(current_password, customer["password_hash"]):
+            return JSONResponse({"success": False, "error": "Current password is incorrect"}, status_code=403)
+    else:
+        # No password set yet — allow setting one without current password
+        pass
+
+    # Validate new password
+    if not new_password or len(new_password) < 8:
+        return JSONResponse({"success": False, "error": "New password must be at least 8 characters"}, status_code=400)
+
+    # Update password
+    customer["password_hash"] = hash_password(new_password)
+    _save_customers()
+
+    return JSONResponse({
+        "success": True,
+        "message": "Password changed successfully",
+    })

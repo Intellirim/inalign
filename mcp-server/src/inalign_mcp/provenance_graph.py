@@ -167,7 +167,7 @@ def get_content(content_hash: str) -> Optional[str]:
         return None
 
 
-def get_record_content(record_id: str) -> dict:
+def get_record_content(record_id: str, client_id: str = None) -> dict:
     """
     Get all content associated with a provenance record.
 
@@ -177,12 +177,17 @@ def get_record_content(record_id: str) -> dict:
     if not _neo4j_driver:
         return {}
 
+    cid_clause = "AND r.client_id = $client_id" if client_id else ""
+
     try:
         with _neo4j_driver.session() as session:
-            result = session.run("""
-                MATCH (r:ProvenanceRecord {record_id: $record_id})-[:HAS_CONTENT]->(c:ContentStore)
+            result = session.run(f"""
+                MATCH (r:ProvenanceRecord {{record_id: $record_id}})
+                WHERE true {cid_clause}
+                WITH r
+                MATCH (r)-[:HAS_CONTENT]->(c:ContentStore)
                 RETURN c.content_type as type, c.compressed_content as content, c.content_hash as hash
-            """, record_id=record_id)
+            """, record_id=record_id, client_id=client_id or "")
 
             contents = {}
             for row in result:
@@ -878,7 +883,7 @@ def get_visualization_data(
 # Trace & Backtrack Functions (역추적)
 # ============================================
 
-def trace_record(record_id: str) -> dict:
+def trace_record(record_id: str, client_id: str = None) -> dict:
     """
     특정 레코드에서 연결된 모든 노드를 역추적.
 
@@ -891,8 +896,11 @@ def trace_record(record_id: str) -> dict:
 
     try:
         with _neo4j_driver.session() as session:
-            result = session.run("""
-                MATCH (r:ProvenanceRecord {record_id: $record_id})
+            # Build client_id filter
+            cid_clause = "AND r.client_id = $client_id" if client_id else ""
+            result = session.run(f"""
+                MATCH (r:ProvenanceRecord {{record_id: $record_id}})
+                WHERE true {cid_clause}
                 OPTIONAL MATCH (r)-[:BELONGS_TO]->(s:Session)
                 OPTIONAL MATCH (r)-[:PERFORMED_BY]->(a:Agent)
                 OPTIONAL MATCH (r)-[:CALLED]->(t:Tool)
@@ -907,7 +915,7 @@ def trace_record(record_id: str) -> dict:
                        collect(DISTINCT ge) as generated_entities,
                        prev, next,
                        collect(DISTINCT {type: c.content_type, hash: c.content_hash, size: c.original_size}) as contents
-            """, record_id=record_id)
+            """, record_id=record_id, client_id=client_id or "")
 
             row = result.single()
             if not row or not row["r"]:
@@ -990,7 +998,7 @@ def trace_record(record_id: str) -> dict:
         return {"error": str(e)}
 
 
-def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20) -> dict:
+def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20, client_id: str = None) -> dict:
     """
     해시 체인을 따라 이전/이후 레코드 전체 경로 추적.
 
@@ -998,17 +1006,23 @@ def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20) -
         record_id: 시작 레코드
         direction: "backward" (이전), "forward" (이후), "both"
         depth: 최대 추적 깊이
+        client_id: 접근 제어용 클라이언트 ID
     """
     if not _neo4j_driver:
         return {"error": "Neo4j not available"}
+
+    cid_where = "AND start.client_id = $client_id" if client_id else ""
 
     try:
         with _neo4j_driver.session() as session:
             chain = {"start": record_id, "backward": [], "forward": []}
 
             if direction in ("backward", "both"):
-                result = session.run("""
-                    MATCH path = (start:ProvenanceRecord {record_id: $record_id})-[:FOLLOWS*1..{depth}]->(prev:ProvenanceRecord)
+                result = session.run(f"""
+                    MATCH (start:ProvenanceRecord {{record_id: $record_id}})
+                    WHERE true {cid_where}
+                    WITH start
+                    MATCH path = (start)-[:FOLLOWS*1..{depth}]->(prev:ProvenanceRecord)
                     UNWIND nodes(path) as n
                     WITH DISTINCT n
                     WHERE n.record_id <> $record_id
@@ -1016,13 +1030,16 @@ def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20) -
                            n.activity_type as type, n.timestamp as time,
                            n.record_hash as hash
                     ORDER BY n.sequence_number ASC
-                """.replace("{depth}", str(depth)), record_id=record_id)
+                """, record_id=record_id, client_id=client_id or "")
 
                 chain["backward"] = [dict(row) for row in result]
 
             if direction in ("forward", "both"):
-                result = session.run("""
-                    MATCH path = (next:ProvenanceRecord)-[:FOLLOWS*1..{depth}]->(start:ProvenanceRecord {record_id: $record_id})
+                result = session.run(f"""
+                    MATCH (start:ProvenanceRecord {{record_id: $record_id}})
+                    WHERE true {cid_where}
+                    WITH start
+                    MATCH path = (next:ProvenanceRecord)-[:FOLLOWS*1..{depth}]->(start)
                     UNWIND nodes(path) as n
                     WITH DISTINCT n
                     WHERE n.record_id <> $record_id
@@ -1030,7 +1047,7 @@ def trace_chain_path(record_id: str, direction: str = "both", depth: int = 20) -
                            n.activity_type as type, n.timestamp as time,
                            n.record_hash as hash
                     ORDER BY n.sequence_number ASC
-                """.replace("{depth}", str(depth)), record_id=record_id)
+                """, record_id=record_id, client_id=client_id or "")
 
                 chain["forward"] = [dict(row) for row in result]
 

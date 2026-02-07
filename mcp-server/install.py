@@ -66,8 +66,9 @@ def install(api_key: str):
 
     # 2. Create ~/.inalign.env file (API URL for server proxy — no DB credentials needed)
     env_path = Path.home() / ".inalign.env"
+    api_url = os.getenv("INALIGN_API_URL", "https://api.inalign.ai")
     env_content = f"""API_KEY={api_key}
-API_URL=http://3.36.132.4:8080
+API_URL={api_url}
 """
 
     print(f"[2/5] Creating {env_path}...")
@@ -152,7 +153,7 @@ Your Client ID: {client_id}
 Next Steps:
 1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
-3. View your activity at: http://3.36.132.4:8080/login
+3. View your activity at: https://api.inalign.ai/login
    (Login with your API key)
 
 All your Claude Code activity will now be automatically recorded
@@ -190,7 +191,7 @@ if __name__ == "__main__":
         print("Usage:")
         print("  Install:   python install.py YOUR_API_KEY")
         print("  Uninstall: python install.py --uninstall")
-        print("\nGet your API key at: http://3.36.132.4:8080")
+        print("\nGet your API key at: https://api.inalign.ai")
         sys.exit(1)
 
     if sys.argv[1] == "--uninstall":

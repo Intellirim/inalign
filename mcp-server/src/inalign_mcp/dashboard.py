@@ -115,7 +115,7 @@ LOGIN_HTML = """
             padding: 40px;
             border-radius: 16px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            width: 400px;
+            width: 420px;
         }}
         .logo {{
             font-size: 32px;
@@ -161,6 +161,35 @@ LOGIN_HTML = """
             margin-bottom: 20px;
             text-align: center;
         }}
+        .tabs {{
+            display: flex;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e5e7eb;
+        }}
+        .tab {{
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            color: #999;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+        }}
+        .tab.active {{
+            color: #2563eb;
+            border-bottom-color: #2563eb;
+        }}
+        .tab:hover {{ color: #2563eb; }}
+        .tab-content {{ display: none; }}
+        .tab-content.active {{ display: block; }}
+        .divider {{
+            text-align: center;
+            color: #999;
+            margin: 16px 0;
+            font-size: 13px;
+        }}
     </style>
 </head>
 <body>
@@ -168,19 +197,54 @@ LOGIN_HTML = """
         <a href="/" style="text-decoration:none;"><div class="logo">InALign</div></a>
         <div class="subtitle">AI Agent Governance Platform</div>
         {error}
-        <form method="post" action="/login">
-            <div class="form-group">
-                <label>API Key</label>
-                <input type="text" name="api_key" placeholder="ial_xxxxxxxxxxxx" required>
-            </div>
-            <button type="submit">Login</button>
-        </form>
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('email')">Email Login</div>
+            <div class="tab" onclick="switchTab('apikey')">API Key</div>
+        </div>
+        <div id="tab-email" class="tab-content active">
+            <form method="post" action="/login">
+                <input type="hidden" name="login_type" value="email">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" name="email" placeholder="you@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" name="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+        <div id="tab-apikey" class="tab-content">
+            <form method="post" action="/login">
+                <input type="hidden" name="login_type" value="apikey">
+                <div class="form-group">
+                    <label>API Key</label>
+                    <input type="text" name="api_key" placeholder="ial_xxxxxxxxxxxx" required>
+                </div>
+                <button type="submit">Login</button>
+                <div class="divider">For MCP server / programmatic access</div>
+            </form>
+        </div>
         <div style="margin-top:20px; text-align:center;">
             <a href="/" style="color:#666; font-size:14px;">← Back to Home</a>
             <span style="color:#ccc; margin:0 10px;">|</span>
-            <a href="/#pricing" style="color:#2563eb; font-size:14px;">Get API Key</a>
+            <a href="/#pricing" style="color:#2563eb; font-size:14px;">Sign Up</a>
         </div>
     </div>
+    <script>
+        function switchTab(tab) {{
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            if (tab === 'email') {{
+                document.querySelectorAll('.tab')[0].classList.add('active');
+                document.getElementById('tab-email').classList.add('active');
+            }} else {{
+                document.querySelectorAll('.tab')[1].classList.add('active');
+                document.getElementById('tab-apikey').classList.add('active');
+            }}
+        }}
+    </script>
 </body>
 </html>
 """
@@ -407,9 +471,68 @@ DASHBOARD_HTML = """
                         <a href="/export/csv" class="btn btn-secondary" style="width:100%; margin-bottom:10px; text-align:center;">
                             Export to CSV
                         </a>
-                        <a href="/trace" class="btn btn-primary" style="width:100%; text-align:center; background:#7c3aed;">
+                        <a href="/trace" class="btn btn-primary" style="width:100%; margin-bottom:10px; text-align:center; background:#7c3aed;">
                             Trace & Backtrack
                         </a>
+                        <button onclick="regenerateKey()" class="btn btn-secondary" style="width:100%; margin-bottom:10px; text-align:center; background:#dc2626; color:white; border:none;">
+                            Regenerate API Key
+                        </button>
+                        <button onclick="changePassword()" class="btn btn-secondary" style="width:100%; text-align:center; background:#6b7280; color:white; border:none;">
+                            Change Password
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Regen Key Modal -->
+                <div id="regenModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+                    <div style="background:white; padding:32px; border-radius:12px; max-width:500px; width:90%;">
+                        <h3 style="margin-bottom:12px; color:#dc2626;">Regenerate API Key</h3>
+                        <p style="color:#666; margin-bottom:16px; font-size:14px;">This will <strong>immediately invalidate</strong> your current API key. Any MCP servers using the old key will stop working.</p>
+                        <div id="regenPasswordField" style="margin-bottom:16px; display:none;">
+                            <label style="display:block; margin-bottom:6px; font-weight:500;">Confirm Password</label>
+                            <input type="password" id="regenPassword" placeholder="Enter your password" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-size:14px;">
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="confirmRegen()" style="flex:1; padding:12px; background:#dc2626; color:white; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Confirm Regenerate</button>
+                            <button onclick="closeRegenModal()" style="flex:1; padding:12px; background:#e5e7eb; color:#333; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
+                        </div>
+                        <div id="regenResult" style="display:none; margin-top:16px;">
+                            <div style="background:#dcfce7; padding:12px; border-radius:8px; margin-bottom:12px;">
+                                <strong style="color:#166534;">New API Key Generated!</strong>
+                            </div>
+                            <div style="background:#1e293b; color:#10b981; padding:14px; border-radius:8px; font-family:monospace; word-break:break-all; font-size:14px;" id="newKeyDisplay"></div>
+                            <button onclick="copyNewKey()" style="width:100%; padding:10px; background:#e5e7eb; border:none; border-radius:8px; margin-top:8px; cursor:pointer; font-weight:500;">Copy New Key</button>
+                            <p style="color:#dc2626; font-size:13px; margin-top:8px; font-weight:600;">Save this key now! It will not be shown again.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Change Password Modal -->
+                <div id="chpwModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+                    <div style="background:white; padding:32px; border-radius:12px; max-width:500px; width:90%;">
+                        <h3 style="margin-bottom:12px; color:#1e3a5f;">Change Password</h3>
+                        <div id="chpwCurrentField" style="margin-bottom:12px;">
+                            <label style="display:block; margin-bottom:6px; font-weight:500;">Current Password</label>
+                            <input type="password" id="chpwCurrent" placeholder="Enter current password" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-size:14px;">
+                        </div>
+                        <div style="margin-bottom:12px;">
+                            <label style="display:block; margin-bottom:6px; font-weight:500;">New Password</label>
+                            <input type="password" id="chpwNew" placeholder="Min 8 characters" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-size:14px;">
+                        </div>
+                        <div style="margin-bottom:16px;">
+                            <label style="display:block; margin-bottom:6px; font-weight:500;">Confirm New Password</label>
+                            <input type="password" id="chpwConfirm" placeholder="Re-enter new password" style="width:100%; padding:10px; border:2px solid #e5e7eb; border-radius:8px; font-size:14px;">
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button onclick="confirmChangePassword()" style="flex:1; padding:12px; background:#2563eb; color:white; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Change Password</button>
+                            <button onclick="closeChpwModal()" style="flex:1; padding:12px; background:#e5e7eb; color:#333; border:none; border-radius:8px; font-weight:600; cursor:pointer;">Cancel</button>
+                        </div>
+                        <div id="chpwResult" style="display:none; margin-top:16px; background:#dcfce7; padding:12px; border-radius:8px;">
+                            <strong style="color:#166534;">Password changed successfully!</strong>
+                        </div>
+                        <div id="chpwError" style="display:none; margin-top:16px; background:#fef2f2; padding:12px; border-radius:8px;">
+                            <strong style="color:#dc2626;" id="chpwErrorMsg"></strong>
+                        </div>
                     </div>
                 </div>
 
@@ -502,6 +625,108 @@ DASHBOARD_HTML = """
                 '</div>'
             ).join('');
         }}
+
+        // === API Key Regeneration ===
+        function regenerateKey() {{
+            const modal = document.getElementById('regenModal');
+            modal.style.display = 'flex';
+            document.getElementById('regenResult').style.display = 'none';
+            // Show password field if user has password (check via email in session)
+            const hasPassword = '{has_password}' === 'true';
+            document.getElementById('regenPasswordField').style.display = hasPassword ? 'block' : 'none';
+        }}
+
+        function closeRegenModal() {{
+            document.getElementById('regenModal').style.display = 'none';
+        }}
+
+        async function confirmRegen() {{
+            const password = document.getElementById('regenPassword').value || '';
+            try {{
+                const res = await fetch('/api/regenerate-key', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ password }})
+                }});
+                const data = await res.json();
+                if (data.success) {{
+                    document.getElementById('newKeyDisplay').textContent = data.api_key;
+                    document.getElementById('regenResult').style.display = 'block';
+                }} else {{
+                    alert(data.error || 'Failed to regenerate key');
+                }}
+            }} catch (e) {{
+                alert('Error: ' + e.message);
+            }}
+        }}
+
+        function copyNewKey() {{
+            const key = document.getElementById('newKeyDisplay').textContent;
+            navigator.clipboard.writeText(key);
+            alert('New API key copied!');
+        }}
+
+        document.getElementById('regenModal').onclick = (e) => {{
+            if (e.target.id === 'regenModal') closeRegenModal();
+        }};
+
+        // === Change Password ===
+        function changePassword() {{
+            const modal = document.getElementById('chpwModal');
+            modal.style.display = 'flex';
+            document.getElementById('chpwResult').style.display = 'none';
+            document.getElementById('chpwError').style.display = 'none';
+            document.getElementById('chpwCurrent').value = '';
+            document.getElementById('chpwNew').value = '';
+            document.getElementById('chpwConfirm').value = '';
+            const hasPassword = '{has_password}' === 'true';
+            document.getElementById('chpwCurrentField').style.display = hasPassword ? 'block' : 'none';
+        }}
+
+        function closeChpwModal() {{
+            document.getElementById('chpwModal').style.display = 'none';
+        }}
+
+        async function confirmChangePassword() {{
+            const current = document.getElementById('chpwCurrent').value || '';
+            const newPw = document.getElementById('chpwNew').value || '';
+            const confirm = document.getElementById('chpwConfirm').value || '';
+
+            document.getElementById('chpwResult').style.display = 'none';
+            document.getElementById('chpwError').style.display = 'none';
+
+            if (newPw.length < 8) {{
+                document.getElementById('chpwErrorMsg').textContent = 'New password must be at least 8 characters';
+                document.getElementById('chpwError').style.display = 'block';
+                return;
+            }}
+            if (newPw !== confirm) {{
+                document.getElementById('chpwErrorMsg').textContent = 'New passwords do not match';
+                document.getElementById('chpwError').style.display = 'block';
+                return;
+            }}
+            try {{
+                const res = await fetch('/api/change-password', {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ current_password: current, new_password: newPw }})
+                }});
+                const data = await res.json();
+                if (data.success) {{
+                    document.getElementById('chpwResult').style.display = 'block';
+                }} else {{
+                    document.getElementById('chpwErrorMsg').textContent = data.error || 'Failed to change password';
+                    document.getElementById('chpwError').style.display = 'block';
+                }}
+            }} catch (e) {{
+                document.getElementById('chpwErrorMsg').textContent = 'Error: ' + e.message;
+                document.getElementById('chpwError').style.display = 'block';
+            }}
+        }}
+
+        document.getElementById('chpwModal').onclick = (e) => {{
+            if (e.target.id === 'chpwModal') closeChpwModal();
+        }};
     </script>
 </body>
 </html>
@@ -1836,8 +2061,39 @@ async def login_page(error: str = ""):
 
 
 @app.post("/login")
-async def login(request: Request, api_key: str = Form(...)):
+async def login(request: Request):
     rate_limit_or_429(request, max_req=5, window=60, prefix="login")
+
+    form = await request.form()
+    login_type = form.get("login_type", "apikey")
+
+    # === Email + Password login ===
+    if login_type == "email":
+        email = form.get("email", "").strip()
+        password = form.get("password", "")
+
+        if not email or not password:
+            return RedirectResponse("/login?error=Email and password required", status_code=303)
+
+        from .payments import find_customer_by_email, verify_password
+        customer = find_customer_by_email(email)
+
+        if not customer or not customer.get("password_hash"):
+            return RedirectResponse("/login?error=Invalid email or password", status_code=303)
+
+        if not verify_password(password, customer["password_hash"]):
+            return RedirectResponse("/login?error=Invalid email or password", status_code=303)
+
+        request.session["client_id"] = customer.get("client_id", "")
+        request.session["email"] = email
+        request.session["plan"] = customer.get("plan", "starter")
+        return RedirectResponse("/dashboard", status_code=303)
+
+    # === API Key login (legacy + MCP) ===
+    api_key = form.get("api_key", "")
+    if not api_key:
+        return RedirectResponse("/login?error=API key required", status_code=303)
+
     # First try client_manager
     valid, client, error = manager.validate_api_key(api_key)
 
@@ -2039,6 +2295,11 @@ async def dashboard(request: Request):
         if not activity_html:
             activity_html = "<li class='activity-item'>No activity recorded yet. Use Claude Code with your API key to see activity.</li>"
 
+        # Check if user has password set
+        from .payments import find_customer_by_email
+        cust = find_customer_by_email(email)
+        _has_pw = "true" if cust and cust.get("password_hash") else "false"
+
         return DASHBOARD_HTML.format(
             company=email,
             total_actions=total_actions,
@@ -2049,7 +2310,8 @@ async def dashboard(request: Request):
             plan=plan.upper(),
             scans_used=total_actions,
             scan_limit=1000 if plan == "starter" else 50000,
-            usage_percent=min(100, int(total_actions / 10))
+            usage_percent=min(100, int(total_actions / 10)),
+            has_password=_has_pw
         )
 
     if not client:
@@ -2089,7 +2351,8 @@ async def dashboard(request: Request):
         plan=client.plan.value.upper(),
         scans_used=stats['scan_count'],
         scan_limit=client.monthly_scan_limit,
-        usage_percent=usage_percent
+        usage_percent=usage_percent,
+        has_password="false"
     )
 
 
@@ -2366,25 +2629,7 @@ async def export_certificate(request: Request, session_id: str = None):
         </html>
         """
 
-    # Fallback to all recent sessions
-    all_sessions = get_recent_neo4j_sessions(5)
-    if all_sessions:
-        session_list = "".join([
-            f'<li><a href="/export/certificate?session_id={s["session_id"]}">{s["session_id"]}</a> - {s.get("agent_name", "unknown")} ({s.get("activity_count", 0)} activities)</li>'
-            for s in all_sessions
-        ])
-        return f"""
-        <html>
-        <head><title>Select Session</title></head>
-        <body style="font-family: sans-serif; padding: 20px;">
-            <h1>Select a Session</h1>
-            <p>No sessions found for your account. Recent sessions:</p>
-            <ul>{session_list}</ul>
-        </body>
-        </html>
-        """
-
-    return "<h1>No sessions found</h1>"
+    return "<h1>No sessions found for your account</h1>"
 
 
 # ============================================
@@ -2398,7 +2643,7 @@ async def api_trace_record(record_id: str, request: Request):
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     ensure_provenance_neo4j()
-    return JSONResponse(trace_record(record_id))
+    return JSONResponse(trace_record(record_id, client_id=client.client_id))
 
 
 @app.get("/api/trace/chain/{record_id}")
@@ -2408,7 +2653,7 @@ async def api_trace_chain(record_id: str, request: Request, direction: str = "bo
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     ensure_provenance_neo4j()
-    return JSONResponse(trace_chain_path(record_id, direction, depth))
+    return JSONResponse(trace_chain_path(record_id, direction, depth, client_id=client.client_id))
 
 
 @app.get("/api/trace/action")
@@ -2448,7 +2693,7 @@ async def api_trace_content(record_id: str, request: Request):
     if not client:
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
     ensure_provenance_neo4j()
-    return JSONResponse(get_record_content(record_id))
+    return JSONResponse(get_record_content(record_id, client_id=client.client_id))
 
 
 @app.get("/trace", response_class=HTMLResponse)
