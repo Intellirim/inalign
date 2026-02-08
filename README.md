@@ -1,33 +1,60 @@
-# InALign
-
-[![PyPI](https://img.shields.io/pypi/v/inalign-mcp.svg)](https://pypi.org/project/inalign-mcp/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![MCP Compatible](https://img.shields.io/badge/MCP-compatible-green.svg)](https://modelcontextprotocol.io)
-
-**AI Agent Governance Platform** — Record, verify, and prove every AI agent action.
-
 <p align="center">
-  <img src="demo.svg" alt="InALign Demo" width="750">
+  <h1 align="center">InALign</h1>
+  <p align="center"><strong>Tamper-proof audit trails for AI agents</strong></p>
+  <p align="center">Know what your AI agents did. Prove it. Cryptographically.</p>
 </p>
 
-AI coding agents read files, execute commands, and modify your codebase autonomously. But who audits the AI? InALign provides cryptographic provenance chains, behavioral analysis, and tamper-proof audit trails — so you always know what happened and can prove it.
+<p align="center">
+  <a href="https://pypi.org/project/inalign-mcp/"><img src="https://img.shields.io/pypi/v/inalign-mcp?color=blue" alt="PyPI"></a>
+  <a href="https://github.com/Intellirim/inalign/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Intellirim/inalign" alt="License"></a>
+  <a href="https://pypi.org/project/inalign-mcp/"><img src="https://img.shields.io/pypi/pyversions/inalign-mcp" alt="Python"></a>
+  <a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-compatible-green" alt="MCP"></a>
+</p>
 
-## Why InALign?
+---
 
-1. **Record** — Every agent action is captured in a SHA-256 hash chain. One record tampered? The entire chain breaks.
-2. **Analyze** — GraphRAG behavioral analysis detects suspicious patterns: data exfiltration, privilege escalation, unusual tool sequences.
-3. **Prove** — Blockchain-anchored audit trails that anyone can independently verify. No trust required.
+## The Problem
+
+AI coding agents (Claude Code, Cursor, Copilot) can read, write, and execute anything on your machine. When something goes wrong, you have no reliable way to answer:
+
+- **What** did the agent actually do?
+- **Who** told it to do that?
+- **When** did it happen?
+- **Can I prove it** to my team, auditors, or a court?
+
+Logs can be edited. Memory fades. You need a chain of evidence that **cannot be tampered with**.
+
+## The Solution
+
+InALign is an open-source [MCP server](https://modelcontextprotocol.io/) that sits inside your AI agent and records every action into a **SHA-256 hash chain** -- each record cryptographically linked to the previous one. Modify any record and the chain breaks. Immediately detectable.
+
+```
+User prompt ──> Agent action ──> InALign records it
+                                  │
+                                  ├─ SHA-256 hash chain (tamper-proof)
+                                  ├─ Graph database (searchable)
+                                  ├─ Risk analysis (pattern detection)
+                                  └─ Policy engine (real-time guardrails)
+```
 
 ## Quick Start
 
-### Install
+**One command. 30 seconds.**
+
+```bash
+pip install inalign-mcp && python -m inalign_mcp.install YOUR_API_KEY
+```
+
+That's it. Restart your editor. Every agent action is now recorded.
+
+> Get your free API key at [in-a-lign.com](https://in-a-lign.com) (1,000 actions/month free)
+
+<details>
+<summary><strong>Manual setup (Claude Code)</strong></summary>
 
 ```bash
 pip install inalign-mcp
 ```
-
-### Configure with Claude Code
 
 Add to `~/.claude/settings.json`:
 
@@ -37,16 +64,21 @@ Add to `~/.claude/settings.json`:
     "inalign": {
       "command": "inalign-mcp",
       "env": {
-        "NEO4J_URI": "neo4j+s://your-instance.neo4j.io",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "your-password"
+        "API_KEY": "ial_your_key_here"
       }
     }
   }
 }
 ```
 
-### Configure with Cursor
+</details>
+
+<details>
+<summary><strong>Manual setup (Cursor)</strong></summary>
+
+```bash
+pip install inalign-mcp
+```
 
 Add to `~/.cursor/mcp.json`:
 
@@ -56,161 +88,179 @@ Add to `~/.cursor/mcp.json`:
     "inalign": {
       "command": "inalign-mcp",
       "env": {
-        "NEO4J_URI": "neo4j+s://your-instance.neo4j.io",
-        "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "your-password"
+        "API_KEY": "ial_your_key_here"
       }
     }
   }
 }
 ```
 
-That's it. InALign will automatically track every agent action.
+</details>
 
-## Features
+## What You Get
 
-### Provenance Tracking
-- **Cryptographic chains** - Every action is hashed and linked to the previous record
-- **W3C PROV compatible** - Industry-standard provenance data model
-- **Session-based** - Group actions by conversation/session
+### 16 MCP Tools, Zero Configuration
 
-### Behavioral Analysis
-- **Pattern detection** - 290+ regex patterns across 8 languages for known attack signatures
-- **GraphRAG** - Neo4j-powered behavioral pattern analysis: data exfiltration, privilege escalation, suspicious tool chains
-- **Cross-session profiling** - Track agent behavior across sessions to detect anomalies
+Once installed, your AI agent gains these capabilities automatically:
 
-### Security Policies
-- **STRICT_ENTERPRISE** - Maximum security for production environments
-- **BALANCED** - Default preset for general use
-- **DEV_SANDBOX** - Permissive mode for development
+| Category | Tools | What it does |
+|----------|-------|-------------|
+| **Provenance** | `record_action`, `record_user_command`, `get_provenance`, `verify_provenance` | Cryptographic audit trail for every action |
+| **Audit** | `generate_audit_report`, `verify_third_party` | Compliance reports, third-party verifiable proof |
+| **Risk** | `analyze_risk`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | GraphRAG pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
+| **Policy** | `get_policy`, `set_policy`, `list_policies`, `simulate_policy` | Runtime guardrails with 3 presets (Strict / Balanced / Sandbox) |
 
-### Audit & Compliance
-- **Blockchain anchoring** - Tamper-proof proofs on Polygon
-- **Third-party verification** - Anyone can independently verify the audit trail
-- **Export reports** - JSON, PROV-JSONLD, summary formats
+### Provenance Chain
 
-### Web Dashboard
-- **Graph visualization** - Canvas-based force-directed graph of agent actions
-- **Timeline view** - Chronological record of all events
-- **Risk analysis** - Real-time behavioral profiling
-- **Policy management** - Configure security rules in the browser
+Every action creates an immutable record:
 
-## MCP Tools
+```
+Record #1 ──hash──> Record #2 ──hash──> Record #3
+   │                    │                    │
+   └── user_command     └── file_write       └── tool_call
+       timestamp            timestamp            timestamp
+       sha256: a1b2c3       sha256: d4e5f6       sha256: g7h8i9
+       prev:   000000       prev:   a1b2c3       prev:   d4e5f6
+```
 
-InALign exposes these tools via the Model Context Protocol:
+Modify record #2? The hash changes. Record #3's `prev` no longer matches. **Chain broken. Tamper detected.**
 
-| Tool | Description |
-|------|-------------|
-| `record_user_command` | Record the user's prompt that triggered agent actions |
-| `record_action` | Record an agent action in the provenance chain |
-| `get_provenance` | Get provenance chain summary for the session |
-| `verify_provenance` | Verify integrity of the provenance chain |
-| `generate_audit_report` | Generate comprehensive audit report |
-| `verify_third_party` | Generate independently verifiable proof |
-| `analyze_risk` | Run GraphRAG pattern detection |
-| `get_behavior_profile` | Get behavioral analysis for a session |
-| `get_policy` / `set_policy` | View or change security policy |
-| `get_agent_risk` | Long-term risk profile for an agent |
-| `get_user_risk` | Org-level risk aggregation |
+### Risk Analysis
+
+GraphRAG-powered pattern detection catches:
+
+- **Data exfiltration** -- reading secrets then making network calls
+- **Privilege escalation** -- unusual permission patterns
+- **Suspicious tool chains** -- uncommon sequences of actions
+- **Anomalous behavior** -- deviations from baseline patterns
+
+### Policy Engine
+
+Three presets, runtime-switchable:
+
+| Preset | Use case |
+|--------|----------|
+| `STRICT_ENTERPRISE` | Production, regulated environments |
+| `BALANCED` | Default, everyday development |
+| `DEV_SANDBOX` | Experimentation, permissive |
+
+Simulate any policy against historical events before deploying:
+
+```
+simulate_policy("STRICT_ENTERPRISE")
+→ 12 actions would be blocked, 3 masked, 47 allowed
+```
+
+## Supported Agents
+
+Works with any agent that supports [MCP (Model Context Protocol)](https://modelcontextprotocol.io/):
+
+| Agent | Status |
+|-------|--------|
+| **Claude Code** | Native MCP |
+| **Cursor** | Native MCP |
+| **Windsurf** | Native MCP |
+| **Continue.dev** | Native MCP |
+| **Cline** | Native MCP |
+| Custom agents | MCP Protocol |
+
+## Example: Incident Investigation
+
+**Scenario**: Production config was modified unexpectedly.
+
+```
+You:    "Who modified config.py and why?"
+
+InALign: Found 1 match across 23 sessions.
+
+         Session:  abc123def456
+         Time:     2026-02-05T11:12:06Z
+         Action:   file_write → config.py
+         Command:  "Delete all logs from /var/log"
+         Agent:    claude-code
+         Hash:     e46903fe63f24a3e...
+
+         Chain Integrity: VERIFIED
+         Cryptographically proven. Cannot be denied.
+```
+
+From vague concern to **cryptographic proof** in seconds.
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│  Your AI Agent (Claude Code / Cursor / etc.)     │
+│                                                  │
+│  ┌────────────────────────────────────────────┐  │
+│  │  InALign MCP Server (runs locally)         │  │
+│  │                                            │  │
+│  │  Action → Hash Chain → API → Neo4j Graph   │  │
+│  │                    ↓                       │  │
+│  │           Risk Analysis (GraphRAG)         │  │
+│  │           Policy Engine (3 presets)        │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────┘
+                        │
+                        ▼
+┌──────────────────────────────────────────────────┐
+│  InALign Cloud API                               │
+│  - Neo4j graph storage                           │
+│  - Dashboard (activity, search, audit certs)     │
+│  - No agent credentials leave your machine       │
+└──────────────────────────────────────────────────┘
+```
+
+**Key design decision**: The MCP server runs locally inside your agent. Only provenance data (action names, hashes, timestamps) is sent to the API. Your code and credentials never leave your machine.
 
 ## CLI Commands
 
 ```bash
 inalign-mcp          # Start MCP server (stdio)
 inalign-dashboard    # Web dashboard (port 8080)
-inalign-api          # REST query API (port 8080)
-inalign-clients      # Manage API keys and clients
-inalign-anchor       # Auto-anchoring service
-inalign-viz          # Visualization API (port 8001)
+inalign-install      # One-command installer
+inalign-clients      # Manage API keys
+inalign-anchor       # Blockchain anchoring service
 ```
 
-## Architecture
+## Self-Hosting
 
-```
-AI Agent (Claude Code / Cursor / Windsurf)
-    |
-    | MCP Protocol (stdio)
-    |
-InALign MCP Server
-    |
-    +-- Provenance Engine (SHA-256 hash chains)
-    +-- Pattern Scanner (290+ attack signatures)
-    +-- GraphRAG (behavioral pattern analysis)
-    +-- Policy Engine (governance rule enforcement)
-    |
-    +---> Neo4j (provenance graphs)
-    +---> Polygon (blockchain anchoring)
-```
-
-## SDK & API
-
-For programmatic access beyond MCP:
-
-**Python SDK:**
-```bash
-pip install inalign
-```
-
-```python
-from inalign import InALign
-
-client = InALign(api_key="your-api-key")
-
-# Record agent actions
-client.record("user_command", "Fix the login bug", session_id="sess-001")
-client.record("file_write", "src/auth.py", session_id="sess-001")
-
-# Verify provenance chain
-result = client.verify(session_id="sess-001")
-print(f"Valid: {result.is_valid}")     # True
-print(f"Records: {result.chain_length}")  # 2
-
-# Get audit report
-report = client.audit_report(session_id="sess-001")
-```
-
-**JavaScript SDK:**
-```bash
-npm install @inalign/sdk
-```
-
-```typescript
-import { InALign } from "@inalign/sdk";
-
-const guard = new InALign("your-api-key");
-await guard.record("user_command", "Fix the login bug", { sessionId: "sess-001" });
-const result = await guard.verify("sess-001");
-```
-
-## Self-Hosted Deployment
-
-### Docker Compose
+InALign is fully open-source. Run everything on your own infrastructure:
 
 ```bash
-git clone https://github.com/in-a-lign/inalign.git
-cd inalign
-cp .env.example .env
-make dev
+pip install inalign-mcp[full]
+
+# Set environment variables
+export NEO4J_URI=neo4j://localhost:7687
+export NEO4J_USER=neo4j
+export NEO4J_PASSWORD=your-password
+
+# Start the dashboard
+inalign-dashboard
 ```
 
-### Kubernetes
+## Development
 
 ```bash
-kubectl apply -f infra/k8s/
+git clone https://github.com/Intellirim/inalign.git
+cd inalign/mcp-server
+pip install -e ".[dev]"
+pytest
 ```
 
-See [Deployment Guide](docs/deployment.md) for details.
+## Contributing
 
-## Documentation
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-- [Architecture](docs/architecture.md) - System design and data flow
-- [Deployment Guide](docs/deployment.md) - Docker and Kubernetes deployment
-- [SDK Guide](docs/sdk-guide.md) - Python and JavaScript SDK usage
-- [API Reference](docs/api/openapi.yaml) - OpenAPI specification
-- [Security Policy](SECURITY.md) - Vulnerability reporting
-- [Contributing](CONTRIBUTING.md) - How to contribute
-- [Changelog](CHANGELOG.md) - Release history
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+[MIT](LICENSE) -- use it however you want.
+
+## Links
+
+- **PyPI**: [pypi.org/project/inalign-mcp](https://pypi.org/project/inalign-mcp/)
+- **Issues**: [github.com/Intellirim/inalign/issues](https://github.com/Intellirim/inalign/issues)
