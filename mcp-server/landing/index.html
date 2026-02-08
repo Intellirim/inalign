@@ -549,24 +549,29 @@
 
             <div id="apiKeyResult" style="display:none; margin-top:20px;">
                 <div style="background:#dcfce7; padding:16px; border-radius:8px; margin-bottom:16px;">
-                    <strong style="color:#166534;">Success! Here's your API key:</strong>
+                    <strong style="color:#166534;">Success! Your account is ready.</strong>
                 </div>
-                <div style="background:#1e293b; color:#10b981; padding:16px; border-radius:8px; font-family:monospace; word-break:break-all;" id="apiKeyDisplay"></div>
-                <button onclick="copyApiKey()" style="width:100%; padding:12px; background:#e5e7eb; border:none; border-radius:8px; margin-top:12px; cursor:pointer; font-weight:500;">
-                    Copy API Key
-                </button>
-                <div style="margin-top:20px; padding:16px; background:#f8fafc; border-radius:8px;">
-                    <strong>Next step:</strong> Add to ~/.claude/settings.json:
-                    <pre style="background:#1e293b; color:#e2e8f0; padding:12px; border-radius:8px; margin-top:8px; overflow-x:auto; font-size:13px;">{
-  "mcpServers": {
-    "inalign": {
-      "command": "inalign-mcp",
-      "env": {
-        "API_KEY": "<span id="keyInConfig"></span>"
-      }
-    }
-  }
-}</pre>
+
+                <div style="margin-bottom:16px;">
+                    <label style="display:block; margin-bottom:6px; font-weight:600; color:#1e3a5f;">Your API Key (save it now!):</label>
+                    <div style="background:#1e293b; color:#10b981; padding:16px; border-radius:8px; font-family:monospace; word-break:break-all;" id="apiKeyDisplay"></div>
+                    <button onclick="copyApiKey()" style="width:100%; padding:10px; background:#e5e7eb; border:none; border-radius:8px; margin-top:8px; cursor:pointer; font-weight:500;">
+                        Copy API Key
+                    </button>
+                </div>
+
+                <div style="padding:16px; background:#f8fafc; border-radius:8px; border:2px solid #2563eb;">
+                    <strong style="color:#1e3a5f;">Install in 1 command:</strong>
+                    <p style="color:#666; font-size:13px; margin:6px 0 10px;">Open your terminal and paste this:</p>
+                    <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:13px; word-break:break-all; position:relative;" id="installCmdDisplay"></div>
+                    <button onclick="copyInstallCmd()" style="width:100%; padding:10px; background:#2563eb; color:white; border:none; border-radius:8px; margin-top:8px; cursor:pointer; font-weight:600;">
+                        Copy Install Command
+                    </button>
+                </div>
+
+                <div style="margin-top:16px; padding:12px; background:#fef3c7; border-radius:8px;">
+                    <strong style="color:#92400e;">After install:</strong>
+                    <span style="color:#78350f;">Restart Claude Code, then all activity is automatically tracked!</span>
                 </div>
             </div>
         </div>
@@ -633,8 +638,8 @@
                 document.getElementById('signupForm').style.display = 'none';
                 document.getElementById('apiKeyResult').style.display = 'block';
                 document.getElementById('apiKeyDisplay').textContent = data.api_key;
-                document.getElementById('keyInConfig').textContent = data.api_key;
-                document.getElementById('downloadBtn').href = '/api/download/install-script?api_key=' + encodeURIComponent(data.api_key);
+                const installCmd = 'pip install inalign-mcp && python -m inalign_mcp.install ' + data.api_key;
+                document.getElementById('installCmdDisplay').textContent = installCmd;
             } else {
                 alert(data.error || 'Signup failed');
             }
@@ -644,6 +649,12 @@
             const key = document.getElementById('apiKeyDisplay').textContent;
             navigator.clipboard.writeText(key);
             alert('API key copied!');
+        }
+
+        function copyInstallCmd() {
+            const cmd = document.getElementById('installCmdDisplay').textContent;
+            navigator.clipboard.writeText(cmd);
+            alert('Install command copied! Paste it in your terminal.');
         }
 
         // Close modal on outside click
