@@ -25,22 +25,26 @@ def get_python_path():
     return sys.executable
 
 
-def install(api_key: str):
+def install(api_key: str = None, local: bool = False):
     """Install InALign MCP server for Claude Code."""
 
     print("\n" + "="*50)
     print("  InALign MCP Server Installer")
     print("="*50 + "\n")
 
-    # Validate API key format
-    if not api_key.startswith("ial_"):
-        print("Error: Invalid API key format. Should start with 'ial_'")
-        sys.exit(1)
+    if local:
+        print("  Mode: LOCAL (in-memory, no API key needed)\n")
+    else:
+        # Validate API key format
+        if not api_key or not api_key.startswith("ial_"):
+            print("Error: Invalid API key format. Should start with 'ial_'")
+            print("Hint: Use --local for local-only mode (no API key needed)")
+            sys.exit(1)
 
     python = get_python_path()
 
     # 1. Ensure inalign-mcp is installed
-    print("[1/5] Checking inalign-mcp package...")
+    print("[1/4] Checking inalign-mcp package...")
     try:
         import inalign_mcp as _pkg
         print(f"      Already installed: {_pkg.__file__}")
@@ -57,23 +61,11 @@ def install(api_key: str):
             sys.exit(1)
         print("      Done!")
 
-    # 2. Create ~/.inalign.env file (API URL for server proxy — no DB credentials needed)
-    env_path = Path.home() / ".inalign.env"
-    api_url = os.getenv("INALIGN_API_URL", "https://api.inalign.ai")
-    env_content = f"""API_KEY={api_key}
-API_URL={api_url}
-"""
-
-    print(f"[2/5] Creating {env_path}...")
-    with open(env_path, "w") as f:
-        f.write(env_content)
-    print("      Done!")
-
-    # 3. Update Claude settings.json
+    # 2. Update Claude settings.json
     settings_path = get_claude_settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[3/5] Updating {settings_path}...")
+    print(f"[2/4] Updating {settings_path}...")
 
     # Load existing settings or create new
     if settings_path.exists():
@@ -86,22 +78,31 @@ API_URL={api_url}
         settings["mcpServers"] = {}
 
     # Use pip-installed package directly (no PYTHONPATH needed)
-    settings["mcpServers"]["inalign"] = {
+    mcp_config = {
         "command": python,
         "args": ["-m", "inalign_mcp.server"],
-        "env": {
-            "API_KEY": api_key,
-        }
     }
+
+    if not local and api_key:
+        mcp_config["env"] = {"API_KEY": api_key}
+
+        # Create ~/.inalign.env for API mode
+        env_path = Path.home() / ".inalign.env"
+        api_url = os.getenv("INALIGN_API_URL", "https://api.inalign.ai")
+        env_content = f"API_KEY={api_key}\nAPI_URL={api_url}\n"
+        with open(env_path, "w") as f:
+            f.write(env_content)
+
+    settings["mcpServers"]["inalign"] = mcp_config
 
     with open(settings_path, "w") as f:
         json.dump(settings, f, indent=2)
     print("      Done!")
 
-    # 4. Create CLAUDE.md template
+    # 3. Create CLAUDE.md template
     claude_md_path = Path.home() / "CLAUDE.md"
 
-    print(f"[4/5] Creating {claude_md_path}...")
+    print(f"[3/4] Creating {claude_md_path}...")
 
     claude_md_content = """# Claude Code Instructions
 
@@ -122,12 +123,15 @@ Example:
     else:
         print("      CLAUDE.md already exists, skipping...")
 
-    # 5. Verify MCP server can start
-    print("[5/5] Verifying MCP server...")
+    # 4. Verify MCP server can start
+    print("[4/4] Verifying MCP server...")
+    test_env = dict(os.environ)
+    if api_key:
+        test_env["API_KEY"] = api_key
     test = subprocess.run(
         [python, "-c", "from inalign_mcp.server import server; print('OK')"],
         capture_output=True, text=True, timeout=10,
-        env={**os.environ, "API_KEY": api_key},
+        env=test_env,
     )
     if test.returncode == 0 and "OK" in test.stdout:
         print("      Server verified!")
@@ -135,22 +139,35 @@ Example:
         print("      Warning: Server import check failed, but may still work at runtime")
 
     # Success message
-    client_id = api_key[:12]
     print("\n" + "="*50)
     print("  Installation Complete!")
     print("="*50)
-    print(f"""
-Your API Key: {api_key}
-Your Client ID: {client_id}
+
+    if local:
+        print("""
+Mode: LOCAL (in-memory)
+Storage: Actions recorded in memory per session
 
 Next Steps:
 1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
-3. View your activity at: https://api.inalign.ai/login
-   (Login with your API key)
+3. Every agent action is now recorded with SHA-256 hash chains
 
-All your Claude Code activity will now be automatically recorded
-and governed by InALign!
+Note: In local mode, audit trails are stored in memory and
+reset when the session ends. For persistent storage, use an
+API key or self-host with Neo4j.
+""")
+    else:
+        print(f"""
+API Key: {api_key}
+
+Next Steps:
+1. Restart Claude Code (close and reopen terminal/VSCode)
+2. Start using Claude Code normally
+3. All agent actions are now recorded and persisted
+
+Your audit trails are stored server-side with cryptographic
+verification. Use generate_audit_report to view activity.
 """)
 
 
@@ -183,16 +200,17 @@ def main():
     """CLI entry point."""
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Install:   inalign-install YOUR_API_KEY")
-        print("             python -m inalign_mcp.install YOUR_API_KEY")
+        print("  Local:     inalign-install --local")
+        print("  Cloud:     inalign-install YOUR_API_KEY")
         print("  Uninstall: inalign-install --uninstall")
-        print("\nGet your API key at: https://api.inalign.ai")
         sys.exit(1)
 
     if sys.argv[1] == "--uninstall":
         uninstall()
+    elif sys.argv[1] == "--local":
+        install(local=True)
     else:
-        install(sys.argv[1])
+        install(api_key=sys.argv[1])
 
 
 if __name__ == "__main__":

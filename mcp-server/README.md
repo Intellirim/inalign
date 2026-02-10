@@ -14,42 +14,38 @@
 
 ## The Problem
 
-AI coding agents (Claude Code, Cursor, Copilot) can read, write, and execute anything on your machine. When something goes wrong, you have no reliable way to answer:
+AI coding agents (Claude Code, Cursor, Copilot) can read, write, and execute anything on your machine. When something goes wrong:
 
 - **What** did the agent actually do?
 - **Who** told it to do that?
-- **When** did it happen?
-- **Can I prove it** to my team, auditors, or a court?
+- **Can you prove it?**
 
-Logs can be edited. Memory fades. You need a chain of evidence that **cannot be tampered with**.
+Logs can be edited. Memory fades. You need evidence that **cannot be tampered with**.
 
-## The Solution
+## Why Not Just Use Logs?
 
-InALign is an open-source [MCP server](https://modelcontextprotocol.io/) that sits inside your AI agent and records every action into a **SHA-256 hash chain** -- each record cryptographically linked to the previous one. Modify any record and the chain breaks. Immediately detectable.
-
-```
-User prompt ──> Agent action ──> InALign records it
-                                  │
-                                  ├─ SHA-256 hash chain (tamper-proof)
-                                  ├─ Graph database (searchable)
-                                  ├─ Risk analysis (pattern detection)
-                                  └─ Policy engine (real-time guardrails)
-```
+| | Traditional Logs | InALign |
+|---|---|---|
+| **Tamper resistance** | None. Anyone with access can edit. | SHA-256 hash chain. Modify one record → chain breaks. |
+| **Provenance** | "Something happened at 3pm" | Who commanded it, what the agent did, full causal chain |
+| **Risk detection** | Manual review | Automatic: data exfiltration, privilege escalation, suspicious patterns |
+| **Guardrails** | After the fact | Runtime policy engine blocks dangerous actions |
+| **Audit proof** | "Trust me" | Third-party verifiable cryptographic proof |
 
 ## Quick Start
 
-**One command. 30 seconds.**
-
 ```bash
-pip install inalign-mcp && python -m inalign_mcp.install YOUR_API_KEY
+pip install inalign-mcp && inalign-install --local
 ```
 
-That's it. Restart your editor. Every agent action is now recorded.
+Restart Claude Code. Done. Every agent action is now recorded with SHA-256 hash chains.
 
-> Get your free API key at [in-a-lign.com](https://in-a-lign.com) (1,000 actions/month free)
+> **That's it.** No API key needed. No account. No cloud. Runs 100% locally in memory.
+>
+> Want persistent storage? Use `inalign-install YOUR_API_KEY` or [self-host with Neo4j](#self-hosting).
 
 <details>
-<summary><strong>Manual setup</strong></summary>
+<summary><strong>Manual setup (without install script)</strong></summary>
 
 ```bash
 pip install inalign-mcp
@@ -61,10 +57,8 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "inalign": {
-      "command": "inalign-mcp",
-      "env": {
-        "API_KEY": "ial_your_key_here"
-      }
+      "command": "python",
+      "args": ["-m", "inalign_mcp.server"]
     }
   }
 }
@@ -76,42 +70,41 @@ Add to `~/.claude/settings.json`:
 
 ### 16 MCP Tools, Zero Configuration
 
-Once installed, your AI agent gains these capabilities automatically:
+Once installed, your AI agent automatically gains:
 
 | Category | Tools | What it does |
 |----------|-------|-------------|
 | **Provenance** | `record_action`, `record_user_command`, `get_provenance`, `verify_provenance` | Cryptographic audit trail for every action |
 | **Audit** | `generate_audit_report`, `verify_third_party` | Compliance reports, third-party verifiable proof |
-| **Risk** | `analyze_risk`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | GraphRAG pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
-| **Policy** | `get_policy`, `set_policy`, `list_policies`, `simulate_policy` | Runtime guardrails with 3 presets (Strict / Balanced / Sandbox) |
+| **Risk** | `analyze_risk`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | Pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
+| **Policy** | `get_policy`, `set_policy`, `list_policies`, `simulate_policy` | Runtime guardrails with 3 presets |
 
-### Provenance Chain
-
-Every action creates an immutable record:
+### How the Hash Chain Works
 
 ```
-Record #1 ──hash──> Record #2 ──hash──> Record #3
+Record #1 ──hash──▶ Record #2 ──hash──▶ Record #3
    │                    │                    │
    └── user_command     └── file_write       └── tool_call
-       timestamp            timestamp            timestamp
        sha256: a1b2c3       sha256: d4e5f6       sha256: g7h8i9
        prev:   000000       prev:   a1b2c3       prev:   d4e5f6
 ```
 
-Modify record #2? The hash changes. Record #3's `prev` no longer matches. **Chain broken. Tamper detected.**
+Modify record #2? Its hash changes. Record #3's `prev` no longer matches. **Chain broken. Tamper detected.**
+
+This is the same principle behind Git commits and blockchains — except applied to AI agent actions.
 
 ### Risk Analysis
 
 GraphRAG-powered pattern detection catches:
 
-- **Data exfiltration** -- reading secrets then making network calls
-- **Privilege escalation** -- unusual permission patterns
-- **Suspicious tool chains** -- uncommon sequences of actions
-- **Anomalous behavior** -- deviations from baseline patterns
+- **Data exfiltration** — reading secrets then making network calls
+- **Privilege escalation** — unusual permission patterns
+- **Suspicious tool chains** — uncommon sequences of actions
+- **Anomalous behavior** — deviations from baseline patterns
 
 ### Policy Engine
 
-Three presets, runtime-switchable:
+Three presets, switchable at runtime:
 
 | Preset | Use case |
 |--------|----------|
@@ -119,7 +112,7 @@ Three presets, runtime-switchable:
 | `BALANCED` | Default, everyday development |
 | `DEV_SANDBOX` | Experimentation, permissive |
 
-Simulate any policy against historical events before deploying:
+Simulate before deploying:
 
 ```
 simulate_policy("STRICT_ENTERPRISE")
@@ -132,31 +125,33 @@ Works with any agent that supports [MCP (Model Context Protocol)](https://modelc
 
 | Agent | Status |
 |-------|--------|
-| **Claude Code** | Native MCP |
-| **Cursor** | Native MCP |
-| **Windsurf** | Native MCP |
-| **Continue.dev** | Native MCP |
-| **Cline** | Native MCP |
-| Custom agents | MCP Protocol |
+| **Claude Code** | ✅ Native MCP |
+| **Cursor** | ✅ Native MCP |
+| **Windsurf** | ✅ Native MCP |
+| **Continue.dev** | ✅ Native MCP |
+| **Cline** | ✅ Native MCP |
+| Custom agents | Via MCP protocol |
 
 ## Example: Incident Investigation
 
-**Scenario**: Production config was modified unexpectedly.
+Production config was modified unexpectedly. Who did it?
 
 ```
-You:    "Who modified config.py and why?"
+You:    "generate an audit report for this session"
 
-InALign: Found 1 match across 23 sessions.
-
+InALign: Audit Report
+         ─────────────────────────────────
          Session:  abc123def456
-         Time:     2026-02-05T11:12:06Z
-         Action:   file_write → config.py
-         Command:  "Delete all logs from /var/log"
-         Agent:    claude-code
-         Hash:     e46903fe63f24a3e...
+         Records:  23 actions recorded
+         Chain:    VERIFIED ✓ (all hashes valid)
 
-         Chain Integrity: VERIFIED ✓
-         Cryptographically proven. Cannot be denied.
+         Timeline:
+         11:12:06  user_command  "Delete all logs from /var/log"
+         11:12:08  file_write    config.py (modified)
+         11:12:09  tool_call     bash: rm -rf /var/log/*
+
+         Risk:     HIGH — destructive file operations detected
+         Policy:   2 actions would be blocked under STRICT_ENTERPRISE
 ```
 
 From vague concern to **cryptographic proof** in seconds.
@@ -170,32 +165,36 @@ From vague concern to **cryptographic proof** in seconds.
 │  ┌────────────────────────────────────────────┐  │
 │  │  InALign MCP Server (runs locally)         │  │
 │  │                                            │  │
-│  │  Action → Hash Chain → API → Neo4j Graph   │  │
-│  │                    ↓                       │  │
-│  │           Risk Analysis (GraphRAG)         │  │
-│  │           Policy Engine (3 presets)        │  │
+│  │  Action → SHA-256 Hash Chain               │  │
+│  │              │                             │  │
+│  │     ┌────────┼────────┐                    │  │
+│  │     ▼        ▼        ▼                    │  │
+│  │  Memory   Neo4j    Cloud API               │  │
+│  │  (local)  (self)   (managed)               │  │
+│  │                                            │  │
+│  │  + Risk Analysis (GraphRAG)                │  │
+│  │  + Policy Engine (3 presets)               │  │
 │  └────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌──────────────────────────────────────────────────┐
-│  InALign Cloud API                               │
-│  - Neo4j graph storage                           │
-│  - Dashboard (activity, search, audit certs)     │
-│  - No agent credentials leave your machine       │
 └──────────────────────────────────────────────────┘
 ```
 
-**Key design decision**: The MCP server runs locally inside your agent. Only provenance data (action names, hashes, timestamps) is sent to the API. Your code and credentials never leave your machine.
+**Privacy**: The MCP server runs locally. Only provenance metadata (action names, hashes, timestamps) leaves your machine. Your code and credentials stay local.
+
+## Storage Modes
+
+| Mode | Setup | Persistence | Best for |
+|------|-------|-------------|----------|
+| **Memory** | `--local` (default) | Per session | Trying it out, local dev |
+| **Neo4j** | Self-host Neo4j | Permanent | Teams, compliance |
+| **Cloud API** | API key | Permanent | Managed service |
 
 ## Self-Hosting
 
-InALign is fully open-source. Run everything on your own infrastructure:
+Run everything on your own infrastructure:
 
 ```bash
 pip install inalign-mcp[full]
 
-# Set environment variables
 export NEO4J_URI=neo4j://localhost:7687
 export NEO4J_USER=neo4j
 export NEO4J_PASSWORD=your-password
@@ -203,6 +202,8 @@ export NEO4J_PASSWORD=your-password
 # Start the dashboard
 inalign-dashboard
 ```
+
+All data stays on your servers. No external dependencies.
 
 ## Development
 
@@ -215,7 +216,7 @@ pytest
 
 ## License
 
-[MIT](LICENSE) -- use it however you want.
+[MIT](LICENSE) — use it however you want.
 
 ## Links
 

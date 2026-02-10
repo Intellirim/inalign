@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "inalign-mcp"
-version = "0.2.4"
+version = "0.2.5"
 description = "In-A-Lign Agent Provenance & Security MCP Server"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -88,7 +88,7 @@ inalign-dashboard = "inalign_mcp.dashboard:run_dashboard"
 inalign-install = "inalign_mcp.install:main"
 
 [project.urls]
-Homepage = "https://in-a-lign.com"
+Homepage = "https://github.com/Intellirim/inalign"
 Documentation = "https://github.com/Intellirim/inalign#readme"
 Repository = "https://github.com/Intellirim/inalign"
 Issues = "https://github.com/Intellirim/inalign/issues"
