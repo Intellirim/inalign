@@ -15,6 +15,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 import uuid
 import hashlib
 from datetime import datetime, timezone
@@ -70,6 +71,22 @@ try:
     API_CLIENT_AVAILABLE = True
 except ImportError:
     API_CLIENT_AVAILABLE = False
+
+# SQLite local storage (zero-config persistent storage)
+try:
+    from .sqlite_storage import (
+        init_sqlite,
+        store_record as sqlite_store_record,
+        store_session as sqlite_store_session,
+        load_chain as sqlite_load_chain,
+        list_sessions as sqlite_list_sessions,
+        get_session_count,
+        get_record_count,
+        get_db_path,
+    )
+    SQLITE_AVAILABLE = True
+except ImportError:
+    SQLITE_AVAILABLE = False
 
 # Policy engine import
 try:
@@ -132,13 +149,16 @@ API_URL = os.getenv("INALIGN_API_URL") or os.getenv("API_URL")
 
 if NEO4J_URI and GRAPHRAG_AVAILABLE:
     try:
-        init_neo4j(
+        neo4j_ok = init_neo4j(
             uri=NEO4J_URI,
             user=os.getenv("NEO4J_USERNAME", "neo4j"),
             password=os.getenv("NEO4J_PASSWORD", "")
         )
-        STORAGE_MODE = "neo4j"
-        logger.info(f"[STORAGE] Direct Neo4j mode → {NEO4J_URI}")
+        if neo4j_ok:
+            STORAGE_MODE = "neo4j"
+            logger.info(f"[STORAGE] Direct Neo4j mode → {NEO4J_URI}")
+        else:
+            logger.warning(f"[NEO4J] Connection failed, trying next backend")
     except Exception as e:
         logger.warning(f"[NEO4J] Failed to connect: {e}")
 
@@ -150,12 +170,21 @@ if STORAGE_MODE != "neo4j" and API_URL and API_KEY and API_CLIENT_AVAILABLE:
     except Exception as e:
         logger.warning(f"[API] Failed to init: {e}")
 
+# SQLite local persistent storage (default for --local mode)
+if STORAGE_MODE == "memory" and SQLITE_AVAILABLE:
+    try:
+        if init_sqlite():
+            STORAGE_MODE = "sqlite"
+            logger.info(f"[STORAGE] SQLite local mode → {get_db_path()}")
+    except Exception as e:
+        logger.warning(f"[SQLITE] Failed to init: {e}")
+
 if STORAGE_MODE == "memory":
-    logger.info("[STORAGE] In-memory only mode (no Neo4j or API)")
+    logger.info("[STORAGE] In-memory only mode (no Neo4j, API, or SQLite)")
 
 
-def _remote_store(record) -> bool:
-    """Store a provenance record to the remote backend (Neo4j or API proxy)."""
+def _persist_store(record) -> bool:
+    """Store a provenance record to the persistent backend (Neo4j, API, or SQLite)."""
     if STORAGE_MODE == "neo4j":
         try:
             store_record(record)
@@ -187,6 +216,13 @@ def _remote_store(record) -> bool:
             )
         except Exception as e:
             logger.warning(f"[API] Failed to store: {e}")
+            return False
+    elif STORAGE_MODE == "sqlite":
+        try:
+            sqlite_store_record(record)
+            return True
+        except Exception as e:
+            logger.warning(f"[SQLITE] Failed to store: {e}")
             return False
     return False
 
@@ -379,7 +415,41 @@ async def list_tools() -> list[Tool]:
         ),
     ]
 
-    # Add policy tools if available
+    # Session history tool (SQLite mode)
+    tools.append(
+        Tool(
+            name="list_sessions",
+            description="List past audit sessions stored locally. Shows session history with record counts and timestamps. Works in SQLite storage mode.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of sessions to return (default 20)",
+                        "default": 20,
+                    },
+                },
+            },
+        )
+    )
+
+    # Export report tool (works in all modes including memory)
+    tools.append(
+        Tool(
+            name="export_report",
+            description="Export a visual HTML audit report that opens in any browser. Works in all storage modes including local memory. The report shows the full provenance chain, verification status, and action timeline.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "output_path": {
+                        "type": "string",
+                        "description": "Optional file path for the HTML report. If not provided, saves to a temp file.",
+                    },
+                },
+            },
+        )
+    )
+
     if POLICY_AVAILABLE:
         tools.extend([
             Tool(
@@ -462,7 +532,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         # Include client_id for data isolation
         args_with_client = {**arguments, "client_id": CLIENT_ID} if CLIENT_ID else arguments
         # Ensure chain has client_id before recording
-        get_or_create_chain(SESSION_ID, "Claude Code", CLIENT_ID or "")
+        chain = get_or_create_chain(SESSION_ID, "Claude Code", CLIENT_ID or "")
+        # Register session in SQLite on first call
+        if STORAGE_MODE == "sqlite" and chain._sequence == 0:
+            sqlite_store_session(SESSION_ID, chain.agent, CLIENT_ID or "")
         auto_record = prov_record_tool(
             session_id=SESSION_ID,
             tool_name=name,
@@ -472,9 +545,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         stats["provenance_records"] += 1
         logger.info(f"[PROVENANCE] Recorded: {name} (session: {SESSION_ID})")
 
-        # Store auto-provenance to remote backend
+        # Store auto-provenance to persistent backend
         if STORAGE_MODE != "memory":
-            _remote_store(auto_record)
+            _persist_store(auto_record)
     except Exception as e:
         logger.warning(f"[PROVENANCE] Failed to record: {e}")
     # === END PROVENANCE RECORDING ===
@@ -519,7 +592,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         # Store to remote backend
         if STORAGE_MODE != "memory":
-            _remote_store(record)
+            _persist_store(record)
             logger.info(f"[{STORAGE_MODE.upper()}] Stored record {record.id} with client_id={CLIENT_ID}")
 
             # Store full prompt content (compressed) for legal compliance (Neo4j direct only)
@@ -581,7 +654,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         # Store to remote backend
         if STORAGE_MODE != "memory":
-            _remote_store(record)
+            _persist_store(record)
             logger.info(f"[{STORAGE_MODE.upper()}] Stored action record {record.id} with client_id={CLIENT_ID}")
 
             # Store full content (Neo4j direct mode only)
@@ -652,6 +725,78 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "merkle_root": chain.get_merkle_root(),
                 "session_id": SESSION_ID,
                 "message": "✅ Chain integrity VERIFIED" if is_valid else f"❌ Chain BROKEN: {error}",
+            }, indent=2)
+        )]
+
+    elif name == "list_sessions":
+        if STORAGE_MODE == "sqlite" and SQLITE_AVAILABLE:
+            limit = arguments.get("limit", 20)
+            sessions = sqlite_list_sessions(limit=limit, client_id=CLIENT_ID)
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "storage_mode": "sqlite",
+                    "db_path": get_db_path(),
+                    "total_sessions": get_session_count(),
+                    "total_records": get_record_count(),
+                    "sessions": sessions,
+                    "message": f"Found {len(sessions)} sessions in local storage",
+                }, indent=2)
+            )]
+        else:
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "storage_mode": STORAGE_MODE,
+                    "message": "Session history requires SQLite storage mode. Current mode: " + STORAGE_MODE,
+                    "sessions": [],
+                }, indent=2)
+            )]
+
+    elif name == "export_report":
+        from .report import generate_html_report
+
+        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
+        is_valid, error = chain.verify_chain()
+
+        records_data = [
+            {
+                "sequence": r.sequence_number,
+                "type": r.activity_type.value,
+                "name": r.activity_name,
+                "hash": r.record_hash,
+                "previous_hash": r.previous_hash,
+                "timestamp": r.timestamp,
+            }
+            for r in chain.records
+        ]
+
+        verification = {
+            "valid": is_valid,
+            "error": error,
+            "merkle_root": chain.get_merkle_root(),
+        }
+
+        html = generate_html_report(SESSION_ID, records_data, verification, stats)
+
+        output_path = arguments.get("output_path")
+        if not output_path:
+            output_path = os.path.join(
+                tempfile.gettempdir(),
+                f"inalign-report-{SESSION_ID}.html"
+            )
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        return [TextContent(
+            type="text",
+            text=json.dumps({
+                "success": True,
+                "file_path": output_path,
+                "record_count": len(chain.records),
+                "chain_valid": is_valid,
+                "message": f"✅ Report exported: {output_path}",
             }, indent=2)
         )]
 
@@ -762,12 +907,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
         else:
+            # SQLite or memory mode: analyze from in-memory chain
+            chain = get_or_create_chain(session_id or SESSION_ID, "claude", CLIENT_ID or "")
+            tool_counts = {}
+            for r in chain.records:
+                tool_counts[r.activity_name] = tool_counts.get(r.activity_name, 0) + 1
+
             return [TextContent(type="text", text=json.dumps({
-                "message": "No remote backend configured (in-memory only mode)",
-                "session_id": session_id,
-                "risk_level": "unknown",
+                "session_id": session_id or SESSION_ID,
                 "storage_mode": STORAGE_MODE,
-            }))]
+                "risk_level": "low",
+                "total_actions": len(chain.records),
+                "tool_usage": tool_counts,
+                "patterns_detected": [],
+                "message": f"Local analysis ({STORAGE_MODE} mode) - {len(chain.records)} actions recorded",
+            }, indent=2))]
 
     elif name == "get_behavior_profile":
         session_id = arguments.get("session_id", SESSION_ID)

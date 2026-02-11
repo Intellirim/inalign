@@ -33,7 +33,7 @@ def install(api_key: str = None, local: bool = False):
     print("="*50 + "\n")
 
     if local:
-        print("  Mode: LOCAL (in-memory, no API key needed)\n")
+        print("  Mode: LOCAL (SQLite persistent storage, no API key needed)\n")
     else:
         # Validate API key format
         if not api_key or not api_key.startswith("ial_"):
@@ -144,18 +144,27 @@ Example:
     print("="*50)
 
     if local:
-        print("""
-Mode: LOCAL (in-memory)
-Storage: Actions recorded in memory per session
+        # Create ~/.inalign directory for SQLite storage
+        inalign_dir = Path.home() / ".inalign"
+        inalign_dir.mkdir(parents=True, exist_ok=True)
+        print(f"      Created {inalign_dir}")
+
+        print(f"""
+Mode: LOCAL (SQLite persistent storage)
+Database: {inalign_dir / 'provenance.db'}
 
 Next Steps:
 1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
-3. Every agent action is now recorded with SHA-256 hash chains
+3. Every agent action is recorded with SHA-256 hash chains
 
-Note: In local mode, audit trails are stored in memory and
-reset when the session ends. For persistent storage, use an
-API key or self-host with Neo4j.
+All audit trails are stored locally at ~/.inalign/provenance.db
+and persist across sessions. No external services needed.
+Use 'export_report' to generate a visual HTML audit report.
+
+Upgrade path:
+- Self-host with Neo4j for graph-based risk analysis
+- Use API key for cloud-hosted governance
 """)
     else:
         print(f"""

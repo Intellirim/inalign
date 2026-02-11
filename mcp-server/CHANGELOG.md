@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.7] - 2026-02-12
+
+### Added
+- **SQLite local persistent storage** — provenance records now persist across sessions at `~/.inalign/provenance.db`, zero configuration required
+- `list_sessions` MCP tool — browse past audit sessions stored locally
+- `export_report` MCP tool — generate visual HTML audit reports in any storage mode
+- HTML report generator (`report.py`) — self-contained dark-theme audit report with chain visualization
+
+### Changed
+- Storage fallback chain: Neo4j → API → **SQLite** → Memory (SQLite is new default for local mode)
+- `--local` install now uses SQLite persistent storage instead of volatile memory
+- Fixed Neo4j `init_neo4j()` return value check — properly falls back when connection fails
+
+## [0.2.6] - 2026-02-11
+
+### Added
+- Performance benchmarks in README (1000 actions ~50ms, 10000 verify <200ms)
+- CHANGELOG.md version history
+
+### Changed
+- Test code cleanup (proper pytest style)
+- Removed legacy install.py from root
+
 ## [0.2.5] - 2026-02-09
 
 ### Added
