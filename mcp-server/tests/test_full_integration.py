@@ -78,7 +78,6 @@ def test_context_extraction():
     assert ctx.language == "python", f"Expected python, got {ctx.language}"
     assert "fastapi" in ctx.frameworks, f"Expected fastapi in frameworks"
     print("  [PASS] Context extraction working correctly")
-    return ctx
 
 
 def test_context_aware_scanning():
@@ -120,7 +119,6 @@ def test_context_aware_scanning():
     assert not result_context.safe or has_threat_category(result_context.threats, "instruction"), \
         "Context scan should detect injection"
     print("  [PASS] Context-aware scanning working correctly")
-    return result_context
 
 
 def test_provenance_chain():
@@ -175,7 +173,6 @@ def test_provenance_chain():
     assert is_valid, f"Chain integrity should be valid: {error_msg}"
     assert len(chain.records) >= 2, "Should have at least 2 records"
     print("  [PASS] Provenance chain working correctly")
-    return chain
 
 
 def test_policy_engine():
@@ -214,7 +211,6 @@ def test_policy_engine():
     assert dev_result.action in [PolicyAction.LOG_ONLY, PolicyAction.WARN, PolicyAction.ALLOW], "Dev sandbox should be permissive"
 
     print("\n  [PASS] Policy engine working correctly")
-    return True
 
 
 def test_full_integration():
@@ -334,7 +330,6 @@ def test_full_integration():
     print("\n" + "="*60)
     print("  [PASS] FULL INTEGRATION TEST SUCCESSFUL!")
     print("="*60)
-    return True
 
 
 def run_all_tests():
@@ -347,11 +342,11 @@ def run_all_tests():
     results = {}
 
     try:
-        results['context'] = test_context_extraction()
-        results['scanning'] = test_context_aware_scanning()
-        results['provenance'] = test_provenance_chain()
-        results['policy'] = test_policy_engine()
-        results['integration'] = test_full_integration()
+        test_context_extraction()
+        test_context_aware_scanning()
+        test_provenance_chain()
+        test_policy_engine()
+        test_full_integration()
 
         print("\n")
         print("=" * 60)

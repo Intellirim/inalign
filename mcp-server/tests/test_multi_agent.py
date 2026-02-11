@@ -111,8 +111,6 @@ def test_multi_agent_tracking():
     assert len(sessions) == len(agents), "All agents should have sessions"
     print("\n  [PASS] All agents tracked successfully!")
 
-    return True
-
 
 def test_api_key_validation():
     """Test that API key works for all agents."""
@@ -145,7 +143,6 @@ def test_api_key_validation():
     assert valid2 == False, "Invalid key should fail"
 
     print("\n  [PASS] API key validation working!")
-    return True
 
 
 def test_usage_tracking():
@@ -184,7 +181,6 @@ def test_usage_tracking():
     assert stats['pii_detected'] == 1, "Should have 1 PII"
 
     print("\n  [PASS] Usage tracking working!")
-    return True
 
 
 def test_audit_export():
@@ -219,7 +215,6 @@ def test_audit_export():
     assert len(csv_export.splitlines()) > 1, "CSV should have rows"
 
     print("\n  [PASS] Audit export working!")
-    return True
 
 
 def run_all_tests():
