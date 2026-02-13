@@ -2,11 +2,14 @@
 InALign Usage Limiter
 
 Tracks and enforces usage limits per client based on their plan.
+Persists usage data to ~/.inalign/usage.json to survive server restarts.
 """
 
 import os
+import json
+import threading
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from pathlib import Path
 from dataclasses import dataclass
 
 # Plan limits
@@ -28,9 +31,11 @@ PLAN_LIMITS = {
     }
 }
 
-# In-memory usage tracking (replace with Redis/DB in production)
-# Format: {client_id: {"month": "2026-02", "count": 123, "plan": "starter"}}
-USAGE_CACHE = {}
+# Persistent usage file
+_USAGE_FILE = str(Path.home() / ".inalign" / "usage.json")
+_save_lock = threading.Lock()
+_save_counter = 0  # Save every N increments to reduce disk I/O
+_SAVE_INTERVAL = 10  # Save to disk every 10 actions
 
 
 @dataclass
@@ -48,6 +53,46 @@ def get_current_month() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
+def _load_usage() -> dict:
+    """Load usage data from disk."""
+    try:
+        if os.path.exists(_USAGE_FILE):
+            with open(_USAGE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Convert inf back from string
+                for cid, info in data.items():
+                    if info.get("plan") == "enterprise":
+                        pass  # limits handled by PLAN_LIMITS
+                return data
+    except Exception as e:
+        print(f"[USAGE] Error loading {_USAGE_FILE}: {e}")
+    return {}
+
+
+def _save_usage():
+    """Save usage data to disk (thread-safe)."""
+    with _save_lock:
+        try:
+            os.makedirs(os.path.dirname(_USAGE_FILE), exist_ok=True)
+            with open(_USAGE_FILE, "w", encoding="utf-8") as f:
+                json.dump(USAGE_CACHE, f, indent=2)
+        except Exception as e:
+            print(f"[USAGE] Error saving {_USAGE_FILE}: {e}")
+
+
+def _maybe_save():
+    """Save periodically to reduce disk writes."""
+    global _save_counter
+    _save_counter += 1
+    if _save_counter >= _SAVE_INTERVAL:
+        _save_counter = 0
+        _save_usage()
+
+
+# Load persisted usage on module import
+USAGE_CACHE = _load_usage()
+
+
 def get_usage(client_id: str) -> dict:
     """Get current usage for a client."""
     if client_id not in USAGE_CACHE:
@@ -62,6 +107,7 @@ def get_usage(client_id: str) -> dict:
     if USAGE_CACHE[client_id]["month"] != current_month:
         USAGE_CACHE[client_id]["month"] = current_month
         USAGE_CACHE[client_id]["count"] = 0
+        _save_usage()  # Save on month reset
 
     return USAGE_CACHE[client_id]
 
@@ -69,7 +115,9 @@ def get_usage(client_id: str) -> dict:
 def set_plan(client_id: str, plan: str):
     """Set the plan for a client."""
     usage = get_usage(client_id)
-    usage["plan"] = plan
+    if usage["plan"] != plan:
+        usage["plan"] = plan
+        _save_usage()
 
 
 def check_and_increment(client_id: str, plan: str = None) -> UsageStatus:
@@ -80,7 +128,7 @@ def check_and_increment(client_id: str, plan: str = None) -> UsageStatus:
     usage = get_usage(client_id)
 
     # Update plan if provided
-    if plan:
+    if plan and usage.get("plan") != plan:
         usage["plan"] = plan
 
     current_plan = usage.get("plan", "starter")
@@ -103,6 +151,9 @@ def check_and_increment(client_id: str, plan: str = None) -> UsageStatus:
     # Increment and allow
     usage["count"] = current_count + 1
     remaining = int(limit - usage["count"]) if limit != float('inf') else -1
+
+    # Periodic save to disk
+    _maybe_save()
 
     return UsageStatus(
         allowed=True,

@@ -8,7 +8,7 @@ Neo4j operations server-side.
 Usage:
     from .api_client import ApiClient
 
-    client = ApiClient(api_url="http://3.36.132.4:8080", api_key="ial_xxx")
+    client = ApiClient(api_url="http://15.165.20.75:8080", api_key="ial_xxx")
     client.store_record(record_data)
     risk = client.analyze_risk(session_id="abc123")
 """

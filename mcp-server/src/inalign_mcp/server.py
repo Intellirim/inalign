@@ -521,7 +521,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     "current_usage": usage_status.current_count,
                     "limit": usage_status.limit,
                     "plan": usage_status.plan,
-                    "upgrade_url": "http://3.36.132.4:8080"
+                    "upgrade_url": "http://15.165.20.75:8080"
                 })
             )]
         logger.info(f"[USAGE] {CLIENT_ID}: {usage_status.current_count}/{usage_status.limit} actions")

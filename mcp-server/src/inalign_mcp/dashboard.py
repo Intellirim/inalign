@@ -2139,7 +2139,7 @@ import platform
 from pathlib import Path
 
 API_KEY = "{api_key}"
-API_URL = "http://3.36.132.4:8080"
+API_URL = "http://15.165.20.75:8080"
 
 def get_python_path():
     return sys.executable
@@ -2217,7 +2217,7 @@ Client ID: {{API_KEY[:12]}}
 Next Steps:
 1. Restart Claude Code (close/reopen terminal or VSCode)
 2. Start using Claude Code normally
-3. View activity at: http://3.36.132.4:8080/login
+3. View activity at: http://15.165.20.75:8080/login
 
 All activity will be automatically recorded and governed by InALign!
 """)
