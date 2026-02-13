@@ -71,7 +71,7 @@ def _get_system_prompt() -> str:
 
         license_hash = license_data.get("license_key_hash", "")
         if not license_hash:
-            return ""
+            return _build_prompt()
 
         # Prompt stored as encrypted file alongside license
         prompt_file = LICENSE_FILE.parent / "analyzer_prompt.enc"
