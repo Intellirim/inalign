@@ -44,7 +44,7 @@ def install(api_key: str = None, local: bool = False):
     python = get_python_path()
 
     # 1. Ensure inalign-mcp is installed
-    print("[1/4] Checking inalign-mcp package...")
+    print("[1/5] Checking inalign-mcp package...")
     try:
         import inalign_mcp as _pkg
         print(f"      Already installed: {_pkg.__file__}")
@@ -65,7 +65,7 @@ def install(api_key: str = None, local: bool = False):
     settings_path = get_claude_settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[2/4] Updating {settings_path}...")
+    print(f"[2/5] Updating {settings_path} (MCP server + auto-report hook)...")
 
     # Load existing settings or create new
     if settings_path.exists():
@@ -95,6 +95,28 @@ def install(api_key: str = None, local: bool = False):
 
     settings["mcpServers"]["inalign"] = mcp_config
 
+    # Add session-end hook for automatic report generation
+    if "hooks" not in settings:
+        settings["hooks"] = {}
+    if "Stop" not in settings["hooks"]:
+        settings["hooks"]["Stop"] = []
+
+    # Check if inalign hook already exists
+    hook_exists = any(
+        "inalign-ingest" in str(h.get("command", ""))
+        for hook_group in settings["hooks"].get("Stop", [])
+        for h in hook_group.get("hooks", [])
+    )
+
+    if not hook_exists:
+        settings["hooks"]["Stop"].append({
+            "matcher": "",
+            "hooks": [{
+                "type": "command",
+                "command": f"{python} -m inalign_mcp.session_ingest --latest --save"
+            }]
+        })
+
     with open(settings_path, "w") as f:
         json.dump(settings, f, indent=2)
     print("      Done!")
@@ -102,7 +124,7 @@ def install(api_key: str = None, local: bool = False):
     # 3. Create CLAUDE.md template
     claude_md_path = Path.home() / "CLAUDE.md"
 
-    print(f"[3/4] Creating {claude_md_path}...")
+    print(f"[3/5] Creating {claude_md_path}...")
 
     claude_md_content = """# Claude Code Instructions
 
@@ -123,8 +145,14 @@ Example:
     else:
         print("      CLAUDE.md already exists, skipping...")
 
-    # 4. Verify MCP server can start
-    print("[4/4] Verifying MCP server...")
+    # 4. Create sessions directory
+    print("[4/5] Creating sessions directory...")
+    sessions_dir = Path.home() / ".inalign" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    print(f"      {sessions_dir}")
+
+    # 5. Verify MCP server can start
+    print("[5/5] Verifying MCP server...")
     test_env = dict(os.environ)
     if api_key:
         test_env["API_KEY"] = api_key
@@ -160,11 +188,13 @@ Next Steps:
 
 All audit trails are stored locally at ~/.inalign/provenance.db
 and persist across sessions. No external services needed.
-Use 'export_report' to generate a visual HTML audit report.
 
-Upgrade path:
-- Self-host with Neo4j for graph-based risk analysis
-- Use API key for cloud-hosted governance
+Auto-report: When a session ends, a full conversation report
+(prompts, responses, tool calls) is auto-saved to:
+  ~/.inalign/sessions/
+  ~/inalign-session-report.html (open in browser)
+
+Manual: inalign-ingest --latest --save
 """)
     else:
         print(f"""
