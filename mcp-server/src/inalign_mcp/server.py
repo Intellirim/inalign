@@ -164,11 +164,15 @@ if NEO4J_URI and GRAPHRAG_AVAILABLE:
 
 if STORAGE_MODE != "neo4j" and API_URL and API_KEY and API_CLIENT_AVAILABLE:
     try:
-        init_api_client(API_URL, API_KEY)
+        client = init_api_client(API_URL, API_KEY)
+        # Verify API is reachable before committing to api mode
+        import urllib.request
+        req = urllib.request.Request(f"{API_URL.rstrip('/')}/", method="HEAD")
+        urllib.request.urlopen(req, timeout=3)
         STORAGE_MODE = "api"
         logger.info(f"[STORAGE] API proxy mode → {API_URL}")
     except Exception as e:
-        logger.warning(f"[API] Failed to init: {e}")
+        logger.warning(f"[API] Server unreachable ({API_URL}), falling back: {e}")
 
 # SQLite local persistent storage (default for --local mode)
 if STORAGE_MODE == "memory" and SQLITE_AVAILABLE:
