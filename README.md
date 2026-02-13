@@ -1,6 +1,6 @@
 <p align="center">
   <h1 align="center">InALign</h1>
-  <p align="center"><strong>Tamper-proof audit trails for AI agents</strong></p>
+  <p align="center"><strong>Tamper-proof audit trails for AI coding agents</strong></p>
   <p align="center">Know what your AI agents did. Prove it. Cryptographically.</p>
 </p>
 
@@ -32,22 +32,24 @@ InALign is an open-source [MCP server](https://modelcontextprotocol.io/) that si
 User prompt ──> Agent action ──> InALign records it
                                   │
                                   ├─ SHA-256 hash chain (tamper-proof)
-                                  ├─ Graph database (searchable)
+                                  ├─ Full conversation capture (prompts + responses)
+                                  ├─ Interactive HTML reports (graph + timeline)
                                   ├─ Risk analysis (pattern detection)
                                   └─ Policy engine (real-time guardrails)
 ```
 
 ## Quick Start
 
-**One command. 30 seconds.**
+**One command. No account needed.**
 
 ```bash
-pip install inalign-mcp && python -m inalign_mcp.install YOUR_API_KEY
+pip install inalign-mcp
+inalign-install --local
 ```
 
-That's it. Restart your editor. Every agent action is now recorded.
+That's it. Restart your editor. Every agent action is now recorded locally with SHA-256 hash chains. When you close a session, a full conversation report is automatically saved.
 
-> Get your free API key at [in-a-lign.com](https://in-a-lign.com) (1,000 actions/month free)
+> **100% local. Zero telemetry. No API key required.**
 
 <details>
 <summary><strong>Manual setup (Claude Code)</strong></summary>
@@ -62,10 +64,8 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "inalign": {
-      "command": "inalign-mcp",
-      "env": {
-        "API_KEY": "ial_your_key_here"
-      }
+      "command": "python",
+      "args": ["-m", "inalign_mcp.server"]
     }
   }
 }
@@ -86,10 +86,8 @@ Add to `~/.cursor/mcp.json`:
 {
   "mcpServers": {
     "inalign": {
-      "command": "inalign-mcp",
-      "env": {
-        "API_KEY": "ial_your_key_here"
-      }
+      "command": "python",
+      "args": ["-m", "inalign_mcp.server"]
     }
   }
 }
@@ -99,16 +97,44 @@ Add to `~/.cursor/mcp.json`:
 
 ## What You Get
 
-### 16 MCP Tools, Zero Configuration
+### 16 MCP Tools + Session Capture
 
 Once installed, your AI agent gains these capabilities automatically:
 
 | Category | Tools | What it does |
 |----------|-------|-------------|
 | **Provenance** | `record_action`, `record_user_command`, `get_provenance`, `verify_provenance` | Cryptographic audit trail for every action |
-| **Audit** | `generate_audit_report`, `verify_third_party` | Compliance reports, third-party verifiable proof |
+| **Audit** | `generate_audit_report`, `verify_third_party`, `export_report` | Compliance reports, interactive HTML reports, third-party verifiable proof |
 | **Risk** | `analyze_risk`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | GraphRAG pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
 | **Policy** | `get_policy`, `set_policy`, `list_policies`, `simulate_policy` | Runtime guardrails with 3 presets (Strict / Balanced / Sandbox) |
+
+### Full Conversation Capture
+
+InALign captures **everything** -- not just metadata:
+
+- **User prompts**: What you asked the agent to do
+- **Agent responses**: What the agent said back (including thinking blocks)
+- **Tool calls**: Every file read, write, search, and execution with full inputs/outputs
+- **Token usage**: Model, tokens used per interaction
+- **Timestamps**: Precise timing for every action
+
+All stored as compressed `.json.gz` files locally at `~/.inalign/sessions/`.
+
+### Interactive HTML Reports
+
+Every session generates a self-contained HTML report with:
+
+- **Graph visualization** (vis.js): Interactive node graph showing conversation flow
+- **Conversation timeline**: Full chronological view of prompts, responses, and tool calls
+- **Search & filter**: Find specific actions, filter by type (user/assistant/tool)
+- **SHA-256 verification**: Every record shows its hash for tamper detection
+- **Export**: Download as JSON or CSV for further analysis
+
+Reports auto-generate when sessions end. Or generate manually:
+
+```bash
+inalign-ingest --latest --save
+```
 
 ### Provenance Chain
 
@@ -157,12 +183,12 @@ Works with any agent that supports [MCP (Model Context Protocol)](https://modelc
 
 | Agent | Status |
 |-------|--------|
-| **Claude Code** | Native MCP |
-| **Cursor** | Native MCP |
-| **Windsurf** | Native MCP |
-| **Continue.dev** | Native MCP |
-| **Cline** | Native MCP |
-| Custom agents | MCP Protocol |
+| **Claude Code** | Full support (auto-report on session end) |
+| **Cursor** | Full support |
+| **Windsurf** | Full support |
+| **Continue.dev** | Full support |
+| **Cline** | Full support |
+| Custom agents | MCP Protocol compatible |
 
 ## Example: Incident Investigation
 
@@ -178,13 +204,12 @@ InALign: Found 1 match across 23 sessions.
          Action:   file_write → config.py
          Command:  "Delete all logs from /var/log"
          Agent:    claude-code
-         Hash:     e46903fe63f24a3e...
 
          Chain Integrity: VERIFIED
-         Cryptographically proven. Cannot be denied.
+         Full conversation available in session report.
 ```
 
-From vague concern to **cryptographic proof** in seconds.
+From vague concern to **cryptographic proof** in seconds. Open the session report to see the exact prompts, agent reasoning, and tool calls that led to the change.
 
 ## Architecture
 
@@ -195,33 +220,57 @@ From vague concern to **cryptographic proof** in seconds.
 │  ┌────────────────────────────────────────────┐  │
 │  │  InALign MCP Server (runs locally)         │  │
 │  │                                            │  │
-│  │  Action → Hash Chain → API → Neo4j Graph   │  │
-│  │                    ↓                       │  │
-│  │           Risk Analysis (GraphRAG)         │  │
-│  │           Policy Engine (3 presets)        │  │
+│  │  Action → Hash Chain → Local SQLite        │  │
+│  │  Session Logs → Compressed JSON            │  │
+│  │           ↓                                │  │
+│  │  Risk Analysis (GraphRAG)                  │  │
+│  │  Policy Engine (3 presets)                 │  │
+│  │  Auto HTML Reports (session end)           │  │
 │  └────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────┘
-                        │
-                        ▼
-┌──────────────────────────────────────────────────┐
-│  InALign Cloud API                               │
-│  - Neo4j graph storage                           │
-│  - Dashboard (activity, search, audit certs)     │
-│  - No agent credentials leave your machine       │
 └──────────────────────────────────────────────────┘
 ```
 
-**Key design decision**: The MCP server runs locally inside your agent. Only provenance data (action names, hashes, timestamps) is sent to the API. Your code and credentials never leave your machine.
+**Key design decisions**:
+
+- **Local-first**: Everything works offline with SQLite. No cloud required.
+- **Zero telemetry**: Your data never leaves your machine.
+- **Full content**: Captures actual prompts and responses, not just metadata.
+- **Auto-reports**: Interactive HTML reports generated automatically when sessions end.
 
 ## CLI Commands
 
 ```bash
-inalign-mcp          # Start MCP server (stdio)
-inalign-dashboard    # Web dashboard (port 8080)
-inalign-install      # One-command installer
-inalign-clients      # Manage API keys
-inalign-anchor       # Blockchain anchoring service
+inalign-install --local  # One-command installer (local SQLite mode)
+inalign-mcp              # Start MCP server (stdio)
+inalign-ingest           # Parse session logs → interactive HTML reports
+inalign-dashboard        # Web dashboard (port 8080)
+inalign-clients          # Manage API keys
+inalign-anchor           # Blockchain anchoring service
 ```
+
+### inalign-ingest
+
+Parse any AI agent session log and generate an interactive report:
+
+```bash
+# Auto-detect latest Claude Code session
+inalign-ingest --latest --save
+
+# Parse a specific session file
+inalign-ingest path/to/session.jsonl --save --output report.html
+
+# Export as JSON
+inalign-ingest --latest --json
+```
+
+## Storage
+
+| Mode | Backend | Use case |
+|------|---------|----------|
+| **Local** (default) | SQLite (`~/.inalign/provenance.db`) | Personal use, no setup |
+| **Cloud** | Neo4j + API | Team use, dashboard, advanced queries |
+
+Session reports are always stored locally at `~/.inalign/sessions/` regardless of mode.
 
 ## Self-Hosting
 
