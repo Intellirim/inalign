@@ -3,7 +3,10 @@
 InALign MCP Server Installer
 
 One-command setup for Claude Code integration.
-Usage: python install.py YOUR_API_KEY
+Usage:
+  inalign-install --local           # Free, local-only
+  inalign-install --license KEY     # Pro/Enterprise with license key
+  inalign-install --uninstall       # Remove InALign
 """
 
 import os
@@ -25,26 +28,22 @@ def get_python_path():
     return sys.executable
 
 
-def install(api_key: str = None, local: bool = False):
+def install(local: bool = False, license_key: str = None):
     """Install InALign MCP server for Claude Code."""
 
     print("\n" + "="*50)
     print("  InALign MCP Server Installer")
     print("="*50 + "\n")
 
-    if local:
-        print("  Mode: LOCAL (SQLite persistent storage, no API key needed)\n")
+    if license_key:
+        print("  Mode: PRO (license key activation)\n")
     else:
-        # Validate API key format
-        if not api_key or not api_key.startswith("ial_"):
-            print("Error: Invalid API key format. Should start with 'ial_'")
-            print("Hint: Use --local for local-only mode (no API key needed)")
-            sys.exit(1)
+        print("  Mode: LOCAL (free, SQLite storage)\n")
 
     python = get_python_path()
 
     # 1. Ensure inalign-mcp is installed
-    print("[1/5] Checking inalign-mcp package...")
+    print("[1/6] Checking inalign-mcp package...")
     try:
         import inalign_mcp as _pkg
         print(f"      Already installed: {_pkg.__file__}")
@@ -61,11 +60,39 @@ def install(api_key: str = None, local: bool = False):
             sys.exit(1)
         print("      Done!")
 
-    # 2. Update Claude settings.json
+    # 2. Create ~/.inalign directory
+    print("[2/6] Creating data directories...")
+    inalign_dir = Path.home() / ".inalign"
+    sessions_dir = inalign_dir / "sessions"
+    inalign_dir.mkdir(parents=True, exist_ok=True)
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    print(f"      {inalign_dir}")
+    print(f"      {sessions_dir}")
+
+    # 3. Activate license (if provided)
+    if license_key:
+        print("[3/6] Activating license key...")
+        try:
+            from inalign_mcp.license import activate_license, get_license_info
+            result = activate_license(license_key)
+            if result["success"]:
+                info = get_license_info()
+                print(f"      Plan: {info['plan'].upper()}")
+                print(f"      Features: {len(info['features'])} unlocked")
+            else:
+                print(f"      Warning: {result.get('error', 'Activation failed')}")
+                print("      Continuing with free plan. You can retry later.")
+        except Exception as e:
+            print(f"      Warning: License activation failed ({e})")
+            print("      Continuing with free plan.")
+    else:
+        print("[3/6] License: Free plan (upgrade anytime at inalign.dev)")
+
+    # 4. Update Claude settings.json (MCP server + auto-report hook)
     settings_path = get_claude_settings_path()
     settings_path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[2/5] Updating {settings_path} (MCP server + auto-report hook)...")
+    print(f"[4/6] Updating {settings_path}...")
 
     # Load existing settings or create new
     if settings_path.exists():
@@ -77,21 +104,11 @@ def install(api_key: str = None, local: bool = False):
     if "mcpServers" not in settings:
         settings["mcpServers"] = {}
 
-    # Use pip-installed package directly (no PYTHONPATH needed)
+    # MCP server config (no API key needed, everything is local)
     mcp_config = {
         "command": python,
         "args": ["-m", "inalign_mcp.server"],
     }
-
-    if not local and api_key:
-        mcp_config["env"] = {"API_KEY": api_key}
-
-        # Create ~/.inalign.env for API mode
-        env_path = Path.home() / ".inalign.env"
-        api_url = os.getenv("INALIGN_API_URL", "https://api.inalign.ai")
-        env_content = f"API_KEY={api_key}\nAPI_URL={api_url}\n"
-        with open(env_path, "w") as f:
-            f.write(env_content)
 
     settings["mcpServers"]["inalign"] = mcp_config
 
@@ -121,10 +138,10 @@ def install(api_key: str = None, local: bool = False):
         json.dump(settings, f, indent=2)
     print("      Done!")
 
-    # 3. Create CLAUDE.md template
+    # 5. Create CLAUDE.md template
     claude_md_path = Path.home() / "CLAUDE.md"
 
-    print(f"[3/5] Creating {claude_md_path}...")
+    print(f"[5/6] Creating {claude_md_path}...")
 
     claude_md_content = """# Claude Code Instructions
 
@@ -145,21 +162,11 @@ Example:
     else:
         print("      CLAUDE.md already exists, skipping...")
 
-    # 4. Create sessions directory
-    print("[4/5] Creating sessions directory...")
-    sessions_dir = Path.home() / ".inalign" / "sessions"
-    sessions_dir.mkdir(parents=True, exist_ok=True)
-    print(f"      {sessions_dir}")
-
-    # 5. Verify MCP server can start
-    print("[5/5] Verifying MCP server...")
-    test_env = dict(os.environ)
-    if api_key:
-        test_env["API_KEY"] = api_key
+    # 6. Verify MCP server can start
+    print("[6/6] Verifying MCP server...")
     test = subprocess.run(
         [python, "-c", "from inalign_mcp.server import server; print('OK')"],
         capture_output=True, text=True, timeout=10,
-        env=test_env,
     )
     if test.returncode == 0 and "OK" in test.stdout:
         print("      Server verified!")
@@ -171,48 +178,94 @@ Example:
     print("  Installation Complete!")
     print("="*50)
 
-    if local:
-        # Create ~/.inalign directory for SQLite storage
-        inalign_dir = Path.home() / ".inalign"
-        inalign_dir.mkdir(parents=True, exist_ok=True)
-        print(f"      Created {inalign_dir}")
-
+    if license_key:
         print(f"""
-Mode: LOCAL (SQLite persistent storage)
+Mode: PRO (license activated)
 Database: {inalign_dir / 'provenance.db'}
+License: {inalign_dir / 'license.json'}
+
+Your data stays 100% on your machine. No telemetry.
 
 Next Steps:
 1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
-3. Every agent action is recorded with SHA-256 hash chains
+3. All actions recorded with SHA-256 hash chains
+4. Pro features unlocked (advanced reports, custom policies, etc.)
 
-All audit trails are stored locally at ~/.inalign/provenance.db
-and persist across sessions. No external services needed.
-
-Auto-report: When a session ends, a full conversation report
-(prompts, responses, tool calls) is auto-saved to:
-  ~/.inalign/sessions/
-  ~/inalign-session-report.html (open in browser)
-
+Auto-report: Session reports auto-saved to ~/.inalign/sessions/
 Manual: inalign-ingest --latest --save
 """)
     else:
         print(f"""
-API Key: {api_key}
+Mode: FREE (local SQLite storage)
+Database: {inalign_dir / 'provenance.db'}
+
+Your data stays 100% on your machine. No telemetry.
 
 Next Steps:
 1. Restart Claude Code (close and reopen terminal/VSCode)
 2. Start using Claude Code normally
-3. All agent actions are now recorded and persisted
+3. All actions recorded with SHA-256 hash chains
 
-Your audit trails are stored server-side with cryptographic
-verification. Use generate_audit_report to view activity.
+Auto-report: Session reports auto-saved to ~/.inalign/sessions/
+Manual: inalign-ingest --latest --save
+
+Upgrade: inalign-install --license YOUR_KEY
+Get a license at https://inalign.dev
 """)
+
+
+def activate(license_key: str):
+    """Activate or update a license key without full reinstall."""
+    print("\n" + "="*50)
+    print("  InALign License Activation")
+    print("="*50 + "\n")
+
+    try:
+        from inalign_mcp.license import activate_license, get_license_info
+        result = activate_license(license_key)
+        if result["success"]:
+            info = get_license_info()
+            print(f"  Plan: {info['plan'].upper()}")
+            print(f"  Status: {info['status']}")
+            print(f"  Features: {', '.join(info['features'])}")
+            print(f"\n  License saved to ~/.inalign/license.json")
+            print(f"  Restart Claude Code to apply changes.")
+        else:
+            print(f"  Error: {result.get('error', 'Activation failed')}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"  Error: {e}")
+        sys.exit(1)
+
+
+def show_license():
+    """Show current license status."""
+    try:
+        from inalign_mcp.license import get_license_info
+        info = get_license_info()
+        print(f"\n  Plan: {info['plan'].upper()}")
+        print(f"  Status: {info['status']}")
+        if info.get('license_prefix'):
+            print(f"  License: {info['license_prefix']}")
+        print(f"  Features: {', '.join(info['features'])}")
+        limits = info.get('limits', {})
+        print(f"  Actions/month: {limits.get('actions_per_month', '?')}")
+        print(f"  Retention: {limits.get('retention_days', '?')} days")
+        print(f"  Max agents: {limits.get('max_agents', '?')}")
+    except Exception as e:
+        print(f"  Error: {e}")
 
 
 def uninstall():
     """Remove InALign configuration."""
     print("\nUninstalling InALign...")
+
+    # Remove license
+    license_path = Path.home() / ".inalign" / "license.json"
+    if license_path.exists():
+        license_path.unlink()
+        print(f"Removed {license_path}")
 
     # Remove env file
     env_path = Path.home() / ".inalign.env"
@@ -233,23 +286,41 @@ def uninstall():
             print(f"Removed inalign from {settings_path}")
 
     print("Uninstall complete!")
+    print("Note: Audit data preserved at ~/.inalign/ (delete manually if needed)")
 
 
 def main():
     """CLI entry point."""
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  Local:     inalign-install --local")
-        print("  Cloud:     inalign-install YOUR_API_KEY")
-        print("  Uninstall: inalign-install --uninstall")
+        print("  Install:     inalign-install --local")
+        print("  With license: inalign-install --license YOUR_KEY")
+        print("  Activate:    inalign-install --activate YOUR_KEY")
+        print("  Status:      inalign-install --status")
+        print("  Uninstall:   inalign-install --uninstall")
         sys.exit(1)
 
-    if sys.argv[1] == "--uninstall":
+    arg = sys.argv[1]
+
+    if arg == "--uninstall":
         uninstall()
-    elif sys.argv[1] == "--local":
+    elif arg == "--local":
         install(local=True)
+    elif arg == "--license":
+        if len(sys.argv) < 3:
+            print("Error: License key required. Usage: inalign-install --license YOUR_KEY")
+            sys.exit(1)
+        install(license_key=sys.argv[2])
+    elif arg == "--activate":
+        if len(sys.argv) < 3:
+            print("Error: License key required. Usage: inalign-install --activate YOUR_KEY")
+            sys.exit(1)
+        activate(sys.argv[2])
+    elif arg == "--status":
+        show_license()
     else:
-        install(api_key=sys.argv[1])
+        # Backward compatibility: treat as API key
+        install(license_key=arg)
 
 
 if __name__ == "__main__":

@@ -280,11 +280,60 @@
             color: #94a3b8; text-decoration: none; font-size: 15px; font-weight: 500; transition: color 0.2s;
         }
         .top-nav .nav-links a:hover { color: white; }
-        .btn-login {
-            padding: 10px 24px; background: transparent; color: white; border: 2px solid #475569;
+        .btn-install {
+            padding: 10px 24px; background: #3b82f6; color: white; border: none;
             border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none; transition: all 0.2s;
         }
-        .btn-login:hover { border-color: #60a5fa; color: #60a5fa; }
+        .btn-install:hover { background: #2563eb; }
+
+        /* Privacy Banner */
+        .privacy-section {
+            padding: 80px 20px;
+            background: linear-gradient(135deg, #064e3b 0%, #0f172a 100%);
+            color: white;
+            text-align: center;
+        }
+        .privacy-section .section-title { color: white; margin-bottom: 16px; }
+        .privacy-badges {
+            display: flex;
+            gap: 32px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 40px;
+        }
+        .privacy-badge {
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 280px;
+            text-align: center;
+        }
+        .privacy-badge-icon { font-size: 40px; margin-bottom: 12px; }
+        .privacy-badge-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .privacy-badge-desc { color: #94a3b8; font-size: 14px; }
+
+        /* Install command inline */
+        .install-inline {
+            background: #1e293b;
+            color: #86efac;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 14px;
+            display: inline-block;
+            margin-top: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            position: relative;
+        }
+        .install-inline:hover { background: #334155; }
+        .install-inline .copy-hint {
+            font-size: 11px;
+            color: #64748b;
+            display: block;
+            margin-top: 4px;
+        }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -302,7 +351,8 @@
         <div class="nav-links">
             <a href="#how-it-works">How It Works</a>
             <a href="#pricing">Pricing</a>
-            <a href="/login" class="btn-login">Login</a>
+            <a href="https://github.com/Intellirim/inalign" style="color:#94a3b8;">GitHub</a>
+            <a href="#pricing" class="btn-install">Get Started</a>
         </div>
     </nav>
 
@@ -313,12 +363,16 @@
             <div class="tagline">AI Agent Governance Platform</div>
             <h1 class="headline">Know What Your AI Agents Did.<br>Prove It.</h1>
             <p class="subheadline">
-                Tamper-proof audit trails for AI agents. Track every action, every decision,
-                with cryptographic proof. Essential for compliance, incident response, and trust.
+                Tamper-proof audit trails for AI agents. Zero telemetry. 100% local-first.
+                No account needed. Install in 30 seconds and start tracking.
             </p>
             <div class="cta-buttons">
-                <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
-                <a href="/login" class="btn btn-secondary">Login</a>
+                <a href="#pricing" class="btn btn-primary">Get Started Free</a>
+                <a href="https://github.com/Intellirim/inalign" class="btn btn-secondary">View on GitHub</a>
+            </div>
+            <div class="install-inline" onclick="copyInstall()">
+                pip install inalign-mcp && inalign-install --local
+                <span class="copy-hint">Click to copy</span>
             </div>
         </div>
     </section>
@@ -407,8 +461,8 @@
             <div class="steps">
                 <div class="step">
                     <div class="step-number">1</div>
-                    <h3 class="step-title">Connect Your Agent</h3>
-                    <p class="step-desc">Add InALign MCP server to Claude Code, Cursor, or any MCP-compatible agent.</p>
+                    <h3 class="step-title">Install Locally</h3>
+                    <p class="step-desc">pip install inalign-mcp && inalign-install --local. No signup, no account, no server.</p>
                 </div>
                 <div class="step">
                     <div class="step-number">2</div>
@@ -417,8 +471,13 @@
                 </div>
                 <div class="step">
                     <div class="step-number">3</div>
-                    <h3 class="step-title">Search & Trace</h3>
-                    <p class="step-desc">Use the dashboard to search activity, investigate incidents, and export audit reports.</p>
+                    <h3 class="step-title">Verify & Export</h3>
+                    <p class="step-desc">Generate audit reports, verify provenance chains, and analyze risk patterns locally.</p>
+                </div>
+                <div class="step">
+                    <div class="step-number">+</div>
+                    <h3 class="step-title">Upgrade Anytime</h3>
+                    <p class="step-desc">Buy a license key on Lemonsqueezy to unlock Pro or Enterprise features. Still 100% local.</p>
                 </div>
             </div>
         </div>
@@ -428,19 +487,23 @@
     <section class="code-section">
         <div class="section-content">
             <h2 class="section-title">Simple Integration</h2>
-            <p class="section-subtitle">Add to your Claude Code settings in 30 seconds</p>
+            <p class="section-subtitle">Install and configure in 30 seconds. No account required.</p>
             <div class="code-block">
-<pre><span class="code-comment">// ~/.claude/settings.json</span>
+<pre><span class="code-comment"># 1. Install</span>
+pip install inalign-mcp && inalign-install --local
+
+<span class="code-comment"># That's it! Your settings.json is auto-configured:</span>
+<span class="code-comment">// ~/.claude/settings.json</span>
 {
   <span class="code-key">"mcpServers"</span>: {
     <span class="code-key">"inalign"</span>: {
-      <span class="code-key">"command"</span>: <span class="code-string">"inalign-mcp"</span>,
-      <span class="code-key">"env"</span>: {
-        <span class="code-key">"API_KEY"</span>: <span class="code-string">"your-api-key"</span>
-      }
+      <span class="code-key">"command"</span>: <span class="code-string">"inalign-mcp"</span>
     }
   }
-}</pre>
+}
+
+<span class="code-comment"># Pro/Enterprise? Just add your license key:</span>
+inalign-install --license <span class="code-string">YOUR_LICENSE_KEY</span></pre>
             </div>
         </div>
     </section>
@@ -449,48 +512,80 @@
     <section class="pricing" id="pricing">
         <div class="section-content">
             <h2 class="section-title">Simple Pricing</h2>
-            <p class="section-subtitle">Start free. Scale as you grow.</p>
+            <p class="section-subtitle">Free forever for individuals. Buy a license key to unlock Pro or Enterprise features.</p>
             <div class="pricing-grid">
                 <div class="pricing-card">
-                    <h3 class="pricing-name">Starter</h3>
-                    <div class="pricing-price">$0<span>/mo</span></div>
+                    <h3 class="pricing-name">Free</h3>
+                    <div class="pricing-price">$0<span> forever</span></div>
                     <ul class="pricing-features">
-                        <li>1,000 actions/month</li>
-                        <li>7-day retention</li>
                         <li>Local SQLite storage</li>
                         <li>Hash chain verification</li>
+                        <li>Basic risk analysis</li>
+                        <li>HTML audit reports</li>
                         <li>Session log ingest</li>
-                        <li>HTML reports</li>
+                        <li>No signup needed</li>
                     </ul>
-                    <a href="#" class="btn btn-secondary">Get Started</a>
+                    <div class="install-inline" onclick="copyInstall()" style="font-size:12px; padding:10px 16px; margin-top:0;">
+                        pip install inalign-mcp && inalign-install --local
+                        <span class="copy-hint">Click to copy</span>
+                    </div>
                 </div>
                 <div class="pricing-card featured">
                     <h3 class="pricing-name">Pro</h3>
                     <div class="pricing-price">$29<span>/mo</span></div>
                     <ul class="pricing-features">
-                        <li>50,000 actions/month</li>
-                        <li>30-day retention</li>
-                        <li>Cloud Neo4j storage</li>
-                        <li>Web dashboard</li>
-                        <li>10 agents</li>
-                        <li>Team management</li>
-                        <li>Session auto-collection</li>
+                        <li>Everything in Free</li>
+                        <li>Advanced audit reports</li>
+                        <li>Custom security policies</li>
+                        <li>All risk analysis patterns</li>
+                        <li>Session compare</li>
+                        <li>Export all formats (JSON-LD, PROV)</li>
+                        <li>Priority updates</li>
                     </ul>
-                    <a href="#" class="btn btn-primary" onclick="openModal('pro')">Start Free Trial</a>
+                    <a href="#" class="btn btn-primary">Buy on Lemonsqueezy</a>
                 </div>
                 <div class="pricing-card">
                     <h3 class="pricing-name">Enterprise</h3>
                     <div class="pricing-price">$99<span>/mo</span></div>
                     <ul class="pricing-features">
-                        <li>Unlimited actions</li>
-                        <li>365-day retention</li>
-                        <li>GraphRAG analysis</li>
-                        <li>Unlimited agents</li>
-                        <li>Blockchain anchoring</li>
-                        <li>Custom policies</li>
-                        <li>Priority support + SLA</li>
+                        <li>Everything in Pro</li>
+                        <li>Blockchain anchoring (Polygon)</li>
+                        <li>Custom policy engine</li>
+                        <li>Priority support</li>
+                        <li>Team license management</li>
                     </ul>
-                    <a href="#" class="btn btn-secondary" onclick="openModal('enterprise')">Get Enterprise</a>
+                    <a href="#" class="btn btn-secondary">Buy on Lemonsqueezy</a>
+                </div>
+            </div>
+            <p style="text-align:center; color:#64748b; margin-top:32px; font-size:15px;">
+                All plans run 100% locally on your machine. License keys unlock features &mdash; not servers.
+            </p>
+        </div>
+    </section>
+
+    <!-- Privacy Section -->
+    <section class="privacy-section">
+        <div class="section-content">
+            <h2 class="section-title">Your Data Never Leaves Your Machine</h2>
+            <p style="color: #94a3b8; max-width: 600px; margin: 0 auto; font-size: 18px;">
+                Even paid plans run 100% locally. We don't collect telemetry, usage data, or analytics.
+                Your audit trails stay on your disk, under your control, always.
+            </p>
+            <div class="privacy-badges">
+                <div class="privacy-badge">
+                    <div class="privacy-badge-icon">🛡</div>
+                    <h4 class="privacy-badge-title">Zero Telemetry</h4>
+                    <p class="privacy-badge-desc">No phone-home. No usage tracking. No analytics. Period.</p>
+                </div>
+                <div class="privacy-badge">
+                    <div class="privacy-badge-icon">💻</div>
+                    <h4 class="privacy-badge-title">100% Local</h4>
+                    <p class="privacy-badge-desc">All data stored in local SQLite. No cloud servers required.</p>
+                </div>
+                <div class="privacy-badge">
+                    <div class="privacy-badge-icon">🔑</div>
+                    <h4 class="privacy-badge-title">License Key = Features</h4>
+                    <p class="privacy-badge-desc">Your license key unlocks features locally. No account, no login, no server.</p>
                 </div>
             </div>
         </div>
@@ -501,9 +596,14 @@
         <div class="section-content">
             <h2 class="section-title">Start Tracking Your AI Agents Today</h2>
             <p style="color: #94a3b8; margin-bottom: 32px;">
-                Free to start. No credit card required. Set up in 2 minutes.
+                Free forever. No signup. No credit card. Install in 30 seconds.
             </p>
-            <a href="#" class="btn btn-primary">Get Your API Key</a>
+            <div class="install-inline" onclick="copyInstall()" style="margin-bottom: 24px;">
+                pip install inalign-mcp && inalign-install --local
+                <span class="copy-hint">Click to copy</span>
+            </div>
+            <br>
+            <a href="#pricing" class="btn btn-primary" style="margin-top: 16px;">See Pricing</a>
         </div>
     </section>
 
@@ -517,163 +617,17 @@
         </p>
     </footer>
 
-    <!-- Signup Modal -->
-    <div id="signupModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
-        <div style="background:white; padding:40px; border-radius:16px; max-width:450px; width:90%; position:relative;">
-            <button onclick="closeModal()" style="position:absolute; top:16px; right:16px; background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
-            <h2 style="margin-bottom:8px; font-size:28px;">Get Started</h2>
-            <p style="color:#64748b; margin-bottom:24px;" id="modalSubtitle">Start tracking your AI agents for free</p>
-
-            <form id="signupForm">
-                <input type="email" id="signupEmail" placeholder="Enter your email" required
-                    style="width:100%; padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px; font-size:16px; margin-bottom:16px;">
-                <input type="password" id="signupPassword" placeholder="Create a password (min 8 chars)" required minlength="8"
-                    style="width:100%; padding:14px 16px; border:2px solid #e5e7eb; border-radius:8px; font-size:16px; margin-bottom:16px;">
-
-                <div id="planSelect" style="margin-bottom:20px;">
-                    <label style="display:flex; align-items:center; padding:16px; border:2px solid #e5e7eb; border-radius:8px; margin-bottom:8px; cursor:pointer;">
-                        <input type="radio" name="plan" value="starter" checked style="margin-right:12px;">
-                        <div>
-                            <strong>Starter - Free</strong>
-                            <div style="font-size:14px; color:#64748b;">1,000 actions/month, 1 agent</div>
-                        </div>
-                    </label>
-                    <label style="display:flex; align-items:center; padding:16px; border:2px solid #3b82f6; border-radius:8px; cursor:pointer; background:#eff6ff; margin-bottom:8px;">
-                        <input type="radio" name="plan" value="pro" style="margin-right:12px;">
-                        <div>
-                            <strong>Pro - $29/month</strong>
-                            <div style="font-size:14px; color:#64748b;">50,000 actions/month, 10 agents, cloud dashboard</div>
-                        </div>
-                    </label>
-                    <label style="display:flex; align-items:center; padding:16px; border:2px solid #e5e7eb; border-radius:8px; cursor:pointer;">
-                        <input type="radio" name="plan" value="enterprise" style="margin-right:12px;">
-                        <div>
-                            <strong>Enterprise - $99/month</strong>
-                            <div style="font-size:14px; color:#64748b;">Unlimited, blockchain anchoring, priority support</div>
-                        </div>
-                    </label>
-                </div>
-
-                <button type="submit" style="width:100%; padding:14px; background:#3b82f6; color:white; border:none; border-radius:8px; font-size:16px; font-weight:600; cursor:pointer;">
-                    Get API Key
-                </button>
-            </form>
-
-            <div id="apiKeyResult" style="display:none; margin-top:20px;">
-                <div style="background:#dcfce7; padding:16px; border-radius:8px; margin-bottom:16px;">
-                    <strong style="color:#166534;">Success! Your account is ready.</strong>
-                </div>
-
-                <div style="margin-bottom:16px;">
-                    <label style="display:block; margin-bottom:6px; font-weight:600; color:#1e3a5f;">Your API Key (save it now!):</label>
-                    <div style="background:#1e293b; color:#10b981; padding:16px; border-radius:8px; font-family:monospace; word-break:break-all;" id="apiKeyDisplay"></div>
-                    <button onclick="copyApiKey()" style="width:100%; padding:10px; background:#e5e7eb; border:none; border-radius:8px; margin-top:8px; cursor:pointer; font-weight:500;">
-                        Copy API Key
-                    </button>
-                </div>
-
-                <div style="padding:16px; background:#f8fafc; border-radius:8px; border:2px solid #2563eb;">
-                    <strong style="color:#1e3a5f;">Install in 1 command:</strong>
-                    <p style="color:#666; font-size:13px; margin:6px 0 10px;">Open your terminal and paste this:</p>
-                    <div style="background:#1e293b; color:#e2e8f0; padding:14px; border-radius:8px; font-family:monospace; font-size:13px; word-break:break-all; position:relative;" id="installCmdDisplay"></div>
-                    <button onclick="copyInstallCmd()" style="width:100%; padding:10px; background:#2563eb; color:white; border:none; border-radius:8px; margin-top:8px; cursor:pointer; font-weight:600;">
-                        Copy Install Command
-                    </button>
-                </div>
-
-                <div style="margin-top:16px; padding:12px; background:#fef3c7; border-radius:8px;">
-                    <strong style="color:#92400e;">After install:</strong>
-                    <span style="color:#78350f;">Restart Claude Code, then all activity is automatically tracked!</span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
-        // Update button links
-        document.querySelectorAll('a.btn').forEach(btn => {
-            if (btn.textContent.includes('Free Trial') || btn.textContent.includes('Get Started') || btn.textContent.includes('API Key')) {
-                btn.href = '#';
-                btn.onclick = (e) => { e.preventDefault(); openModal(); };
-            }
-        });
-
-        function openModal(plan) {
-            document.getElementById('signupModal').style.display = 'flex';
-            if (plan === 'pro') {
-                document.querySelector('input[value="pro"]').checked = true;
-            }
-        }
-
-        function closeModal() {
-            document.getElementById('signupModal').style.display = 'none';
-        }
-
-        document.getElementById('signupForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const email = document.getElementById('signupEmail').value;
-            const password = document.getElementById('signupPassword').value;
-            const plan = document.querySelector('input[name="plan"]:checked').value;
-
-            if (password.length < 8) {
-                alert('Password must be at least 8 characters');
-                return;
-            }
-
-            if (plan === 'pro' || plan === 'enterprise') {
-                // First create starter account, then redirect to Lemonsqueezy checkout
-                await signupStarter(email, password);
-                const res = await fetch('/api/checkout/' + plan, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({email})
-                });
-                const data = await res.json();
-                if (data.checkout_url) {
-                    window.location.href = data.checkout_url;
-                } else {
-                    // Checkout not configured yet, show message
-                    alert('Paid plans coming soon! Your free account is ready.');
-                }
-            } else {
-                signupStarter(email, password);
-            }
-        };
-
-        async function signupStarter(email, password) {
-            const res = await fetch('/api/signup/starter', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email, password})
+        function copyInstall() {
+            const cmd = 'pip install inalign-mcp && inalign-install --local';
+            navigator.clipboard.writeText(cmd).then(() => {
+                // Brief visual feedback
+                const el = event.currentTarget;
+                const original = el.querySelector('.copy-hint').textContent;
+                el.querySelector('.copy-hint').textContent = 'Copied!';
+                setTimeout(() => { el.querySelector('.copy-hint').textContent = original; }, 2000);
             });
-            const data = await res.json();
-            if (data.api_key) {
-                document.getElementById('signupForm').style.display = 'none';
-                document.getElementById('apiKeyResult').style.display = 'block';
-                document.getElementById('apiKeyDisplay').textContent = data.api_key;
-                const installCmd = 'pip install inalign-mcp && python -m inalign_mcp.install ' + data.api_key;
-                document.getElementById('installCmdDisplay').textContent = installCmd;
-            } else {
-                alert(data.error || 'Signup failed');
-            }
         }
-
-        function copyApiKey() {
-            const key = document.getElementById('apiKeyDisplay').textContent;
-            navigator.clipboard.writeText(key);
-            alert('API key copied!');
-        }
-
-        function copyInstallCmd() {
-            const cmd = document.getElementById('installCmdDisplay').textContent;
-            navigator.clipboard.writeText(cmd);
-            alert('Install command copied! Paste it in your terminal.');
-        }
-
-        // Close modal on outside click
-        document.getElementById('signupModal').onclick = (e) => {
-            if (e.target.id === 'signupModal') closeModal();
-        };
     </script>
 </body>
 </html>

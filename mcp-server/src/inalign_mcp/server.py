@@ -45,7 +45,24 @@ try:
 except ImportError:
     LIMITER_AVAILABLE = False
 
-# Optional Neo4j and GraphRAG imports (for direct Neo4j mode)
+# Local SQLite-based risk analysis (works without Neo4j)
+try:
+    from .risk_analyzer import (
+        analyze_session_risk as local_analyze_risk,
+        get_behavior_profile as local_behavior_profile,
+    )
+    LOCAL_RISK_AVAILABLE = True
+except ImportError:
+    LOCAL_RISK_AVAILABLE = False
+
+# License module
+try:
+    from .license import get_current_plan, has_feature, get_license_info
+    LICENSE_AVAILABLE = True
+except ImportError:
+    LICENSE_AVAILABLE = False
+
+# Optional Neo4j and GraphRAG imports (for self-hosted Neo4j)
 try:
     from .provenance_graph import (
         init_neo4j,
@@ -911,14 +928,23 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
         else:
-            # SQLite or memory mode: analyze from in-memory chain
-            chain = get_or_create_chain(session_id or SESSION_ID, "claude", CLIENT_ID or "")
+            # SQLite or memory mode: use local risk analyzer
+            sid = session_id or SESSION_ID
+            if LOCAL_RISK_AVAILABLE:
+                try:
+                    risk = local_analyze_risk(sid)
+                    return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                except Exception as e:
+                    pass  # Fall through to basic analysis
+
+            # Fallback: basic in-memory analysis
+            chain = get_or_create_chain(sid, "claude", CLIENT_ID or "")
             tool_counts = {}
             for r in chain.records:
                 tool_counts[r.activity_name] = tool_counts.get(r.activity_name, 0) + 1
 
             return [TextContent(type="text", text=json.dumps({
-                "session_id": session_id or SESSION_ID,
+                "session_id": sid,
                 "storage_mode": STORAGE_MODE,
                 "risk_level": "low",
                 "total_actions": len(chain.records),
@@ -929,6 +955,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "get_behavior_profile":
         session_id = arguments.get("session_id", SESSION_ID)
+
+        # Try local risk analyzer first
+        if LOCAL_RISK_AVAILABLE:
+            try:
+                profile = local_behavior_profile(session_id)
+                return [TextContent(type="text", text=json.dumps(profile, indent=2))]
+            except Exception:
+                pass  # Fall through to basic
+
+        # Fallback: basic in-memory profile
         chain = get_or_create_chain(session_id, "claude")
 
         tool_counts = {}

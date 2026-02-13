@@ -12,24 +12,37 @@ from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass
 
-# Plan limits
-PLAN_LIMITS = {
-    "starter": {
-        "actions_per_month": 1000,
-        "retention_days": 7,
-        "max_agents": 1,
-    },
-    "pro": {
-        "actions_per_month": 50000,
-        "retention_days": 30,
-        "max_agents": 10,
-    },
-    "enterprise": {
-        "actions_per_month": float('inf'),  # Unlimited
-        "retention_days": 365,
-        "max_agents": float('inf'),
+# Import plan limits from license module
+try:
+    from .license import PLAN_FEATURES, get_current_plan
+    PLAN_LIMITS = {
+        plan: {
+            "actions_per_month": info["actions_per_month"],
+            "retention_days": info["retention_days"],
+            "max_agents": info["max_agents"],
+        }
+        for plan, info in PLAN_FEATURES.items()
     }
-}
+    LICENSE_AVAILABLE = True
+except ImportError:
+    LICENSE_AVAILABLE = False
+    PLAN_LIMITS = {
+        "free": {
+            "actions_per_month": 1000,
+            "retention_days": 7,
+            "max_agents": 1,
+        },
+        "pro": {
+            "actions_per_month": 50000,
+            "retention_days": 90,
+            "max_agents": 10,
+        },
+        "enterprise": {
+            "actions_per_month": float('inf'),
+            "retention_days": 365,
+            "max_agents": float('inf'),
+        }
+    }
 
 # Persistent usage file
 _USAGE_FILE = str(Path.home() / ".inalign" / "usage.json")
@@ -131,8 +144,12 @@ def check_and_increment(client_id: str, plan: str = None) -> UsageStatus:
     if plan and usage.get("plan") != plan:
         usage["plan"] = plan
 
-    current_plan = usage.get("plan", "starter")
-    limits = PLAN_LIMITS.get(current_plan, PLAN_LIMITS["starter"])
+    # Use license-based plan if available
+    if LICENSE_AVAILABLE:
+        current_plan = get_current_plan()
+    else:
+        current_plan = usage.get("plan", "free")
+    limits = PLAN_LIMITS.get(current_plan, PLAN_LIMITS["free"])
     limit = limits["actions_per_month"]
 
     current_count = usage["count"]
@@ -169,7 +186,7 @@ def get_usage_stats(client_id: str) -> dict:
     """Get usage statistics for a client."""
     usage = get_usage(client_id)
     plan = usage.get("plan", "starter")
-    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["free"])
     limit = limits["actions_per_month"]
 
     return {
