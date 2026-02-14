@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>InALign Guide - Complete Usage Documentation</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #e2e8f0;
+            background: #0f172a;
+            line-height: 1.7;
+        }
+        a { color: #60a5fa; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        /* Top Nav */
+        .top-nav {
+            position: sticky; top: 0; z-index: 100;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 16px 40px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid #1e293b;
+        }
+        .nav-logo { font-size: 22px; font-weight: 800; color: white; text-decoration: none; }
+        .nav-logo span { color: #60a5fa; }
+        .nav-links { display: flex; gap: 12px; align-items: center; }
+        .nav-links a { color: #94a3b8; font-size: 15px; font-weight: 500; }
+        .nav-links a:hover { color: white; text-decoration: none; }
+
+        /* Layout */
+        .page-layout {
+            display: flex;
+            max-width: 1400px;
+            margin: 0 auto;
+            min-height: calc(100vh - 60px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            padding: 32px 24px;
+            border-right: 1px solid #1e293b;
+            position: sticky;
+            top: 60px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+        .sidebar-section { margin-bottom: 28px; }
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+        .sidebar-link {
+            display: block;
+            padding: 5px 12px;
+            color: #94a3b8;
+            font-size: 14px;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+        .sidebar-link:hover { background: #1e293b; color: #e2e8f0; text-decoration: none; }
+        .sidebar-link.active { background: #1e3a5f; color: #60a5fa; }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 48px 56px;
+            max-width: 900px;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 40px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 12px;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        h2 {
+            font-size: 28px;
+            font-weight: 700;
+            color: white;
+            margin-top: 56px;
+            margin-bottom: 16px;
+            padding-top: 24px;
+            border-top: 1px solid #1e293b;
+        }
+        h2:first-of-type { border-top: none; margin-top: 40px; }
+        h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #f1f5f9;
+            margin-top: 32px;
+            margin-bottom: 12px;
+        }
+        p { margin-bottom: 16px; color: #cbd5e1; }
+        .subtitle { font-size: 18px; color: #94a3b8; margin-bottom: 40px; }
+
+        /* Code */
+        code {
+            background: #1e293b;
+            color: #86efac;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+        }
+        .code-block {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin: 16px 0 24px;
+            overflow-x: auto;
+            position: relative;
+        }
+        .code-block pre {
+            color: #e2e8f0;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.7;
+        }
+        .code-block .label {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            font-size: 11px;
+            color: #475569;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        .c { color: #64748b; }
+        .s { color: #86efac; }
+        .k { color: #93c5fd; }
+        .f { color: #c4b5fd; }
+        .n { color: #fbbf24; }
+
+        /* Cards */
+        .tool-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+        .tool-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .tool-name {
+            font-size: 16px;
+            font-weight: 700;
+            color: white;
+            font-family: 'Fira Code', 'Consolas', monospace;
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .badge-free { background: #064e3b; color: #6ee7b7; }
+        .badge-pro { background: #1e3a5f; color: #60a5fa; }
+        .badge-enterprise { background: #4c1d95; color: #c4b5fd; }
+        .tool-desc { color: #94a3b8; font-size: 14px; margin-bottom: 12px; }
+        .tool-params {
+            font-size: 13px;
+            color: #64748b;
+        }
+        .tool-params span { color: #86efac; font-family: 'Fira Code', monospace; }
+
+        /* Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+            font-size: 14px;
+        }
+        .comparison-table th {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 2px solid #334155;
+        }
+        .comparison-table td {
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e293b;
+            color: #cbd5e1;
+        }
+        .comparison-table tr:hover { background: rgba(30, 41, 59, 0.5); }
+        .check { color: #22c55e; }
+        .cross { color: #475569; }
+
+        /* Info Box */
+        .info-box {
+            background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(139,92,246,0.1));
+            border: 1px solid #334155;
+            border-left: 4px solid #3b82f6;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+        .info-box.warn {
+            border-left-color: #f59e0b;
+            background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(245,158,11,0.03));
+        }
+        .info-box strong { color: white; }
+
+        /* Step Cards */
+        .step-flow {
+            display: flex;
+            gap: 12px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .step-item {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px 16px;
+            flex: 1;
+            min-width: 180px;
+            text-align: center;
+            font-size: 13px;
+        }
+        .step-item .step-num {
+            display: inline-block;
+            width: 24px; height: 24px;
+            background: #3b82f6;
+            border-radius: 50%;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 24px;
+            margin-bottom: 6px;
+        }
+        .step-arrow { color: #475569; font-size: 20px; display: flex; align-items: center; }
+
+        /* File Tree */
+        .file-tree {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin: 16px 0;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+        }
+        .file-tree .dir { color: #60a5fa; }
+        .file-tree .file { color: #94a3b8; }
+        .file-tree .desc { color: #475569; }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .main-content { padding: 32px 20px; }
+            h1 { font-size: 28px; }
+            h2 { font-size: 22px; }
+            .top-nav { padding: 12px 16px; }
+            .step-flow { flex-direction: column; }
+            .step-arrow { display: none; }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <!-- Top Nav -->
+    <nav class="top-nav">
+        <a href="/" class="nav-logo">In<span>A</span>Lign</a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="https://github.com/Intellirim/inalign">GitHub</a>
+            <a href="https://pypi.org/project/inalign-mcp/">PyPI</a>
+        </div>
+    </nav>
+
+    <div class="page-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Getting Started</div>
+                <a href="#quick-start" class="sidebar-link active">Quick Start</a>
+                <a href="#how-it-works" class="sidebar-link">How It Works</a>
+                <a href="#data-storage" class="sidebar-link">Data Storage</a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">CLI Commands</div>
+                <a href="#cli-install" class="sidebar-link">inalign-install</a>
+                <a href="#cli-report" class="sidebar-link">inalign-report</a>
+                <a href="#cli-analyze" class="sidebar-link">inalign-analyze</a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">MCP Tools</div>
+                <a href="#tools-provenance" class="sidebar-link">Provenance</a>
+                <a href="#tools-risk" class="sidebar-link">Risk Analysis</a>
+                <a href="#tools-policy" class="sidebar-link">Security Policy</a>
+                <a href="#tools-report" class="sidebar-link">Reports & Export</a>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Reference</div>
+                <a href="#plan-comparison" class="sidebar-link">Plan Comparison</a>
+                <a href="#workflows" class="sidebar-link">Example Workflows</a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <h1>InALign Guide</h1>
+            <p class="subtitle">
+                Everything you need to know about using InALign &mdash; from installation to advanced AI security analysis.
+            </p>
+
+            <!-- Quick Start -->
+            <h2 id="quick-start">Quick Start</h2>
+            <p>Get InALign running in 30 seconds. No signup, no account, no server required.</p>
+
+            <h3>1. Install</h3>
+            <div class="code-block">
+                <span class="label">Terminal</span>
+<pre>pip install inalign-mcp && inalign-install --local</pre>
+            </div>
+            <p>This installs the package, creates <code>~/.inalign/</code> directory, and auto-configures your Claude Code settings.</p>
+
+            <h3>2. Use Claude Code Normally</h3>
+            <p>That's it. Every tool call, file access, and decision is now <strong style="color:white;">automatically recorded</strong> with SHA-256 cryptographic hashing. No code changes needed.</p>
+
+            <h3>3. View Your Audit Trail</h3>
+            <div class="code-block">
+                <span class="label">Terminal</span>
+<pre><span class="c"># Generate and open an HTML report in your browser</span>
+inalign-report</pre>
+            </div>
+
+            <div class="info-box">
+                <strong>Pro/Enterprise?</strong> Add your license key anytime:
+                <code>inalign-install --license YOUR_KEY</code>
+                &mdash; features unlock instantly, still 100% local.
+            </div>
+
+            <!-- How It Works -->
+            <h2 id="how-it-works">How It Works</h2>
+            <p>InALign runs as an <strong style="color:white;">MCP (Model Context Protocol) server</strong> alongside your AI agent. Every action creates a cryptographic record linked to the previous one, forming a tamper-proof chain.</p>
+
+            <div class="step-flow">
+                <div class="step-item">
+                    <div class="step-num">1</div>
+                    <div>Agent makes a tool call</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">2</div>
+                    <div>InALign records action + SHA-256 hash</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">3</div>
+                    <div>Hash links to previous record</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">4</div>
+                    <div>Merkle root computed for verification</div>
+                </div>
+            </div>
+
+            <p>If anyone modifies a single record, every subsequent hash changes &mdash; making tampering <strong style="color:white;">mathematically detectable</strong>.</p>
+
+            <!-- Data Storage -->
+            <h2 id="data-storage">Data Storage</h2>
+            <p>All data stays on your machine. Here's where InALign stores things:</p>
+
+            <div class="file-tree">
+<span class="dir">~/.inalign/</span>
+    <span class="file">provenance.db</span>        <span class="desc"># Cryptographic hash chain (SQLite WAL)</span>
+    <span class="file">license.json</span>          <span class="desc"># License info + cached validation</span>
+    <span class="file">usage.json</span>            <span class="desc"># Monthly action counter</span>
+    <span class="dir">sessions/</span>
+        <span class="file">*.json.gz</span>          <span class="desc"># Full session transcripts (compressed)</span>
+    <span class="dir">analysis/</span>
+        <span class="file">*.html</span>             <span class="desc"># AI analysis reports (Pro)</span>
+
+<span class="dir">~/.claude/</span>
+    <span class="file">settings.json</span>         <span class="desc"># MCP server configuration</span>
+            </div>
+
+            <div class="info-box warn">
+                <strong>Zero Telemetry.</strong> InALign never phones home. No usage data, analytics, or audit data is ever transmitted to InALign servers. Even AI analysis uses <em>your</em> API key directly.
+            </div>
+
+            <!-- CLI: inalign-install -->
+            <h2 id="cli-install">inalign-install</h2>
+            <p>Install and manage your InALign setup.</p>
+
+            <div class="code-block">
+<pre><span class="c"># Install free version with local SQLite storage</span>
+inalign-install --local
+
+<span class="c"># Install with a Pro or Enterprise license key</span>
+inalign-install --license <span class="s">YOUR_LICENSE_KEY</span>
+
+<span class="c"># Activate or update license without reinstalling</span>
+inalign-install --activate <span class="s">YOUR_LICENSE_KEY</span>
+
+<span class="c"># Check current license status</span>
+inalign-install --status
+
+<span class="c"># Remove InALign configuration</span>
+inalign-install --uninstall</pre>
+            </div>
+
+            <p>The installer automatically:</p>
+            <ul style="margin: 8px 0 16px 24px; color: #94a3b8;">
+                <li>Creates <code>~/.inalign/</code> directory structure</li>
+                <li>Updates <code>~/.claude/settings.json</code> with MCP server config</li>
+                <li>Creates <code>CLAUDE.md</code> with audit logging instructions</li>
+                <li>Validates and caches license key (if provided)</li>
+            </ul>
+
+            <!-- CLI: inalign-report -->
+            <h2 id="cli-report">inalign-report</h2>
+            <p>Generate and view your audit dashboard in the browser.</p>
+
+            <div class="code-block">
+<pre><span class="c"># Generate report and open in browser (default port 8275)</span>
+inalign-report
+
+<span class="c"># Custom port</span>
+inalign-report --port <span class="n">9000</span>
+
+<span class="c"># Generate without opening browser</span>
+inalign-report --no-open</pre>
+            </div>
+
+            <p>The report is a <strong style="color:white;">4-tab interactive dashboard</strong>:</p>
+
+            <div class="tool-card">
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
+                    <div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Overview</div>
+                        <div style="font-size:13px; color:#94a3b8;">Session stats, Merkle root, chain validity badge, record count</div>
+                    </div>
+                    <div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Provenance Chain</div>
+                        <div style="font-size:13px; color:#94a3b8;">Every recorded action with expandable details and hash values</div>
+                    </div>
+                    <div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Session Log</div>
+                        <div style="font-size:13px; color:#94a3b8;">Full conversation transcript with role filtering (user, assistant, tool)</div>
+                    </div>
+                    <div>
+                        <div style="color:#a78bfa; font-weight:600; margin-bottom:4px;">AI Analysis <span class="badge badge-pro" style="font-size:10px;">Pro</span></div>
+                        <div style="font-size:13px; color:#94a3b8;">LLM-powered deep security analysis with risk scoring</div>
+                    </div>
+                </div>
+            </div>
+            <p>Data export is available in JSON and CSV formats from the dashboard.</p>
+
+            <!-- CLI: inalign-analyze -->
+            <h2 id="cli-analyze">inalign-analyze</h2>
+            <p>Run deep AI security analysis on your sessions using your own LLM API key. <span class="badge badge-pro">Pro</span></p>
+
+            <div class="code-block">
+<pre><span class="c"># Analyze latest session with Anthropic Claude</span>
+inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --save
+
+<span class="c"># Analyze with OpenAI GPT-4o</span>
+inalign-analyze --provider <span class="s">openai</span> --api-key <span class="s">sk-xxxxx</span> --latest --save
+
+<span class="c"># Analyze a specific session file</span>
+inalign-analyze <span class="s">session-20260215.json.gz</span> --api-key <span class="s">sk-ant-xxxxx</span>
+
+<span class="c"># Output raw JSON (for programmatic use)</span>
+inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</pre>
+            </div>
+
+            <p>The AI analyzer:</p>
+            <ul style="margin: 8px 0 16px 24px; color: #94a3b8;">
+                <li><strong style="color:#e2e8f0;">Masks PII</strong> before sending data &mdash; API keys, passwords, emails, SSH keys, JWT tokens, and 10 more patterns</li>
+                <li><strong style="color:#e2e8f0;">Traces causal chains</strong> &mdash; user intent &rarr; agent reasoning &rarr; action &rarr; result</li>
+                <li><strong style="color:#e2e8f0;">Detects threat patterns</strong> &mdash; data exfiltration, privilege escalation, command injection, supply chain attacks</li>
+                <li><strong style="color:#e2e8f0;">Scores risk</strong> from 0-100 with severity levels (LOW / MEDIUM / HIGH / CRITICAL)</li>
+                <li><strong style="color:#e2e8f0;">Generates actionable recommendations</strong> prioritized by impact</li>
+            </ul>
+
+            <p>Supported LLMs: <code>anthropic</code> (Claude Sonnet) and <code>openai</code> (GPT-4o).</p>
+
+            <div class="info-box">
+                <strong>Your API key, your cost.</strong> InALign never stores or transmits your API key. Analysis runs directly from your machine to the LLM provider.
+            </div>
+
+            <!-- MCP Tools: Provenance -->
+            <h2 id="tools-provenance">Provenance Tools</h2>
+            <p>These tools form the core audit trail. They're called automatically by your AI agent via the MCP protocol.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">record_user_command</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Record the user's original prompt/command that triggered agent actions. Called at the start of every task for audit logging.</div>
+                <div class="tool-params">
+                    Params: <span>command</span> (required), <span>command_hash_only</span> (optional, for privacy), <span>user_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">record_action</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Record any agent action in the provenance chain with cryptographic verification. Supports tool calls, decisions, file operations, and LLM requests.</div>
+                <div class="tool-params">
+                    Params: <span>action_type</span> (tool_call | decision | file_read | file_write | llm_request), <span>action_name</span>, <span>inputs</span>, <span>outputs</span>
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_provenance</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get the provenance chain summary for the current session. Shows recent records and Merkle root.</div>
+                <div class="tool-params">
+                    Params: <span>format</span> (summary | full | prov-jsonld)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">verify_provenance</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Verify the integrity of the entire provenance chain. Checks that no records have been tampered with using hash chain verification.</div>
+                <div class="tool-params">Params: none</div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">verify_third_party</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Generate third-party verifiable proof. Returns everything needed to independently verify the provenance chain without trusting InALign.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">list_sessions</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">List past audit sessions stored in local SQLite. Shows session history with record counts and timestamps.</div>
+                <div class="tool-params">
+                    Params: <span>limit</span> (default: 20)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Risk Analysis -->
+            <h2 id="tools-risk">Risk Analysis Tools</h2>
+            <p>Detect threats and behavioral anomalies in agent sessions.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">analyze_risk</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Run pattern detection on the session. Detects data exfiltration, privilege escalation, suspicious tool chains, and other attack patterns.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_behavior_profile</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get behavioral profile for a session. Shows tool usage patterns, timing analysis, and anomalies.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_agent_risk</span>
+                    <span class="badge badge-pro">Pro</span>
+                </div>
+                <div class="tool-desc">Get long-term risk profile for an agent across all sessions. Shows risk trends, common patterns, and tools used over time.</div>
+                <div class="tool-params">
+                    Params: <span>agent_id</span> (required)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_user_risk</span>
+                    <span class="badge badge-pro">Pro</span>
+                </div>
+                <div class="tool-desc">Get risk profile for a user or team across all agents. Aggregates risk data for organization-level security overview.</div>
+                <div class="tool-params">
+                    Params: <span>user_id</span> (required)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">list_agents_risk</span>
+                    <span class="badge badge-pro">Pro</span>
+                </div>
+                <div class="tool-desc">Get risk summary for all known agents. Useful for org-wide security dashboards and monitoring.</div>
+                <div class="tool-params">
+                    Params: <span>limit</span> (default: 20)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Policy -->
+            <h2 id="tools-policy">Security Policy Tools</h2>
+            <p>Configure and simulate security policies for your agent environment.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_policy</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get current security policy settings. Shows the active preset and all rule configurations.</div>
+                <div class="tool-params">Params: none</div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">set_policy</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Change the security policy preset. Three presets available for different security needs.</div>
+                <div class="tool-params">
+                    Params: <span>preset</span> (STRICT_ENTERPRISE | BALANCED | DEV_SANDBOX)
+                </div>
+            </div>
+
+            <div class="code-block">
+<pre><span class="c"># Policy presets:</span>
+<span class="k">STRICT_ENTERPRISE</span>  <span class="c"># Maximum security - strict rules for production</span>
+<span class="k">BALANCED</span>           <span class="c"># Default - good balance of security and usability</span>
+<span class="k">DEV_SANDBOX</span>        <span class="c"># Permissive - for development and testing</span></pre>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">list_policies</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">List all available policy presets with their descriptions and rule configurations.</div>
+                <div class="tool-params">Params: none</div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">simulate_policy</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Simulate a policy against historical events. Shows how many actions would have been blocked, masked, or warned.</div>
+                <div class="tool-params">
+                    Params: <span>preset</span> (STRICT_ENTERPRISE | BALANCED | DEV_SANDBOX)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Reports -->
+            <h2 id="tools-report">Report & Export Tools</h2>
+            <p>Generate audit reports and certificates.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">generate_audit_report</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Generate a comprehensive audit report with provenance chain, integrity verification, and statistics.</div>
+                <div class="tool-params">
+                    Params: <span>format</span> (json | summary | prov-jsonld)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">export_report</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Export a standalone HTML audit dashboard viewable in any browser. Includes provenance visualization, session log, and data export buttons.</div>
+                <div class="tool-params">
+                    Params: <span>output_path</span> (optional, defaults to temp file)
+                </div>
+            </div>
+
+            <!-- Plan Comparison -->
+            <h2 id="plan-comparison">Plan Comparison</h2>
+            <p>All plans run 100% locally. License keys unlock features &mdash; not servers.</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Free</th>
+                        <th>Pro ($29/mo)</th>
+                        <th>Enterprise ($99/mo)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Provenance recording & verification</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Hash chain integrity check</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>HTML audit dashboard (4 tabs)</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Security policy management</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Basic risk analysis</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Session log capture</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Third-party verifiable proofs</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>AI security analysis (your API key)</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-session agent risk tracking</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Org-level risk aggregation</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>PROV-JSON-LD export (W3C)</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Blockchain anchoring (Polygon)</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Custom policy engine</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Team license management</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Actions per month</td>
+                        <td>1,000</td>
+                        <td>50,000</td>
+                        <td>Unlimited</td>
+                    </tr>
+                    <tr>
+                        <td>Data retention</td>
+                        <td>7 days</td>
+                        <td>90 days</td>
+                        <td>365 days</td>
+                    </tr>
+                    <tr>
+                        <td>Agents</td>
+                        <td>1</td>
+                        <td>10</td>
+                        <td>Unlimited</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Example Workflows -->
+            <h2 id="workflows">Example Workflows</h2>
+
+            <h3>Free: Basic Audit Trail</h3>
+            <div class="code-block">
+<pre><span class="c"># 1. Install</span>
+pip install inalign-mcp && inalign-install --local
+
+<span class="c"># 2. Use Claude Code normally - actions are auto-recorded</span>
+<span class="c"># 3. When done, view your audit trail:</span>
+inalign-report
+
+<span class="c"># Opens a 4-tab dashboard in your browser with:</span>
+<span class="c">#   - Provenance chain (every action with hashes)</span>
+<span class="c">#   - Session log (full conversation transcript)</span>
+<span class="c">#   - Data export (JSON / CSV download)</span></pre>
+            </div>
+
+            <h3>Pro: AI-Powered Security Analysis</h3>
+            <div class="code-block">
+<pre><span class="c"># 1. Install with license</span>
+inalign-install --license <span class="s">ial_pro_xxxxx</span>
+
+<span class="c"># 2. Use Claude Code normally</span>
+<span class="c"># 3. Analyze your session with AI</span>
+inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --save
+
+<span class="c"># Output:</span>
+<span class="c">#   Risk Score: 25/100 (LOW)</span>
+<span class="c">#   Findings: 2 items</span>
+<span class="c">#   - Sensitive file access detected (severity: medium)</span>
+<span class="c">#   - Unusual tool chain pattern (severity: low)</span>
+<span class="c">#   Recommendations: ...</span>
+
+<span class="c"># 4. View the full report with AI analysis tab</span>
+inalign-report</pre>
+            </div>
+
+            <h3>Enterprise: Team Monitoring</h3>
+            <div class="code-block">
+<pre><span class="c"># Admin: Install on each developer's machine</span>
+inalign-install --license <span class="s">ial_enterprise_xxxxx</span>
+
+<span class="c"># Monitor agent risk across the team</span>
+<span class="c"># (via MCP tools in Claude Code):</span>
+<span class="c">#   list_agents_risk   → see all agents' risk scores</span>
+<span class="c">#   get_user_risk      → team-level security posture</span>
+<span class="c">#   get_agent_risk     → individual agent trends</span></pre>
+            </div>
+
+            <div style="margin-top: 64px; padding-top: 32px; border-top: 1px solid #1e293b; text-align: center; color: #475569;">
+                <p>&copy; 2026 InALign &mdash; AI Agent Governance Platform</p>
+                <p style="margin-top: 8px; font-size: 14px;">
+                    <a href="https://github.com/Intellirim/inalign">GitHub</a> &middot;
+                    <a href="https://pypi.org/project/inalign-mcp/">PyPI</a> &middot;
+                    <a href="/">Home</a>
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Highlight active sidebar link on scroll
+        const sections = document.querySelectorAll('h2[id]');
+        const links = document.querySelectorAll('.sidebar-link');
+
+        function updateActive() {
+            let current = '';
+            sections.forEach(section => {
+                const top = section.getBoundingClientRect().top;
+                if (top < 120) current = section.id;
+            });
+            links.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        window.addEventListener('scroll', updateActive);
+        updateActive();
+
+        // Smooth scroll for sidebar links
+        links.forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
