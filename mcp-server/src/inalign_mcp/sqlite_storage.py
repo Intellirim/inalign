@@ -98,6 +98,74 @@ def _init_schema(conn: sqlite3.Connection):
 
         CREATE INDEX IF NOT EXISTS idx_records_client
             ON records(client_id);
+
+        -- Agent permissions (permissions.py)
+        CREATE TABLE IF NOT EXISTS agent_permissions (
+            agent_id TEXT NOT NULL,
+            tool_name TEXT NOT NULL,
+            permission TEXT NOT NULL DEFAULT 'allow',
+            reason TEXT DEFAULT '',
+            set_by TEXT DEFAULT 'system',
+            set_at TEXT NOT NULL,
+            PRIMARY KEY (agent_id, tool_name)
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_defaults (
+            agent_id TEXT PRIMARY KEY,
+            agent_name TEXT DEFAULT '',
+            default_permission TEXT NOT NULL DEFAULT 'allow',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        -- Behavior drift baselines (drift_detector.py)
+        CREATE TABLE IF NOT EXISTS behavior_baselines (
+            agent_id TEXT PRIMARY KEY,
+            session_count INTEGER DEFAULT 0,
+            total_actions INTEGER DEFAULT 0,
+            tool_frequency TEXT DEFAULT '{}',
+            tool_stddev TEXT DEFAULT '{}',
+            avg_session_length REAL DEFAULT 0,
+            avg_interval_seconds REAL DEFAULT 0,
+            known_tools TEXT DEFAULT '[]',
+            updated_at TEXT NOT NULL
+        );
+
+        -- Multi-agent topology (topology.py)
+        CREATE TABLE IF NOT EXISTS agent_interactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_agent TEXT NOT NULL,
+            target_agent TEXT NOT NULL,
+            interaction_type TEXT DEFAULT 'delegate',
+            session_id TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            metadata TEXT DEFAULT '{}'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_interactions_session
+            ON agent_interactions(session_id);
+
+        CREATE INDEX IF NOT EXISTS idx_interactions_agents
+            ON agent_interactions(source_agent, target_agent);
+
+        -- Cost tracking (topology.py)
+        CREATE TABLE IF NOT EXISTS cost_tracking (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            model TEXT NOT NULL,
+            provider TEXT DEFAULT 'unknown',
+            input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            cost_usd REAL DEFAULT 0.0,
+            timestamp TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cost_session
+            ON cost_tracking(session_id);
+
+        CREATE INDEX IF NOT EXISTS idx_cost_agent
+            ON cost_tracking(agent_id);
     """)
     conn.commit()
 

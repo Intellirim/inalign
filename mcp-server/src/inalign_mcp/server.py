@@ -119,6 +119,62 @@ except ImportError:
     POLICY_AVAILABLE = False
     PolicyEngine = None
 
+# Compliance module (EU AI Act)
+try:
+    from .compliance import generate_compliance_report, compliance_report_to_dict, generate_compliance_html
+    COMPLIANCE_AVAILABLE = True
+except ImportError:
+    COMPLIANCE_AVAILABLE = False
+
+# OWASP LLM Top 10
+try:
+    from .owasp import check_owasp_compliance, owasp_report_to_dict
+    OWASP_AVAILABLE = True
+except ImportError:
+    OWASP_AVAILABLE = False
+
+# Agent Permissions
+try:
+    from .permissions import (
+        get_permission_matrix as perm_get_matrix,
+        set_agent_permissions as perm_set_permissions,
+        check_permission as perm_check,
+    )
+    PERMISSIONS_AVAILABLE = True
+except ImportError:
+    PERMISSIONS_AVAILABLE = False
+
+# Behavior Drift Detection
+try:
+    from .drift_detector import (
+        detect_drift as drift_detect,
+        get_behavior_baseline as drift_get_baseline,
+        build_baseline as drift_build_baseline,
+        drift_report_to_dict,
+    )
+    DRIFT_AVAILABLE = True
+except ImportError:
+    DRIFT_AVAILABLE = False
+
+# OpenTelemetry Export
+try:
+    from .otel_export import export_otlp_json, export_to_file as otel_export_file, push_to_endpoint as otel_push
+    OTEL_AVAILABLE = True
+except ImportError:
+    OTEL_AVAILABLE = False
+
+# Multi-Agent Topology & Cost
+try:
+    from .topology import (
+        track_agent_interaction as topo_track,
+        get_agent_topology as topo_get,
+        track_cost as topo_track_cost,
+        get_cost_report as topo_cost_report,
+    )
+    TOPOLOGY_AVAILABLE = True
+except ImportError:
+    TOPOLOGY_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("inalign-mcp")
@@ -516,6 +572,247 @@ async def list_tools() -> list[Tool]:
                         },
                     },
                     "required": ["preset"],
+                },
+            ),
+        ])
+
+    # ============================================
+    # COMPLIANCE & FRAMEWORKS
+    # ============================================
+    if COMPLIANCE_AVAILABLE:
+        tools.append(Tool(
+            name="generate_compliance_report",
+            description="Generate EU AI Act compliance report. Maps provenance data to Articles 9, 12, 14, 15 requirements with PASS/PARTIAL/FAIL checklist.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID to analyze (defaults to current session)",
+                    },
+                    "format": {
+                        "type": "string",
+                        "description": "Output format: json or html",
+                        "enum": ["json", "html"],
+                        "default": "json",
+                    },
+                },
+            },
+        ))
+
+    if OWASP_AVAILABLE:
+        tools.append(Tool(
+            name="check_owasp_compliance",
+            description="Run OWASP LLM Top 10 compliance check. Returns per-item PASS/WARN/FAIL scores for prompt injection, output handling, DoS, supply chain, sensitive info, plugin security, agency, and overreliance.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID to check (defaults to current session)",
+                    },
+                },
+            },
+        ))
+
+    # ============================================
+    # AGENT PERMISSIONS
+    # ============================================
+    if PERMISSIONS_AVAILABLE:
+        tools.extend([
+            Tool(
+                name="get_permission_matrix",
+                description="Get agent tool permission matrix. Shows allow/deny/audit settings per agent per tool.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent ID to query (omit for all agents)",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="set_agent_permissions",
+                description="Set tool permissions for an agent. Each tool can be allow, deny, or audit.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent ID to configure",
+                        },
+                        "permissions": {
+                            "type": "object",
+                            "description": "Dict of tool_name → 'allow'/'deny'/'audit'",
+                        },
+                        "default_permission": {
+                            "type": "string",
+                            "description": "Default permission for unlisted tools",
+                            "enum": ["allow", "deny", "audit"],
+                        },
+                    },
+                    "required": ["agent_id", "permissions"],
+                },
+            ),
+        ])
+
+    # ============================================
+    # DRIFT DETECTION
+    # ============================================
+    if DRIFT_AVAILABLE:
+        tools.extend([
+            Tool(
+                name="detect_drift",
+                description="Detect behavioral drift in a session compared to historical baseline. Flags new tools, frequency spikes, timing anomalies.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID to analyze (defaults to current)",
+                        },
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent ID for baseline comparison",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="get_behavior_baseline",
+                description="Get or build behavior baseline for an agent. Shows average tool usage, timing patterns, and known tools from historical sessions.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent ID to profile",
+                        },
+                    },
+                    "required": ["agent_id"],
+                },
+            ),
+        ])
+
+    # ============================================
+    # OPENTELEMETRY EXPORT
+    # ============================================
+    if OTEL_AVAILABLE:
+        tools.append(Tool(
+            name="export_otel",
+            description="Export provenance data as OpenTelemetry (OTLP) JSON. Supports file export and optional OTLP endpoint push.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID to export (defaults to current)",
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "File path for export (default: ~/.inalign/exports/)",
+                    },
+                    "endpoint": {
+                        "type": "string",
+                        "description": "Optional OTLP collector endpoint URL for push (e.g., http://localhost:4318)",
+                    },
+                },
+            },
+        ))
+
+    # ============================================
+    # MULTI-AGENT TOPOLOGY & COST
+    # ============================================
+    if TOPOLOGY_AVAILABLE:
+        tools.extend([
+            Tool(
+                name="track_agent_interaction",
+                description="Record an interaction between two agents. Builds multi-agent topology graph.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "source_agent": {
+                            "type": "string",
+                            "description": "Agent initiating the interaction",
+                        },
+                        "target_agent": {
+                            "type": "string",
+                            "description": "Agent receiving the interaction",
+                        },
+                        "interaction_type": {
+                            "type": "string",
+                            "description": "Type of interaction",
+                            "enum": ["delegate", "query", "respond"],
+                            "default": "delegate",
+                        },
+                    },
+                    "required": ["source_agent", "target_agent"],
+                },
+            ),
+            Tool(
+                name="get_agent_topology",
+                description="Get multi-agent interaction topology. Shows nodes (agents) and edges (interactions) as a graph.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Filter by session (omit for all)",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="track_cost",
+                description="Track token usage and API cost for an agent/session. Auto-computes cost from model pricing.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID",
+                        },
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Agent ID",
+                        },
+                        "model": {
+                            "type": "string",
+                            "description": "Model name (e.g., claude-opus-4-6, gpt-4o)",
+                        },
+                        "input_tokens": {
+                            "type": "integer",
+                            "description": "Input/prompt tokens used",
+                        },
+                        "output_tokens": {
+                            "type": "integer",
+                            "description": "Output/completion tokens used",
+                        },
+                        "provider": {
+                            "type": "string",
+                            "description": "API provider (anthropic, openai, etc.)",
+                        },
+                    },
+                    "required": ["model", "input_tokens", "output_tokens"],
+                },
+            ),
+            Tool(
+                name="get_cost_report",
+                description="Get cost attribution report. Shows total cost, breakdown by agent and model.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Filter by session",
+                        },
+                        "agent_id": {
+                            "type": "string",
+                            "description": "Filter by agent",
+                        },
+                    },
                 },
             ),
         ])
@@ -1176,6 +1473,114 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "warned_details": warned[:10],
                 "masked_details": masked[:10],
             }, indent=2))]
+
+    # ============================================
+    # COMPLIANCE & FRAMEWORKS HANDLERS
+    # ============================================
+
+    elif name == "generate_compliance_report" and COMPLIANCE_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        fmt = arguments.get("format", "json")
+        report = generate_compliance_report(sid)
+        if fmt == "html":
+            html_content = generate_compliance_html(report)
+            import tempfile as _tmpf
+            out_path = os.path.join(_tmpf.gettempdir(), f"inalign-compliance-{sid}.html")
+            with open(out_path, "w", encoding="utf-8") as f:
+                f.write(html_content)
+            result = [TextContent(type="text", text=json.dumps({
+                "success": True,
+                "file_path": out_path,
+                "overall_status": report.overall_status.value,
+                "total_checks": len(report.checks),
+                "summary": report.summary,
+                "message": f"✅ EU AI Act compliance report: {out_path}",
+            }, indent=2))]
+        else:
+            result = [TextContent(type="text", text=json.dumps(compliance_report_to_dict(report), indent=2))]
+
+    elif name == "check_owasp_compliance" and OWASP_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        report = check_owasp_compliance(sid)
+        result = [TextContent(type="text", text=json.dumps(owasp_report_to_dict(report), indent=2))]
+
+    # ============================================
+    # PERMISSIONS HANDLERS
+    # ============================================
+
+    elif name == "get_permission_matrix" and PERMISSIONS_AVAILABLE:
+        aid = arguments.get("agent_id")
+        matrix = perm_get_matrix(aid)
+        result = [TextContent(type="text", text=json.dumps(matrix, indent=2))]
+
+    elif name == "set_agent_permissions" and PERMISSIONS_AVAILABLE:
+        aid = arguments.get("agent_id", "")
+        perms = arguments.get("permissions", {})
+        dp = arguments.get("default_permission")
+        res = perm_set_permissions(aid, perms, dp)
+        result = [TextContent(type="text", text=json.dumps(res, indent=2))]
+
+    # ============================================
+    # DRIFT DETECTION HANDLERS
+    # ============================================
+
+    elif name == "detect_drift" and DRIFT_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        aid = arguments.get("agent_id")
+        report = drift_detect(sid, aid)
+        result = [TextContent(type="text", text=json.dumps(drift_report_to_dict(report), indent=2))]
+
+    elif name == "get_behavior_baseline" and DRIFT_AVAILABLE:
+        aid = arguments.get("agent_id", "unknown")
+        baseline = drift_get_baseline(aid)
+        result = [TextContent(type="text", text=json.dumps(baseline, indent=2))]
+
+    # ============================================
+    # OPENTELEMETRY HANDLER
+    # ============================================
+
+    elif name == "export_otel" and OTEL_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        endpoint = arguments.get("endpoint")
+        out_path = arguments.get("output_path")
+
+        if endpoint:
+            res = otel_push(sid, endpoint)
+        else:
+            res = otel_export_file(sid, out_path)
+        result = [TextContent(type="text", text=json.dumps(res, indent=2))]
+
+    # ============================================
+    # TOPOLOGY & COST HANDLERS
+    # ============================================
+
+    elif name == "track_agent_interaction" and TOPOLOGY_AVAILABLE:
+        src = arguments.get("source_agent", "")
+        tgt = arguments.get("target_agent", "")
+        itype = arguments.get("interaction_type", "delegate")
+        res = topo_track(src, tgt, itype, SESSION_ID)
+        result = [TextContent(type="text", text=json.dumps(res, indent=2))]
+
+    elif name == "get_agent_topology" and TOPOLOGY_AVAILABLE:
+        sid = arguments.get("session_id")
+        topo = topo_get(sid)
+        result = [TextContent(type="text", text=json.dumps(topo, indent=2))]
+
+    elif name == "track_cost" and TOPOLOGY_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        aid = arguments.get("agent_id", "Claude Code")
+        model = arguments.get("model", "unknown")
+        inp = arguments.get("input_tokens", 0)
+        out = arguments.get("output_tokens", 0)
+        provider = arguments.get("provider", "unknown")
+        res = topo_track_cost(sid, aid, model, inp, out, provider)
+        result = [TextContent(type="text", text=json.dumps(res, indent=2))]
+
+    elif name == "get_cost_report" and TOPOLOGY_AVAILABLE:
+        sid = arguments.get("session_id")
+        aid = arguments.get("agent_id")
+        report = topo_cost_report(sid, aid)
+        result = [TextContent(type="text", text=json.dumps(report, indent=2))]
 
     # Unknown tool
     else:
