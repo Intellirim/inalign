@@ -836,8 +836,6 @@ def generate_html_report(
 <div class="tabs">
   <div class="tab active" data-tab="overview">Overview</div>
   <div class="tab" data-tab="timeline">Timeline ({max_entries})</div>
-  <div class="tab" data-tab="chain">Provenance Chain</div>
-  <div class="tab" data-tab="log">Session Log</div>
   <div class="tab" data-tab="security">Security</div>
   <div class="tab" data-tab="governance">Governance</div>
   <div class="tab" data-tab="ai">AI Analysis</div>
@@ -916,36 +914,6 @@ def generate_html_report(
     </div>
     <div id="tl-container">
       {timeline_html if timeline_html else '<p style="color:var(--muted);padding:1rem;">No timeline data available.</p>'}
-    </div>
-  </div>
-</div>
-
-<!-- === PROVENANCE CHAIN === -->
-<div class="tab-panel" id="panel-chain">
-  <div class="section">
-    <h2>Provenance Chain ({total_records} records)</h2>
-    <p style="color:var(--muted);font-size:0.75rem;margin-bottom:0.6rem;">Click a row to see details</p>
-    <table>
-      <thead><tr><th>#</th><th>Type</th><th>Action</th><th>Hash</th><th>Previous</th><th>Time</th></tr></thead>
-      <tbody>{records_html}</tbody>
-    </table>
-  </div>
-</div>
-
-<!-- === SESSION LOG === -->
-<div class="tab-panel" id="panel-log">
-  <div class="section">
-    <h2>Full Session Log ({total_log} events)</h2>
-    <div class="log-filter">
-      <span class="log-filter-btn active" data-filter="all">All</span>
-      <span class="log-filter-btn" data-filter="user">User</span>
-      <span class="log-filter-btn" data-filter="assistant">Assistant</span>
-      <span class="log-filter-btn" data-filter="thinking">Thinking</span>
-      <span class="log-filter-btn" data-filter="tool_call">Tool Call</span>
-      <span class="log-filter-btn" data-filter="tool_result">Tool Result</span>
-    </div>
-    <div id="session-log-container">
-      {session_log_html if session_log_html else '<p style="color:var(--muted);">No session log data. Run <code>inalign-install --ingest</code> to import Claude Code sessions.</p>'}
     </div>
   </div>
 </div>
@@ -1039,45 +1007,6 @@ SCRIPT_PLACEHOLDER
         "  });\n"
         "});\n"
         "\n"
-        "// === Provenance row toggle ===\n"
-        "document.querySelectorAll('.record-row.expandable').forEach(row => {\n"
-        "  row.addEventListener('click', () => {\n"
-        "    const d = document.getElementById('detail-' + row.dataset.idx);\n"
-        "    if (!d) return;\n"
-        "    const open = d.style.display !== 'none';\n"
-        "    d.style.display = open ? 'none' : 'table-row';\n"
-        "    row.classList.toggle('open', !open);\n"
-        "  });\n"
-        "});\n"
-        "\n"
-        "// === Session log toggle ===\n"
-        "document.querySelectorAll('.log-entry.log-expandable').forEach(entry => {\n"
-        "  entry.addEventListener('click', () => {\n"
-        "    const d = document.getElementById('log-' + entry.dataset.log);\n"
-        "    if (!d) return;\n"
-        "    const open = d.style.display !== 'none';\n"
-        "    d.style.display = open ? 'none' : 'block';\n"
-        "    entry.classList.toggle('open', !open);\n"
-        "  });\n"
-        "});\n"
-        "\n"
-        "// === Session log filter ===\n"
-        "document.querySelectorAll('.log-filter-btn').forEach(btn => {\n"
-        "  btn.addEventListener('click', () => {\n"
-        "    document.querySelectorAll('.log-filter-btn').forEach(b => b.classList.remove('active'));\n"
-        "    btn.classList.add('active');\n"
-        "    const f = btn.dataset.filter;\n"
-        "    document.querySelectorAll('.log-entry').forEach(e => {\n"
-        "      if (f === 'all') { e.style.display = ''; return; }\n"
-        "      const badge = e.querySelector('.log-badge');\n"
-        "      const t = badge ? badge.textContent.toLowerCase().replace(/\\s/g,'_') : '';\n"
-        "      e.style.display = t.includes(f) ? '' : 'none';\n"
-        "      const full = document.getElementById('log-' + e.dataset.log);\n"
-        "      if (full && e.style.display === 'none') full.style.display = 'none';\n"
-        "    });\n"
-        "  });\n"
-        "});\n"
-        "\n"
         "// === Downloads ===\n"
         "function downloadJSON() {\n"
         "  const blob = new Blob([JSON.stringify(_DATA, null, 2)], {type: 'application/json'});\n"
@@ -1109,7 +1038,7 @@ SCRIPT_PLACEHOLDER
         "  btn.disabled = true;\n"
         "  status.textContent = 'Analyzing session... (this may take 30-60s)';\n"
         "  resultEl.style.display = 'none';\n"
-        "  const logText = document.getElementById('session-log-container').innerText.slice(0, 15000);\n"
+        "  const logText = document.getElementById('tl-container').innerText.slice(0, 15000);\n"
         "  try {\n"
         "    // Try local proxy first (works for both OpenAI & Anthropic)\n"
         "    let text = await tryLocalProxy(provider, key, logText);\n"
