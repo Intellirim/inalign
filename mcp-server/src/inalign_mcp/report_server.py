@@ -156,10 +156,17 @@ def generate_report_data():
     except Exception:
         pass
 
+    risk_data = {}
+    try:
+        from .risk_analyzer import analyze_session_risk
+        risk_data = analyze_session_risk(session_id)
+    except Exception:
+        pass
+
     return (
         session_id, records_data, verification, stats, session_log,
         compliance_data, owasp_data, drift_data,
-        permissions_data, cost_data, topology_data,
+        permissions_data, cost_data, topology_data, risk_data,
     )
 
 
@@ -308,7 +315,7 @@ def main():
         (
             session_id, records, verification, stats, session_log,
             compliance_data, owasp_data, drift_data,
-            permissions_data, cost_data, topology_data,
+            permissions_data, cost_data, topology_data, risk_data,
         ) = generate_report_data()
         _report_html = generate_html_report(
             session_id, records, verification, stats,
@@ -319,6 +326,7 @@ def main():
             permissions_data=permissions_data,
             cost_data=cost_data,
             topology_data=topology_data,
+            risk_data=risk_data,
         )
         print(f"  Session: {session_id}")
         print(f"  Records: {len(records)} provenance, {len(session_log)} session log")

@@ -23,6 +23,7 @@ def generate_html_report(
     permissions_data: dict = None,
     cost_data: dict = None,
     topology_data: dict = None,
+    risk_data: dict = None,
 ) -> str:
     """Generate a self-contained HTML audit dashboard.
 
@@ -53,6 +54,30 @@ def generate_html_report(
     permissions_data = permissions_data or {}
     cost_data = cost_data or {}
     topology_data = topology_data or {}
+    risk_data = risk_data or {}
+
+    # === Prepare risk highlights for timeline ===
+    risk_score = risk_data.get("risk_score", 0)
+    risk_level = risk_data.get("overall_risk", "low")
+    risk_patterns = risk_data.get("patterns", [])
+    risk_recommendations = risk_data.get("recommendations", [])
+    causal_chains = risk_data.get("causal_chains", {})
+    behavior_profile = risk_data.get("behavior_profile", {})
+
+    # Build set of suspicious tool names/keywords from risk patterns for timeline highlighting
+    _suspicious_tools = set()
+    _suspicious_keywords = set()
+    for p in risk_patterns:
+        ev = p.get("evidence", {})
+        if isinstance(ev.get("commands"), list):
+            for cmd in ev["commands"]:
+                _suspicious_keywords.add(cmd.lower() if isinstance(cmd, str) else "")
+        if isinstance(ev.get("sensitive_files"), list):
+            for sf in ev["sensitive_files"]:
+                _suspicious_keywords.add(sf.lower())
+        if isinstance(ev.get("matched_patterns"), list):
+            for mp in ev["matched_patterns"]:
+                _suspicious_keywords.add(mp.lower() if isinstance(mp, str) else "")
 
     # === Build provenance chain rows ===
     records_html = ""
@@ -258,9 +283,22 @@ def generate_html_report(
         # Role filter data attribute
         filter_role = rtype if rtype in ("thinking", "tool_call", "tool_result") else role
 
+        # Risk highlight: check if this event matches suspicious patterns
+        is_risky = False
+        risk_reason = ""
+        _check_text = (str(tool_name) + " " + str(content) + " " + str(tool_input)).lower()
+        for kw in _suspicious_keywords:
+            if kw and kw in _check_text:
+                is_risky = True
+                risk_reason = kw
+                break
+        risky_class = "tl-risky" if is_risky else ""
+        risk_dot = f'<span class="tl-risk-dot" title="Suspicious: {html_mod.escape(risk_reason)}"></span>' if is_risky else ""
+
         timeline_html += f"""
-        <div class="tl-entry {expand_class}" data-tl="{i}" data-role="{filter_role}">
+        <div class="tl-entry {expand_class} {risky_class}" data-tl="{i}" data-role="{filter_role}" data-risky="{1 if is_risky else 0}">
           <div class="tl-row">
+            {risk_dot}
             <div class="tl-seq">#{seq}</div>
             <div class="tl-badge {badge_class}">{badge_label}</div>
             <div class="tl-content">{arrow}{preview if preview else '<span class="tl-muted">(empty)</span>'}</div>
@@ -299,6 +337,34 @@ def generate_html_report(
         t = r.get("type", r.get("record_type", "unknown"))
         log_type_counts[t] = log_type_counts.get(t, 0) + 1
     log_summary_html = "".join(f'<span class="stat-chip">{t}: {c}</span>' for t, c in sorted(log_type_counts.items(), key=lambda x: -x[1]))
+
+    # === Build audit summary ===
+    risk_level_class = {"critical": "fail", "high": "fail", "medium": "warn", "low": "pass"}.get(risk_level, "pass")
+    risk_level_label = risk_level.upper()
+
+    # Build findings list for overview
+    findings_html = ""
+    for p in risk_patterns[:5]:
+        p_risk = p.get("risk", "low")
+        p_class = {"critical": "st-fail", "high": "st-fail", "medium": "st-warn", "low": "st-pass"}.get(p_risk, "st-pass")
+        mitre_chips = " ".join(f'<span class="mitre-chip">{html_mod.escape(t)}</span>' for t in p.get("mitre_techniques", []))
+        findings_html += f"""
+        <div class="finding-item">
+          <div class="finding-header">
+            <span class="badge {p_class}">{p_risk.upper()}</span>
+            <span class="finding-name">{html_mod.escape(p.get("name", ""))}</span>
+            {mitre_chips}
+          </div>
+          <div class="finding-desc">{html_mod.escape(p.get("description", ""))}</div>
+          <div class="finding-rec">{html_mod.escape(p.get("recommendation", ""))}</div>
+        </div>"""
+
+    recommendations_html = ""
+    for rec in risk_recommendations[:5]:
+        recommendations_html += f'<div class="rec-item">{html_mod.escape(rec)}</div>'
+
+    # Count risky timeline entries
+    risky_count = sum(1 for kw in _suspicious_keywords if kw)
 
     # === Prepare v0.5.0 feature data for overview cards ===
     owasp_score = owasp_data.get("overall_score", 0)
@@ -638,30 +704,32 @@ def generate_html_report(
 <title>InALign Dashboard — {session_id}</title>
 <style>
   :root {{
-    --bg: #0d1117; --card: #161b22; --border: #30363d;
-    --text: #e6edf3; --muted: #8b949e;
-    --green: #3fb950; --red: #f85149; --blue: #58a6ff;
-    --purple: #bc8cff; --orange: #d29922; --yellow: #e3b341;
+    --bg: #0a0a0a; --card: #111111; --surface: #1a1a1a; --border: #2a2a2a;
+    --text: #ededed; --muted: #a0a0a0; --dim: #606068;
+    --green: #22c55e; --red: #ef4444; --blue: #4d65ff;
+    --purple: #DFC5FE; --orange: #f59e0b; --yellow: #e3b341;
+    --accent: #4d65ff;
   }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     background: var(--bg); color: var(--text);
-    line-height: 1.6; padding: 2rem; max-width: 1200px; margin: 0 auto;
+    line-height: 1.5; padding: 2rem 2.5rem; max-width: 1200px; margin: 0 auto;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   }}
-  .header {{ text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); }}
-  .header h1 {{ font-size: 1.8rem; margin-bottom: 0.3rem; }}
-  .header .subtitle {{ color: var(--muted); font-size: 0.9rem; }}
+  .header {{ text-align: center; margin-bottom: 2rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--border); }}
+  .header h1 {{ font-size: 1.6rem; font-weight: 700; margin-bottom: 0.3rem; letter-spacing: -0.02em; }}
+  .header .subtitle {{ color: var(--muted); font-size: 0.82rem; }}
 
   /* Tabs */
-  .tabs {{ display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); overflow-x: auto; }}
+  .tabs {{ display: flex; gap: 0; margin-bottom: 2rem; border-bottom: 1px solid var(--border); overflow-x: auto; }}
   .tab {{
-    padding: 0.6rem 1.2rem; cursor: pointer; color: var(--muted);
-    font-weight: 500; font-size: 0.85rem; border-bottom: 2px solid transparent;
-    margin-bottom: -2px; transition: all 0.15s; white-space: nowrap;
+    padding: 0.7rem 1.4rem; cursor: pointer; color: var(--dim);
+    font-weight: 500; font-size: 0.82rem; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; transition: all 0.15s ease; white-space: nowrap;
   }}
   .tab:hover {{ color: var(--text); }}
-  .tab.active {{ color: var(--blue); border-bottom-color: var(--blue); }}
+  .tab.active {{ color: var(--accent); border-bottom-color: var(--accent); }}
   .tab-panel {{ display: none; }}
   .tab-panel.active {{ display: block; }}
 
@@ -677,17 +745,60 @@ def generate_html_report(
   .dl-btn svg {{ width: 14px; height: 14px; fill: currentColor; }}
 
   /* Cards */
-  .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.8rem; margin-bottom: 1.5rem; }}
-  .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }}
-  .card .label {{ color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; }}
-  .card .value {{ font-size: 1.4rem; font-weight: 600; }}
+  .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }}
+  .card {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.2rem; transition: border-color 0.15s ease;
+  }}
+  .card:hover {{ border-color: rgba(77,101,255,0.3); }}
+  .card .label {{ color: var(--dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; font-weight: 600; }}
+  .card .value {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }}
   .card .value.pass {{ color: var(--green); }}
   .card .value.fail {{ color: var(--red); }}
   .card .value.warn {{ color: var(--orange); }}
   .card .value.na {{ color: var(--muted); }}
 
-  .section {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; margin-bottom: 1.2rem; }}
-  .section h2 {{ font-size: 1rem; margin-bottom: 0.8rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }}
+  .section {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.5rem; margin-bottom: 1.2rem;
+  }}
+  .section h2 {{ font-size: 0.92rem; font-weight: 600; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }}
+
+  /* Audit Summary */
+  .audit-summary {{
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+    padding: 1.5rem; margin-bottom: 1.2rem;
+  }}
+  .audit-header {{ display: flex; align-items: center; gap: 1.2rem; margin-bottom: 1.2rem; }}
+  .risk-gauge {{
+    width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 1.6rem; font-weight: 700; flex-shrink: 0;
+  }}
+  .risk-gauge.pass {{ background: rgba(34,197,94,0.12); color: var(--green); border: 2px solid rgba(34,197,94,0.3); }}
+  .risk-gauge.warn {{ background: rgba(245,158,11,0.12); color: var(--orange); border: 2px solid rgba(245,158,11,0.3); }}
+  .risk-gauge.fail {{ background: rgba(239,68,68,0.12); color: var(--red); border: 2px solid rgba(239,68,68,0.3); }}
+  .audit-meta {{ flex: 1; }}
+  .audit-meta h3 {{ font-size: 1.1rem; font-weight: 600; margin-bottom: 0.2rem; }}
+  .audit-meta .audit-sub {{ color: var(--muted); font-size: 0.82rem; }}
+
+  .finding-item {{
+    padding: 0.8rem; margin-bottom: 0.5rem; background: var(--surface);
+    border-radius: 6px; border-left: 3px solid var(--border);
+  }}
+  .finding-item:last-child {{ margin-bottom: 0; }}
+  .finding-header {{ display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; flex-wrap: wrap; }}
+  .finding-name {{ font-weight: 600; font-size: 0.85rem; }}
+  .finding-desc {{ color: var(--muted); font-size: 0.8rem; margin-bottom: 0.2rem; }}
+  .finding-rec {{ color: var(--accent); font-size: 0.78rem; }}
+  .finding-rec::before {{ content: "\\2192 "; }}
+  .mitre-chip {{
+    font-family: monospace; font-size: 0.65rem; padding: 0.1rem 0.35rem;
+    background: rgba(77,101,255,0.1); color: var(--accent); border-radius: 3px;
+  }}
+  .rec-item {{
+    padding: 0.5rem 0.8rem; font-size: 0.82rem; color: var(--text);
+    border-left: 2px solid var(--accent); margin-bottom: 0.4rem; background: var(--surface); border-radius: 0 4px 4px 0;
+  }}
 
   /* Score bar */
   .score-bar {{ height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-top: 0.3rem; }}
@@ -813,6 +924,14 @@ def generate_html_report(
   .tl-filter-btn:hover {{ border-color: var(--blue); color: var(--text); }}
   .tl-filter-btn.active {{ border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,0.08); }}
   #tl-container {{ max-height: 80vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }}
+  .tl-risky {{ border-left: 3px solid var(--red); background: rgba(239,68,68,0.04); }}
+  .tl-risky:hover {{ background: rgba(239,68,68,0.08); }}
+  .tl-risk-dot {{
+    width: 8px; height: 8px; border-radius: 50%; background: var(--red);
+    flex-shrink: 0; box-shadow: 0 0 6px rgba(239,68,68,0.4);
+  }}
+  .tl-filter-risk {{ border-color: rgba(239,68,68,0.3); color: var(--red); }}
+  .tl-filter-risk.active {{ border-color: var(--red); background: rgba(239,68,68,0.08); }}
 
   .footer {{ text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 2rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }}
   .footer a {{ color: var(--blue); text-decoration: none; }}
@@ -843,38 +962,39 @@ def generate_html_report(
 
 <!-- === OVERVIEW === -->
 <div class="tab-panel active" id="panel-overview">
-  <div class="toolbar">
-    <button class="dl-btn" onclick="downloadJSON()">
-      <svg viewBox="0 0 16 16"><path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75z"/><path d="M7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.749.749 0 111.06 1.06l-3.25 3.25a.749.749 0 01-1.06 0L4.22 6.78a.749.749 0 111.06-1.06l1.97 1.969z"/></svg>
-      JSON
-    </button>
-    <button class="dl-btn" onclick="downloadCSV()">
-      <svg viewBox="0 0 16 16"><path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75z"/><path d="M7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.749.749 0 111.06 1.06l-3.25 3.25a.749.749 0 01-1.06 0L4.22 6.78a.749.749 0 111.06-1.06l1.97 1.969z"/></svg>
-      CSV
-    </button>
+
+  <!-- Audit Summary -->
+  <div class="audit-summary">
+    <div class="audit-header">
+      <div class="risk-gauge {risk_level_class}">{risk_score}</div>
+      <div class="audit-meta">
+        <h3>Risk Level: {risk_level_label}</h3>
+        <div class="audit-sub">{len(risk_patterns)} pattern(s) detected &middot; {total_records} provenance records &middot; Chain {"VERIFIED" if verification.get("valid") else "BROKEN"}</div>
+      </div>
+      <div class="toolbar" style="margin:0;">
+        <button class="dl-btn" onclick="downloadJSON()">
+          <svg viewBox="0 0 16 16" style="width:12px;height:12px;fill:currentColor;"><path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75z"/><path d="M7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.749.749 0 111.06 1.06l-3.25 3.25a.749.749 0 01-1.06 0L4.22 6.78a.749.749 0 111.06-1.06l1.97 1.969z"/></svg>JSON
+        </button>
+        <button class="dl-btn" onclick="downloadCSV()">
+          <svg viewBox="0 0 16 16" style="width:12px;height:12px;fill:currentColor;"><path d="M2.75 14A1.75 1.75 0 011 12.25v-2.5a.75.75 0 011.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 00.25-.25v-2.5a.75.75 0 011.5 0v2.5A1.75 1.75 0 0113.25 14H2.75z"/><path d="M7.25 7.689V2a.75.75 0 011.5 0v5.689l1.97-1.969a.749.749 0 111.06 1.06l-3.25 3.25a.749.749 0 01-1.06 0L4.22 6.78a.749.749 0 111.06-1.06l1.97 1.969z"/></svg>CSV
+        </button>
+      </div>
+    </div>
   </div>
 
+  <!-- Status Cards -->
   <div class="cards">
-    <div class="card">
-      <div class="label">Session</div>
-      <div class="value" style="font-size:1rem; font-family:monospace;">{session_id}</div>
-    </div>
     <div class="card">
       <div class="label">Chain Integrity</div>
       <div class="value {chain_class}">{"VERIFIED" if verification.get("valid") else "BROKEN"}</div>
     </div>
     <div class="card">
-      <div class="label">Records</div>
+      <div class="label">Events</div>
       <div class="value">{total_records}</div>
     </div>
     <div class="card">
-      <div class="label">Session Log</div>
-      <div class="value">{total_log}</div>
-    </div>
-    <div class="card">
-      <div class="label">OWASP Score</div>
-      <div class="value {owasp_status_class}">{owasp_score if owasp_data.get("checks") else "—"}</div>
-      {"<div class='score-bar'><div class='score-fill' style='width:" + str(owasp_score) + "%;background:var(--" + ("red" if owasp_score >= 60 else "orange" if owasp_score >= 30 else "green") + ");'></div></div>" if owasp_data.get("checks") else ""}
+      <div class="label">OWASP</div>
+      <div class="value {owasp_status_class}">{owasp_score if owasp_data.get("checks") else "—"}<span style="font-size:0.7rem;color:var(--muted);">/100</span></div>
     </div>
     <div class="card">
       <div class="label">Compliance</div>
@@ -886,17 +1006,18 @@ def generate_html_report(
     </div>
   </div>
 
+  <!-- Key Findings -->
+  {"<div class='section'><h2>Key Findings</h2>" + findings_html + "</div>" if findings_html else ""}
+
+  <!-- Recommendations -->
+  {"<div class='section'><h2>Recommendations</h2>" + recommendations_html + "</div>" if recommendations_html else ""}
+
+  <!-- Merkle Root -->
   <div class="section">
     <h2>Merkle Root</h2>
     <div class="merkle">{merkle_root}</div>
+    <div style="margin-top:0.6rem;font-size:0.72rem;color:var(--dim);">Session: <code style="color:var(--accent);">{session_id}</code></div>
   </div>
-
-  <div class="section">
-    <h2>Provenance Summary</h2>
-    <div>{type_summary_html}</div>
-  </div>
-
-  {"<div class='section'><h2>Session Log Summary</h2><div>" + log_summary_html + "</div></div>" if log_summary_html else ""}
 </div>
 
 <!-- === UNIFIED TIMELINE === -->
@@ -911,6 +1032,7 @@ def generate_html_report(
       <span class="tl-filter-btn" data-tlf="thinking">Thinking</span>
       <span class="tl-filter-btn" data-tlf="tool_call">Tool Call</span>
       <span class="tl-filter-btn" data-tlf="tool_result">Result</span>
+      <span class="tl-filter-btn tl-filter-risk" data-tlf="risky">Suspicious</span>
     </div>
     <div id="tl-container">
       {timeline_html if timeline_html else '<p style="color:var(--muted);padding:1rem;">No timeline data available.</p>'}
@@ -999,8 +1121,9 @@ SCRIPT_PLACEHOLDER
         "    const f = btn.dataset.tlf;\n"
         "    document.querySelectorAll('.tl-entry').forEach(e => {\n"
         "      if (f === 'all') { e.style.display = ''; return; }\n"
-        "      const role = e.dataset.role || '';\n"
-        "      e.style.display = role === f ? '' : 'none';\n"
+        "      if (f === 'risky') { e.style.display = e.dataset.risky === '1' ? '' : 'none'; }\n"
+        "      else { const role = e.dataset.role || '';\n"
+        "      e.style.display = role === f ? '' : 'none'; }\n"
         "      const detail = document.getElementById('tl-detail-' + e.dataset.tl);\n"
         "      if (detail && e.style.display === 'none') detail.style.display = 'none';\n"
         "    });\n"
