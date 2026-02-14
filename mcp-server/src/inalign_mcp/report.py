@@ -2,7 +2,8 @@
 InALign HTML Report Generator
 
 Generates standalone HTML audit dashboard viewable in any browser.
-Features: provenance chain, session log, data export, AI analysis trigger.
+Features: provenance chain, session log, data export, AI analysis,
+          compliance, OWASP, drift detection, permissions, cost, topology.
 """
 
 import json
@@ -16,6 +17,12 @@ def generate_html_report(
     verification: dict,
     stats: dict,
     session_log: list = None,
+    compliance_data: dict = None,
+    owasp_data: dict = None,
+    drift_data: dict = None,
+    permissions_data: dict = None,
+    cost_data: dict = None,
+    topology_data: dict = None,
 ) -> str:
     """Generate a self-contained HTML audit dashboard.
 
@@ -25,6 +32,12 @@ def generate_html_report(
         verification: Chain verification result {valid, error, merkle_root}
         stats: Session statistics
         session_log: Full session conversation log (from json.gz)
+        compliance_data: EU AI Act compliance report dict
+        owasp_data: OWASP LLM Top 10 report dict
+        drift_data: Behavior drift detection report dict
+        permissions_data: Agent permission matrix dict
+        cost_data: Cost tracking report dict
+        topology_data: Agent topology graph dict
 
     Returns:
         Complete HTML string
@@ -34,6 +47,12 @@ def generate_html_report(
     merkle_root = verification.get("merkle_root", "N/A")
     total_records = len(records)
     session_log = session_log or []
+    compliance_data = compliance_data or {}
+    owasp_data = owasp_data or {}
+    drift_data = drift_data or {}
+    permissions_data = permissions_data or {}
+    cost_data = cost_data or {}
+    topology_data = topology_data or {}
 
     # === Build provenance chain rows ===
     records_html = ""
@@ -175,6 +194,336 @@ def generate_html_report(
         log_type_counts[t] = log_type_counts.get(t, 0) + 1
     log_summary_html = "".join(f'<span class="stat-chip">{t}: {c}</span>' for t, c in sorted(log_type_counts.items(), key=lambda x: -x[1]))
 
+    # === Prepare v0.5.0 feature data for overview cards ===
+    owasp_score = owasp_data.get("overall_score", 0)
+    owasp_status = owasp_data.get("overall_status", "N/A")
+    owasp_status_class = {"PASS": "pass", "WARN": "warn", "FAIL": "fail"}.get(owasp_status, "na")
+
+    compliance_status = compliance_data.get("overall_status", "N/A")
+    compliance_status_class = {"PASS": "pass", "PARTIAL": "warn", "FAIL": "fail"}.get(compliance_status, "na")
+    compliance_pass = compliance_data.get("summary", {}).get("PASS", 0)
+    compliance_total = compliance_data.get("total_checks", 0)
+
+    drift_detected = drift_data.get("drift_detected", False)
+    drift_score = drift_data.get("drift_score", 0)
+    drift_class = "fail" if drift_detected else "pass"
+    anomaly_count = drift_data.get("anomaly_count", 0)
+
+    total_cost = cost_data.get("total_cost_usd", 0)
+    total_input_tokens = cost_data.get("total_input_tokens", 0)
+    total_output_tokens = cost_data.get("total_output_tokens", 0)
+    total_tokens = total_input_tokens + total_output_tokens
+
+    unique_agents = topology_data.get("unique_agents", 0)
+    total_interactions = topology_data.get("total_interactions", 0)
+
+    has_security_data = bool(owasp_data.get("checks") or compliance_data.get("checks") or drift_data.get("anomalies") is not None)
+    has_governance_data = bool(permissions_data.get("agents") or cost_data.get("by_model") or topology_data.get("nodes"))
+
+    # === Build OWASP table rows ===
+    owasp_rows_html = ""
+    for check in owasp_data.get("checks", []):
+        st = check.get("status", "N/A")
+        sc = {"PASS": "st-pass", "WARN": "st-warn", "FAIL": "st-fail"}.get(st, "st-na")
+        owasp_rows_html += f"""
+        <tr>
+          <td><span class="badge {sc}">{st}</span></td>
+          <td class="mono-sm">{html_mod.escape(check.get("item_id", ""))}</td>
+          <td>{html_mod.escape(check.get("name", ""))}</td>
+          <td>{check.get("score", 0)}/100</td>
+          <td class="desc-cell">{html_mod.escape(check.get("description", "")[:200])}</td>
+        </tr>"""
+
+    # === Build compliance table rows ===
+    compliance_rows_html = ""
+    for check in compliance_data.get("checks", []):
+        st = check.get("status", "N/A")
+        sc = {"PASS": "st-pass", "PARTIAL": "st-warn", "FAIL": "st-fail"}.get(st, "st-na")
+        evidence = " | ".join(html_mod.escape(str(e)[:100]) for e in check.get("evidence", []))
+        compliance_rows_html += f"""
+        <tr>
+          <td><span class="badge {sc}">{st}</span></td>
+          <td class="mono-sm">{html_mod.escape(check.get("check_id", ""))}</td>
+          <td>{html_mod.escape(check.get("article", ""))}</td>
+          <td>{html_mod.escape(check.get("requirement", "")[:120])}</td>
+          <td class="desc-cell">{evidence if evidence else '<span style="color:var(--muted);">&mdash;</span>'}</td>
+        </tr>"""
+
+    # === Build drift anomalies rows ===
+    anomalies_rows_html = ""
+    for a in drift_data.get("anomalies", []):
+        sev = a.get("severity", "low")
+        sc = {"high": "st-fail", "medium": "st-warn", "low": "st-pass"}.get(sev, "st-na")
+        anomalies_rows_html += f"""
+        <tr>
+          <td><span class="badge {sc}">{sev.upper()}</span></td>
+          <td>{html_mod.escape(a.get("type", ""))}</td>
+          <td>{html_mod.escape(a.get("description", ""))}</td>
+        </tr>"""
+
+    # === Build permissions table rows ===
+    permissions_rows_html = ""
+    for agent_id, agent_info in permissions_data.get("agents", {}).items():
+        default_perm = agent_info.get("default_permission", "allow")
+        tools = agent_info.get("tools", {})
+        if tools:
+            for tool_name, tool_info in tools.items():
+                perm = tool_info.get("permission", "allow")
+                pc = {"allow": "st-pass", "deny": "st-fail", "audit": "st-warn"}.get(perm, "st-na")
+                permissions_rows_html += f"""
+        <tr>
+          <td>{html_mod.escape(str(agent_id))}</td>
+          <td>{html_mod.escape(str(tool_name))}</td>
+          <td><span class="badge {pc}">{perm.upper()}</span></td>
+          <td>{html_mod.escape(str(tool_info.get("reason", "")))}</td>
+        </tr>"""
+        else:
+            pc = {"allow": "st-pass", "deny": "st-fail", "audit": "st-warn"}.get(default_perm, "st-na")
+            permissions_rows_html += f"""
+        <tr>
+          <td>{html_mod.escape(str(agent_id))}</td>
+          <td><em>All tools</em></td>
+          <td><span class="badge {pc}">{default_perm.upper()}</span></td>
+          <td>Default policy</td>
+        </tr>"""
+
+    # === Build cost table rows ===
+    cost_model_rows_html = ""
+    for model, info in cost_data.get("by_model", {}).items():
+        cost_model_rows_html += f"""
+        <tr>
+          <td>{html_mod.escape(str(model))}</td>
+          <td>{info.get("calls", 0)}</td>
+          <td>{info.get("input_tokens", 0):,}</td>
+          <td>{info.get("output_tokens", 0):,}</td>
+          <td>${info.get("cost", 0):.4f}</td>
+        </tr>"""
+
+    cost_agent_rows_html = ""
+    for agent, info in cost_data.get("by_agent", {}).items():
+        cost_agent_rows_html += f"""
+        <tr>
+          <td>{html_mod.escape(str(agent))}</td>
+          <td>{info.get("calls", 0)}</td>
+          <td>{info.get("input_tokens", 0):,}</td>
+          <td>{info.get("output_tokens", 0):,}</td>
+          <td>${info.get("cost", 0):.4f}</td>
+        </tr>"""
+
+    # === Build topology rows ===
+    topo_nodes_html = ""
+    for node in topology_data.get("nodes", []):
+        topo_nodes_html += f'<span class="stat-chip">{html_mod.escape(str(node.get("label", node.get("id", ""))))}</span>'
+
+    topo_edges_html = ""
+    for edge in topology_data.get("edges", []):
+        etype = edge.get("type", "delegate")
+        ec = {"delegate": "type-tool", "query": "type-decision", "respond": "type-user"}.get(etype, "type-tool")
+        topo_edges_html += f"""
+        <tr>
+          <td>{html_mod.escape(str(edge.get("source", "")))}</td>
+          <td><span class="badge {ec}">{etype}</span></td>
+          <td>{html_mod.escape(str(edge.get("target", "")))}</td>
+          <td>{edge.get("weight", 0)}</td>
+        </tr>"""
+
+    # === Empty state messages ===
+    no_owasp = '<p style="color:var(--muted);font-size:0.82rem;">No OWASP data. Run <code>check_owasp_compliance</code> via MCP to generate.</p>'
+    no_compliance = '<p style="color:var(--muted);font-size:0.82rem;">No compliance data. Run <code>generate_compliance_report</code> via MCP to generate.</p>'
+    no_drift = '<p style="color:var(--muted);font-size:0.82rem;">No drift data. Run <code>detect_drift</code> via MCP to analyze behavior.</p>'
+    no_perms = '<p style="color:var(--muted);font-size:0.82rem;">No permissions configured. Use <code>set_agent_permissions</code> via MCP to set up access controls.</p>'
+    no_cost = '<p style="color:var(--muted);font-size:0.82rem;">No cost data recorded. Use <code>track_cost</code> via MCP to log token usage.</p>'
+    no_topo = '<p style="color:var(--muted);font-size:0.82rem;">No agent interactions recorded. Use <code>track_agent_interaction</code> via MCP to build topology.</p>'
+
+    # === Build OWASP section HTML ===
+    if owasp_rows_html:
+        owasp_section = f"""
+    <div class="section">
+      <h2>OWASP LLM Top 10</h2>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Risk Score</div>
+          <div class="value {owasp_status_class}">{owasp_score}/100</div>
+          <div class="score-bar"><div class="score-fill" style="width:{owasp_score}%;background:var(--{'red' if owasp_score >= 60 else 'orange' if owasp_score >= 30 else 'green'});"></div></div>
+        </div>
+        <div class="card">
+          <div class="label">Status</div>
+          <div class="value {owasp_status_class}">{owasp_status}</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Status</th><th>ID</th><th>Check</th><th>Score</th><th>Details</th></tr></thead>
+        <tbody>{owasp_rows_html}</tbody>
+      </table>
+      </div>
+    </div>"""
+    else:
+        owasp_section = f'<div class="section"><h2>OWASP LLM Top 10</h2>{no_owasp}</div>'
+
+    # === Build compliance section HTML ===
+    if compliance_rows_html:
+        compliance_section = f"""
+    <div class="section">
+      <h2>EU AI Act Compliance</h2>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Status</div>
+          <div class="value {compliance_status_class}">{compliance_status}</div>
+        </div>
+        <div class="card">
+          <div class="label">Checks Passed</div>
+          <div class="value">{compliance_pass}/{compliance_total}</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Status</th><th>ID</th><th>Article</th><th>Requirement</th><th>Evidence</th></tr></thead>
+        <tbody>{compliance_rows_html}</tbody>
+      </table>
+      </div>
+    </div>"""
+    else:
+        compliance_section = f'<div class="section"><h2>EU AI Act Compliance</h2>{no_compliance}</div>'
+
+    # === Build drift section HTML ===
+    drift_baseline = drift_data.get("baseline", {})
+    drift_baseline_info = ""
+    if drift_baseline and drift_baseline.get("session_count"):
+        drift_baseline_info = f"""
+      <div style="margin-top:0.8rem;">
+        <div class="detail-label">Baseline</div>
+        <div style="font-size:0.82rem;">{drift_baseline.get("session_count", 0)} sessions, {drift_baseline.get("known_tools", 0)} known tools, avg interval {drift_baseline.get("avg_interval", 0):.1f}s</div>
+      </div>"""
+
+    if drift_data.get("anomalies") is not None:
+        anomalies_table = ""
+        if anomalies_rows_html:
+            anomalies_table = f"""
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Severity</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>{anomalies_rows_html}</tbody>
+      </table>
+      </div>"""
+        else:
+            anomalies_table = '<p style="color:var(--green);font-size:0.82rem;">No anomalies detected. Behavior is within normal range.</p>'
+
+        drift_section = f"""
+    <div class="section">
+      <h2>Behavior Drift Detection</h2>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Status</div>
+          <div class="value {drift_class}">{"DRIFT DETECTED" if drift_detected else "NORMAL"}</div>
+        </div>
+        <div class="card">
+          <div class="label">Drift Score</div>
+          <div class="value">{drift_score:.0f}/100</div>
+          <div class="score-bar"><div class="score-fill" style="width:{drift_score}%;background:var(--{'red' if drift_score >= 60 else 'orange' if drift_score >= 30 else 'green'});"></div></div>
+        </div>
+        <div class="card">
+          <div class="label">Anomalies</div>
+          <div class="value">{anomaly_count}</div>
+        </div>
+      </div>
+      {anomalies_table}
+      {drift_baseline_info}
+    </div>"""
+    else:
+        drift_section = f'<div class="section"><h2>Behavior Drift Detection</h2>{no_drift}</div>'
+
+    # === Build permissions section HTML ===
+    if permissions_rows_html:
+        permissions_section = f"""
+    <div class="section">
+      <h2>Agent Permissions</h2>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Agent</th><th>Tool</th><th>Permission</th><th>Reason</th></tr></thead>
+        <tbody>{permissions_rows_html}</tbody>
+      </table>
+      </div>
+    </div>"""
+    else:
+        permissions_section = f'<div class="section"><h2>Agent Permissions</h2>{no_perms}</div>'
+
+    # === Build cost section HTML ===
+    if cost_model_rows_html or cost_agent_rows_html:
+        cost_tables = ""
+        if cost_model_rows_html:
+            cost_tables += f"""
+      <h3 style="font-size:0.85rem;color:var(--muted);margin:1rem 0 0.4rem;">By Model</h3>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Model</th><th>Calls</th><th>Input Tokens</th><th>Output Tokens</th><th>Cost (USD)</th></tr></thead>
+        <tbody>{cost_model_rows_html}</tbody>
+      </table>
+      </div>"""
+        if cost_agent_rows_html:
+            cost_tables += f"""
+      <h3 style="font-size:0.85rem;color:var(--muted);margin:1rem 0 0.4rem;">By Agent</h3>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Agent</th><th>Calls</th><th>Input Tokens</th><th>Output Tokens</th><th>Cost (USD)</th></tr></thead>
+        <tbody>{cost_agent_rows_html}</tbody>
+      </table>
+      </div>"""
+
+        cost_section = f"""
+    <div class="section">
+      <h2>Cost Tracking</h2>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Total Cost</div>
+          <div class="value">${total_cost:.4f}</div>
+        </div>
+        <div class="card">
+          <div class="label">Total Tokens</div>
+          <div class="value">{total_tokens:,}</div>
+        </div>
+        <div class="card">
+          <div class="label">Input / Output</div>
+          <div class="value" style="font-size:1rem;">{total_input_tokens:,} / {total_output_tokens:,}</div>
+        </div>
+      </div>
+      {cost_tables}
+    </div>"""
+    else:
+        cost_section = f'<div class="section"><h2>Cost Tracking</h2>{no_cost}</div>'
+
+    # === Build topology section HTML ===
+    if topo_nodes_html or topo_edges_html:
+        edges_table = ""
+        if topo_edges_html:
+            edges_table = f"""
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Source</th><th>Type</th><th>Target</th><th>Count</th></tr></thead>
+        <tbody>{topo_edges_html}</tbody>
+      </table>
+      </div>"""
+
+        topo_section = f"""
+    <div class="section">
+      <h2>Agent Topology</h2>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Agents</div>
+          <div class="value">{unique_agents}</div>
+        </div>
+        <div class="card">
+          <div class="label">Interactions</div>
+          <div class="value">{total_interactions}</div>
+        </div>
+      </div>
+      <div class="detail-label" style="margin-bottom:0.3rem;">Agents</div>
+      <div style="margin-bottom:0.8rem;">{topo_nodes_html}</div>
+      {edges_table}
+    </div>"""
+    else:
+        topo_section = f'<div class="section"><h2>Agent Topology</h2>{no_topo}</div>'
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -199,11 +548,11 @@ def generate_html_report(
   .header .subtitle {{ color: var(--muted); font-size: 0.9rem; }}
 
   /* Tabs */
-  .tabs {{ display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); }}
+  .tabs {{ display: flex; gap: 0; margin-bottom: 1.5rem; border-bottom: 2px solid var(--border); overflow-x: auto; }}
   .tab {{
-    padding: 0.6rem 1.5rem; cursor: pointer; color: var(--muted);
-    font-weight: 500; font-size: 0.9rem; border-bottom: 2px solid transparent;
-    margin-bottom: -2px; transition: all 0.15s;
+    padding: 0.6rem 1.2rem; cursor: pointer; color: var(--muted);
+    font-weight: 500; font-size: 0.85rem; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s; white-space: nowrap;
   }}
   .tab:hover {{ color: var(--text); }}
   .tab.active {{ color: var(--blue); border-bottom-color: var(--blue); }}
@@ -222,15 +571,21 @@ def generate_html_report(
   .dl-btn svg {{ width: 14px; height: 14px; fill: currentColor; }}
 
   /* Cards */
-  .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.8rem; margin-bottom: 1.5rem; }}
+  .cards {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.8rem; margin-bottom: 1.5rem; }}
   .card {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }}
   .card .label {{ color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; }}
   .card .value {{ font-size: 1.4rem; font-weight: 600; }}
   .card .value.pass {{ color: var(--green); }}
   .card .value.fail {{ color: var(--red); }}
+  .card .value.warn {{ color: var(--orange); }}
+  .card .value.na {{ color: var(--muted); }}
 
   .section {{ background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; margin-bottom: 1.2rem; }}
   .section h2 {{ font-size: 1rem; margin-bottom: 0.8rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }}
+
+  /* Score bar */
+  .score-bar {{ height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin-top: 0.3rem; }}
+  .score-fill {{ height: 100%; border-radius: 3px; }}
 
   /* Table */
   table {{ width: 100%; border-collapse: collapse; font-size: 0.82rem; }}
@@ -250,6 +605,15 @@ def generate_html_report(
   .type-decision {{ background: rgba(188,140,255,0.15); color: var(--purple); }}
   .type-file {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
   .type-llm {{ background: rgba(248,81,73,0.15); color: var(--red); }}
+
+  /* Status badges */
+  .st-pass {{ background: rgba(63,185,80,0.15); color: var(--green); }}
+  .st-warn {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
+  .st-fail {{ background: rgba(248,81,73,0.15); color: var(--red); }}
+  .st-na {{ background: rgba(139,148,158,0.15); color: var(--muted); }}
+
+  .mono-sm {{ font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem; }}
+  .desc-cell {{ max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
 
   .detail-row td {{ padding: 0; }}
   .detail-box {{ background: var(--bg); padding: 0.6rem 1rem; margin: 0.2rem 0.6rem 0.4rem 1.5rem; border-radius: 6px; border-left: 3px solid var(--blue); font-size: 0.8rem; }}
@@ -301,6 +665,7 @@ def generate_html_report(
     .cards {{ grid-template-columns: 1fr 1fr; }}
     .tabs {{ overflow-x: auto; }}
     .log-preview {{ max-width: 200px; }}
+    .desc-cell {{ max-width: 150px; }}
   }}
 </style>
 </head>
@@ -315,6 +680,8 @@ def generate_html_report(
   <div class="tab active" data-tab="overview">Overview</div>
   <div class="tab" data-tab="chain">Provenance Chain</div>
   <div class="tab" data-tab="log">Session Log ({total_log})</div>
+  <div class="tab" data-tab="security">Security</div>
+  <div class="tab" data-tab="governance">Governance</div>
   <div class="tab" data-tab="ai">AI Analysis</div>
 </div>
 
@@ -341,12 +708,25 @@ def generate_html_report(
       <div class="value {chain_class}">{"VERIFIED" if verification.get("valid") else "BROKEN"}</div>
     </div>
     <div class="card">
-      <div class="label">Provenance Records</div>
+      <div class="label">Records</div>
       <div class="value">{total_records}</div>
     </div>
     <div class="card">
       <div class="label">Session Log</div>
       <div class="value">{total_log}</div>
+    </div>
+    <div class="card">
+      <div class="label">OWASP Score</div>
+      <div class="value {owasp_status_class}">{owasp_score if owasp_data.get("checks") else "—"}</div>
+      {"<div class='score-bar'><div class='score-fill' style='width:" + str(owasp_score) + "%;background:var(--" + ("red" if owasp_score >= 60 else "orange" if owasp_score >= 30 else "green") + ");'></div></div>" if owasp_data.get("checks") else ""}
+    </div>
+    <div class="card">
+      <div class="label">Compliance</div>
+      <div class="value {compliance_status_class}">{compliance_status if compliance_data.get("checks") else "—"}</div>
+    </div>
+    <div class="card">
+      <div class="label">Drift</div>
+      <div class="value {drift_class}">{"DETECTED" if drift_detected else "NORMAL" if drift_data.get("anomalies") is not None else "—"}</div>
     </div>
   </div>
 
@@ -391,6 +771,20 @@ def generate_html_report(
       {session_log_html if session_log_html else '<p style="color:var(--muted);">No session log data. Run <code>inalign-install --ingest</code> to import Claude Code sessions.</p>'}
     </div>
   </div>
+</div>
+
+<!-- === SECURITY === -->
+<div class="tab-panel" id="panel-security">
+  {owasp_section}
+  {compliance_section}
+  {drift_section}
+</div>
+
+<!-- === GOVERNANCE === -->
+<div class="tab-panel" id="panel-governance">
+  {permissions_section}
+  {cost_section}
+  {topo_section}
 </div>
 
 <!-- === AI ANALYSIS === -->

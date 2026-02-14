@@ -1099,7 +1099,55 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         except Exception as e:
             logger.debug(f"[REPORT] Could not load session log: {e}")
 
-        html = generate_html_report(SESSION_ID, records_data, verification, stats, session_log=session_log)
+        # Load v0.5.0 feature data (all local, zero external calls)
+        compliance_data = {}
+        owasp_data = {}
+        drift_data = {}
+        permissions_data = {}
+        cost_data = {}
+        topology_data = {}
+
+        try:
+            from .compliance import generate_compliance_report, compliance_report_to_dict
+            compliance_data = compliance_report_to_dict(generate_compliance_report(SESSION_ID))
+        except Exception:
+            pass
+
+        try:
+            from .owasp import check_owasp_compliance, owasp_report_to_dict
+            owasp_data = owasp_report_to_dict(check_owasp_compliance(SESSION_ID))
+        except Exception:
+            pass
+
+        try:
+            from .drift_detector import detect_drift, drift_report_to_dict
+            drift_data = drift_report_to_dict(detect_drift(SESSION_ID))
+        except Exception:
+            pass
+
+        try:
+            from .permissions import get_permission_matrix
+            permissions_data = get_permission_matrix()
+        except Exception:
+            pass
+
+        try:
+            from .topology import get_cost_report, get_agent_topology
+            cost_data = get_cost_report(session_id=SESSION_ID)
+            topology_data = get_agent_topology(session_id=SESSION_ID)
+        except Exception:
+            pass
+
+        html = generate_html_report(
+            SESSION_ID, records_data, verification, stats,
+            session_log=session_log,
+            compliance_data=compliance_data,
+            owasp_data=owasp_data,
+            drift_data=drift_data,
+            permissions_data=permissions_data,
+            cost_data=cost_data,
+            topology_data=topology_data,
+        )
 
         output_path = arguments.get("output_path")
         if not output_path:

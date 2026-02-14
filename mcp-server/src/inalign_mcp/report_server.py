@@ -95,7 +95,50 @@ def generate_report_data():
     except Exception:
         pass
 
-    return session_id, records_data, verification, stats, session_log
+    # Load v0.5.0 feature data (all local, zero external calls)
+    compliance_data = {}
+    owasp_data = {}
+    drift_data = {}
+    permissions_data = {}
+    cost_data = {}
+    topology_data = {}
+
+    try:
+        from .compliance import generate_compliance_report, compliance_report_to_dict
+        compliance_data = compliance_report_to_dict(generate_compliance_report(session_id))
+    except Exception:
+        pass
+
+    try:
+        from .owasp import check_owasp_compliance, owasp_report_to_dict
+        owasp_data = owasp_report_to_dict(check_owasp_compliance(session_id))
+    except Exception:
+        pass
+
+    try:
+        from .drift_detector import detect_drift, drift_report_to_dict
+        drift_data = drift_report_to_dict(detect_drift(session_id))
+    except Exception:
+        pass
+
+    try:
+        from .permissions import get_permission_matrix
+        permissions_data = get_permission_matrix()
+    except Exception:
+        pass
+
+    try:
+        from .topology import get_cost_report, get_agent_topology
+        cost_data = get_cost_report(session_id=session_id)
+        topology_data = get_agent_topology(session_id=session_id)
+    except Exception:
+        pass
+
+    return (
+        session_id, records_data, verification, stats, session_log,
+        compliance_data, owasp_data, drift_data,
+        permissions_data, cost_data, topology_data,
+    )
 
 
 class ReportHandler(BaseHTTPRequestHandler):
@@ -240,8 +283,21 @@ def main():
 
     try:
         from .report import generate_html_report
-        session_id, records, verification, stats, session_log = generate_report_data()
-        _report_html = generate_html_report(session_id, records, verification, stats, session_log=session_log)
+        (
+            session_id, records, verification, stats, session_log,
+            compliance_data, owasp_data, drift_data,
+            permissions_data, cost_data, topology_data,
+        ) = generate_report_data()
+        _report_html = generate_html_report(
+            session_id, records, verification, stats,
+            session_log=session_log,
+            compliance_data=compliance_data,
+            owasp_data=owasp_data,
+            drift_data=drift_data,
+            permissions_data=permissions_data,
+            cost_data=cost_data,
+            topology_data=topology_data,
+        )
         print(f"  Session: {session_id}")
         print(f"  Records: {len(records)} provenance, {len(session_log)} session log")
     except Exception as e:
