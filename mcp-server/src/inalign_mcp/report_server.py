@@ -32,7 +32,7 @@ _report_html = ""
 def generate_report_data():
     """Generate report data from local storage."""
     from .provenance import get_or_create_chain, ActivityType
-    from .sqlite_storage import init_sqlite, list_sessions
+    from .sqlite_storage import init_sqlite, list_sessions, load_chain
 
     # Init storage
     init_sqlite()
@@ -44,8 +44,10 @@ def generate_report_data():
     else:
         session_id = "no-session"
 
-    # Try to load chain from memory or create
-    chain = get_or_create_chain(session_id, "Claude Code")
+    # Load chain from SQLite first, fallback to memory
+    chain = load_chain(session_id)
+    if chain is None:
+        chain = get_or_create_chain(session_id, "Claude Code")
 
     # Build records data
     records_data = [

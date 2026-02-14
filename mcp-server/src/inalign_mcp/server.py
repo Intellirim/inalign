@@ -1061,8 +1061,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     elif name == "export_report":
         from .report import generate_html_report
+        from .sqlite_storage import load_chain as _load_chain
 
-        chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
+        # Load from SQLite first (has historical data), fallback to memory
+        chain = _load_chain(SESSION_ID)
+        if chain is None:
+            chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
         is_valid, error = chain.verify_chain()
 
         records_data = [
