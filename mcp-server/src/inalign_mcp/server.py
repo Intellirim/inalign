@@ -1063,10 +1063,43 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         from .report import generate_html_report
         from .sqlite_storage import load_chain as _load_chain
 
-        # Load from SQLite first (has historical data), fallback to memory
-        chain = _load_chain(SESSION_ID)
+        # --- Load session log + auto-convert to provenance chain ---
+        session_log = []
+        log_session_id = None
+        chain = None
+        report_session_id = SESSION_ID
+
+        try:
+            import gzip
+            from pathlib import Path
+            sessions_dir = Path.home() / ".inalign" / "sessions"
+            if sessions_dir.exists():
+                gz_files = sorted(sessions_dir.glob("*.json.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
+                if gz_files:
+                    with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
+                        sdata = json.load(gf)
+                    session_log = sdata.get("records", sdata) if isinstance(sdata, dict) else sdata
+                    if isinstance(sdata, dict):
+                        log_session_id = sdata.get("session_id")
+        except Exception as e:
+            logger.debug(f"[REPORT] Could not load session log: {e}")
+
+        # Auto-convert session log → hash-chained provenance records
+        if session_log and log_session_id:
+            try:
+                from .session_ingest import convert_session_log_to_chain
+                chain = convert_session_log_to_chain(session_log, log_session_id)
+                if chain:
+                    report_session_id = log_session_id
+            except Exception as e:
+                logger.debug(f"[REPORT] Auto-conversion failed: {e}")
+
+        # Fallback: load MCP session chain
         if chain is None:
-            chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
+            chain = _load_chain(SESSION_ID)
+            if chain is None:
+                chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
+
         is_valid, error = chain.verify_chain()
 
         records_data = [
@@ -1088,21 +1121,6 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             "merkle_root": chain.get_merkle_root(),
         }
 
-        # Load full session log from ~/.inalign/sessions/ (if available)
-        session_log = []
-        try:
-            import gzip
-            from pathlib import Path
-            sessions_dir = Path.home() / ".inalign" / "sessions"
-            if sessions_dir.exists():
-                gz_files = sorted(sessions_dir.glob("*.json.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
-                if gz_files:
-                    with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
-                        sdata = json.load(gf)
-                    session_log = sdata.get("records", sdata) if isinstance(sdata, dict) else sdata
-        except Exception as e:
-            logger.debug(f"[REPORT] Could not load session log: {e}")
-
         # Load v0.5.0 feature data (all local, zero external calls)
         compliance_data = {}
         owasp_data = {}
@@ -1113,19 +1131,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         try:
             from .compliance import generate_compliance_report, compliance_report_to_dict
-            compliance_data = compliance_report_to_dict(generate_compliance_report(SESSION_ID))
+            compliance_data = compliance_report_to_dict(generate_compliance_report(report_session_id))
         except Exception:
             pass
 
         try:
             from .owasp import check_owasp_compliance, owasp_report_to_dict
-            owasp_data = owasp_report_to_dict(check_owasp_compliance(SESSION_ID))
+            owasp_data = owasp_report_to_dict(check_owasp_compliance(report_session_id))
         except Exception:
             pass
 
         try:
             from .drift_detector import detect_drift, drift_report_to_dict
-            drift_data = drift_report_to_dict(detect_drift(SESSION_ID))
+            drift_data = drift_report_to_dict(detect_drift(report_session_id))
         except Exception:
             pass
 
@@ -1137,13 +1155,13 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
         try:
             from .topology import get_cost_report, get_agent_topology
-            cost_data = get_cost_report(session_id=SESSION_ID)
-            topology_data = get_agent_topology(session_id=SESSION_ID)
+            cost_data = get_cost_report(session_id=report_session_id)
+            topology_data = get_agent_topology(session_id=report_session_id)
         except Exception:
             pass
 
         html = generate_html_report(
-            SESSION_ID, records_data, verification, stats,
+            report_session_id, records_data, verification, stats,
             session_log=session_log,
             compliance_data=compliance_data,
             owasp_data=owasp_data,
@@ -1157,7 +1175,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if not output_path:
             output_path = os.path.join(
                 tempfile.gettempdir(),
-                f"inalign-report-{SESSION_ID}.html"
+                f"inalign-report-{report_session_id}.html"
             )
 
         with open(output_path, "w", encoding="utf-8") as f:

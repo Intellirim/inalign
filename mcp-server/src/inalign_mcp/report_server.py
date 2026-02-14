@@ -30,24 +30,65 @@ _report_html = ""
 
 
 def generate_report_data():
-    """Generate report data from local storage."""
+    """Generate report data from local storage.
+
+    Auto-converts session log events into SHA-256 hash-chained provenance
+    records if not already converted. This ensures the Provenance Chain tab
+    shows a full tamper-proof audit trail (not just MCP tool calls).
+    """
     from .provenance import get_or_create_chain, ActivityType
     from .sqlite_storage import init_sqlite, list_sessions, load_chain
 
     # Init storage
     init_sqlite()
 
-    # Get latest session from SQLite
-    sessions = list_sessions(limit=1)
-    if sessions:
-        session_id = sessions[0].get("session_id", "unknown")
-    else:
-        session_id = "no-session"
+    # --- Load session log first (needed for auto-conversion) ---
+    session_log = []
+    log_session_id = None
+    try:
+        sessions_dir = Path.home() / ".inalign" / "sessions"
+        if sessions_dir.exists():
+            gz_files = sorted(
+                sessions_dir.glob("*.json.gz"),
+                key=lambda f: f.stat().st_mtime,
+                reverse=True,
+            )
+            if gz_files:
+                with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
+                    sdata = json.load(gf)
+                session_log = (
+                    sdata.get("records", sdata)
+                    if isinstance(sdata, dict)
+                    else sdata
+                )
+                if isinstance(sdata, dict):
+                    log_session_id = sdata.get("session_id")
+    except Exception:
+        pass
 
-    # Load chain from SQLite first, fallback to memory
-    chain = load_chain(session_id)
+    # --- Auto-convert session log → provenance chain ---
+    chain = None
+    session_id = None
+
+    if session_log and log_session_id:
+        try:
+            from .session_ingest import convert_session_log_to_chain
+            chain = convert_session_log_to_chain(session_log, log_session_id)
+            if chain:
+                session_id = log_session_id
+        except Exception:
+            pass
+
+    # Fallback: load MCP session chain from SQLite
     if chain is None:
-        chain = get_or_create_chain(session_id, "Claude Code")
+        sessions = list_sessions(limit=1)
+        if sessions:
+            session_id = sessions[0].get("session_id", "unknown")
+        else:
+            session_id = "no-session"
+        chain = load_chain(session_id)
+        if chain is None:
+            chain = get_or_create_chain(session_id, "Claude Code")
 
     # Build records data
     records_data = [
@@ -75,27 +116,6 @@ def generate_report_data():
         "policy_checks": 0,
         "sessions_tracked": 1,
     }
-
-    # Load session log
-    session_log = []
-    try:
-        sessions_dir = Path.home() / ".inalign" / "sessions"
-        if sessions_dir.exists():
-            gz_files = sorted(
-                sessions_dir.glob("*.json.gz"),
-                key=lambda f: f.stat().st_mtime,
-                reverse=True,
-            )
-            if gz_files:
-                with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
-                    sdata = json.load(gf)
-                session_log = (
-                    sdata.get("records", sdata)
-                    if isinstance(sdata, dict)
-                    else sdata
-                )
-    except Exception:
-        pass
 
     # Load v0.5.0 feature data (all local, zero external calls)
     compliance_data = {}

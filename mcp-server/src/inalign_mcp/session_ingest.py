@@ -668,6 +668,148 @@ function downloadCSV() {{
 </html>"""
 
 
+def convert_session_log_to_chain(
+    session_log: list[dict],
+    session_id: str,
+    agent_name: str = "Claude Code",
+):
+    """Convert session log events into a SHA-256 hash-chained provenance chain.
+
+    Bridges the gap between rich session logs (unverified, tamper-possible) and
+    the cryptographic provenance chain (SHA-256 hash chained, tamper-proof).
+
+    Each session log event becomes a ProvenanceRecord where:
+    - content_hash in attributes links to original content (tamper detection)
+    - Each record's hash includes previous record's hash (chain integrity)
+    - Deterministic IDs enable safe re-runs (idempotent)
+
+    Args:
+        session_log: List of ConversationRecord dicts (from json.gz)
+        session_id: Session identifier (from Claude Code)
+        agent_name: Name of the AI agent
+
+    Returns:
+        ProvenanceChain with all events as hash-chained records, or None
+    """
+    from .provenance import ProvenanceChain, ProvenanceRecord, ActivityType, Agent, Entity
+    from .sqlite_storage import init_sqlite, store_session, load_chain, store_records_batch
+
+    if not session_log:
+        return None
+
+    init_sqlite()
+
+    # Idempotent: skip if already converted
+    existing = load_chain(session_id)
+    if existing and len(existing.records) >= len(session_log):
+        return existing
+
+    agent = Agent(
+        id=f"agent:{agent_name.lower().replace(' ', '-')}:{session_id[:8]}",
+        type="ai_agent",
+        name=agent_name,
+    )
+
+    store_session(session_id, agent)
+    chain = ProvenanceChain(session_id, agent)
+
+    # Session log type → ProvenanceRecord ActivityType
+    _TYPE_MAP = {
+        ("message", "user"): ActivityType.USER_INPUT,
+        ("message", "assistant"): ActivityType.LLM_RESPONSE,
+        ("tool_call", "assistant"): ActivityType.TOOL_CALL,
+        ("tool_result", "tool"): ActivityType.TOOL_RESULT,
+        ("thinking", "assistant"): ActivityType.DECISION,
+    }
+    _FALLBACK = {
+        "tool_call": ActivityType.TOOL_CALL,
+        "tool_result": ActivityType.TOOL_RESULT,
+        "thinking": ActivityType.DECISION,
+        "message": ActivityType.LLM_RESPONSE,
+    }
+
+    # Entity direction: used (input) vs generated (output)
+    _ENTITY_DIR = {
+        ActivityType.USER_INPUT: ("prompt", "used"),
+        ActivityType.LLM_RESPONSE: ("response", "generated"),
+        ActivityType.TOOL_CALL: ("tool_input", "used"),
+        ActivityType.TOOL_RESULT: ("tool_output", "generated"),
+        ActivityType.DECISION: ("reasoning", "generated"),
+    }
+
+    batch = []
+
+    for event in session_log:
+        rtype = event.get("type", "message")
+        role = event.get("role", "unknown")
+
+        # Map activity type
+        atype = _TYPE_MAP.get((rtype, role)) or _FALLBACK.get(rtype, ActivityType.TOOL_CALL)
+
+        # Activity name
+        if rtype == "tool_call":
+            aname = event.get("tool_name", "unknown_tool")
+        elif rtype == "tool_result":
+            tn = event.get("tool_name", "unknown")
+            aname = f"result:{tn[:30]}"
+        elif rtype == "thinking":
+            aname = "thinking"
+        else:
+            aname = f"{role}_message"
+
+        # Attributes: metadata + content_hash for tamper detection
+        attrs = {
+            "content_hash": event.get("content_hash", ""),
+            "role": role,
+            "record_type": rtype,
+        }
+        if event.get("tool_name"):
+            attrs["tool_name"] = event["tool_name"]
+        if event.get("model"):
+            attrs["model"] = event["model"]
+        if event.get("token_usage"):
+            attrs["token_usage"] = event["token_usage"]
+
+        # Create entity (links content hash to chain)
+        content_hash = event.get("content_hash", "")
+        edir = _ENTITY_DIR.get(atype, ("data", "used"))
+        entity = Entity(
+            id=f"entity:ingest:{session_id[:8]}:{chain._sequence:06d}",
+            type=edir[0],
+            value_hash=content_hash,
+        )
+        used = [entity] if edir[1] == "used" else []
+        generated = [entity] if edir[1] == "generated" else []
+
+        # Timestamp from original event
+        ts = event.get("timestamp", "") or datetime.now(timezone.utc).isoformat()
+
+        # Deterministic ID for idempotent re-runs
+        record = ProvenanceRecord(
+            id=f"prov:ingest:{session_id[:8]}:{chain._sequence:06d}",
+            timestamp=ts,
+            activity_type=atype,
+            activity_name=aname,
+            activity_attributes=attrs,
+            used_entities=used,
+            generated_entities=generated,
+            agent=agent,
+            previous_hash=chain.latest_hash,
+            sequence_number=chain._sequence,
+            session_id=session_id,
+        )
+        record.record_hash = record.compute_hash()
+
+        chain.records.append(record)
+        chain._sequence += 1
+        batch.append(record)
+
+    # Single-transaction batch write to SQLite
+    store_records_batch(batch, session_id)
+
+    return chain
+
+
 def find_latest_session(base_dir: str) -> Optional[str]:
     """Find the most recently modified .jsonl session file."""
     base = Path(base_dir)

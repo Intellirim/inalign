@@ -364,6 +364,69 @@ def get_db_path() -> str:
     return str(DB_PATH)
 
 
+def store_records_batch(records: list, session_id: str = ""):
+    """Persist multiple provenance records in a single transaction.
+
+    Much more efficient than calling store_record() in a loop
+    (single commit instead of N commits).
+    """
+    if not records:
+        return
+
+    conn = _get_db()
+    try:
+        for record in records:
+            used = json.dumps([
+                {"id": e.id, "type": e.type, "value_hash": e.value_hash, "attributes": e.attributes}
+                for e in record.used_entities
+            ])
+            generated = json.dumps([
+                {"id": e.id, "type": e.type, "value_hash": e.value_hash, "attributes": e.attributes}
+                for e in record.generated_entities
+            ])
+            attrs = json.dumps(record.activity_attributes, default=str)
+
+            conn.execute(
+                """INSERT OR REPLACE INTO records
+                   (id, session_id, sequence_number, timestamp, activity_type, activity_name,
+                    activity_attributes, used_entities, generated_entities,
+                    agent_id, agent_name, agent_type, previous_hash, record_hash,
+                    client_id, signature, signer_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    record.id,
+                    record.session_id,
+                    record.sequence_number,
+                    record.timestamp,
+                    record.activity_type.value,
+                    record.activity_name,
+                    attrs,
+                    used,
+                    generated,
+                    record.agent.id if record.agent else None,
+                    record.agent.name if record.agent else None,
+                    record.agent.type if record.agent else None,
+                    record.previous_hash,
+                    record.record_hash,
+                    record.client_id or "",
+                    record.signature,
+                    record.signer_id,
+                ),
+            )
+
+        # Set final record count (not incremental)
+        sid = session_id or (records[0].session_id if records else "")
+        if sid:
+            conn.execute(
+                "UPDATE sessions SET updated_at=?, record_count=? WHERE session_id=?",
+                (datetime.now(timezone.utc).isoformat(), len(records), sid),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
 def close():
     """Close the database connection."""
     global _connection
