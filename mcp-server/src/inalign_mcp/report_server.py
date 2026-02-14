@@ -163,10 +163,58 @@ def generate_report_data():
     except Exception:
         pass
 
+    ontology_data = {}
+    try:
+        from .ontology import (
+            populate_from_session, populate_decisions, populate_risks,
+            get_ontology_stats,
+        )
+        # Auto-populate ontology from this session's data
+        populate_from_session(session_id)
+        populate_decisions(session_id)
+        populate_risks(session_id)
+        ontology_data = get_ontology_stats(session_id)
+
+        # Add graph data for visualization (sampled for performance)
+        from .ontology import _get_db
+        conn = _get_db()
+        try:
+            # Sample nodes (up to 200 for vis)
+            vis_nodes = []
+            for row in conn.execute(
+                "SELECT id, node_class, label, timestamp FROM ontology_nodes WHERE session_id=? ORDER BY RANDOM() LIMIT 200",
+                (session_id,),
+            ).fetchall():
+                vis_nodes.append({
+                    "id": row["id"], "class": row["node_class"],
+                    "label": (row["label"] or "")[:30],
+                })
+            # Sample edges for those nodes
+            node_ids = {n["id"] for n in vis_nodes}
+            vis_edges = []
+            for row in conn.execute(
+                "SELECT source_id, target_id, relation FROM ontology_edges WHERE session_id=? LIMIT 500",
+                (session_id,),
+            ).fetchall():
+                if row["source_id"] in node_ids and row["target_id"] in node_ids:
+                    vis_edges.append({
+                        "s": row["source_id"], "t": row["target_id"],
+                        "r": row["relation"],
+                    })
+            ontology_data["vis_nodes"] = vis_nodes
+            ontology_data["vis_edges"] = vis_edges[:300]
+        except Exception:
+            pass
+        finally:
+            conn.close()
+    except Exception:
+        pass
+
     return (
         session_id, records_data, verification, stats, session_log,
         compliance_data, owasp_data, drift_data,
         permissions_data, cost_data, topology_data, risk_data,
+        ontology_data,
     )
 
 
@@ -316,6 +364,7 @@ def main():
             session_id, records, verification, stats, session_log,
             compliance_data, owasp_data, drift_data,
             permissions_data, cost_data, topology_data, risk_data,
+            ontology_data,
         ) = generate_report_data()
         _report_html = generate_html_report(
             session_id, records, verification, stats,
@@ -327,6 +376,7 @@ def main():
             cost_data=cost_data,
             topology_data=topology_data,
             risk_data=risk_data,
+            ontology_data=ontology_data,
         )
         print(f"  Session: {session_id}")
         print(f"  Records: {len(records)} provenance, {len(session_log)} session log")

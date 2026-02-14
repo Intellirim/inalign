@@ -255,6 +255,16 @@ def _get_text(record: dict) -> str:
     return " ".join(str(p) for p in parts if p).lower()
 
 
+def _assign_record_ids(prov_records: list[dict], content_records: list[dict]) -> None:
+    """Assign stable numeric IDs to records for cross-referencing with timeline.
+    Both prov and content map to timeline indices 0..N (same session, same order).
+    """
+    for idx, r in enumerate(prov_records):
+        r["id"] = str(r.get("sequence_number", idx))
+    for idx, r in enumerate(content_records):
+        r["id"] = str(idx)
+
+
 def _with_mitre(pattern_name: str, pat: RiskPattern) -> RiskPattern:
     """Attach MITRE ATT&CK metadata to a pattern."""
     m = MITRE_MAP.get(pattern_name, {})
@@ -714,7 +724,10 @@ def _generate_recommendations(patterns: list[RiskPattern], profile: BehaviorProf
 # ---- Public API --------------------------------------------------------------
 def analyze_basic(session_id: str) -> RiskReport:
     """Free tier: 5 core pattern detectors."""
-    records = _load_session_records(session_id) + _load_session_json(session_id)
+    prov = _load_session_records(session_id)
+    content = _load_session_json(session_id)
+    _assign_record_ids(prov, content)
+    records = prov + content
     patterns: list[RiskPattern] = []
     patterns.extend(_detect_mass_file_read(records))
     patterns.extend(_detect_privilege_escalation(records))
@@ -731,6 +744,7 @@ def analyze_full(session_id: str) -> RiskReport:
     """Pro tier: all 11 patterns + MITRE mapping + causal chains + recommendations."""
     content_records = _load_session_json(session_id)
     prov_records = _load_session_records(session_id)
+    _assign_record_ids(prov_records, content_records)
     # Use content records for content-based detection, provenance for structural
     all_records = prov_records + content_records
 
@@ -778,6 +792,7 @@ def analyze_session_risk(session_id: str) -> dict[str, Any]:
             {"id": p.pattern_id, "name": p.pattern_name, "risk": p.risk_level.value,
              "confidence": p.confidence, "description": p.description,
              "recommendation": p.recommendation, "evidence": p.evidence,
+             "matched_records": p.matched_records,
              "mitre_tactic": p.mitre_tactic, "mitre_techniques": p.mitre_techniques}
             for p in report.patterns
         ],

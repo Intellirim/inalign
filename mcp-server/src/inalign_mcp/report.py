@@ -24,6 +24,7 @@ def generate_html_report(
     cost_data: dict = None,
     topology_data: dict = None,
     risk_data: dict = None,
+    ontology_data: dict = None,
 ) -> str:
     """Generate a self-contained HTML audit dashboard.
 
@@ -324,6 +325,12 @@ def generate_html_report(
     }
     export_json_escaped = json.dumps(export_data, indent=2, ensure_ascii=False).replace("</", "<\\/")
 
+    # Ontology graph data for Canvas visualization (separate from _DATA to keep export clean)
+    ontology_data = ontology_data or {}
+    onto_vis_nodes = ontology_data.get("vis_nodes", [])
+    onto_vis_edges = ontology_data.get("vis_edges", [])
+    onto_graph_json = json.dumps({"nodes": onto_vis_nodes, "edges": onto_vis_edges}, ensure_ascii=False).replace("</", "<\\/")
+
     # Type counts
     type_counts = {}
     for r in records:
@@ -344,16 +351,32 @@ def generate_html_report(
 
     # Build findings list for overview
     findings_html = ""
-    for p in risk_patterns[:5]:
+    max_timeline = len(records)
+    for p in risk_patterns[:8]:
         p_risk = p.get("risk", "low")
         p_class = {"critical": "st-fail", "high": "st-fail", "medium": "st-warn", "low": "st-pass"}.get(p_risk, "st-pass")
         mitre_chips = " ".join(f'<span class="mitre-chip">{html_mod.escape(t)}</span>' for t in p.get("mitre_techniques", []))
+
+        # Map matched_records to timeline indices (IDs are numeric strings from risk_analyzer)
+        matched = p.get("matched_records", [])
+        linked_indices = []
+        for mr in matched[:10]:
+            if isinstance(mr, str) and mr.isdigit():
+                idx_val = int(mr)
+                if idx_val < max_timeline:
+                    linked_indices.append(idx_val)
+        indices_str = ",".join(str(x) for x in linked_indices[:10])
+        click_attr = f'data-linked="{indices_str}" onclick="jumpToEvents(this)"' if indices_str else ""
+        click_class = "finding-clickable" if indices_str else ""
+        event_count = f'<span class="finding-count">{len(linked_indices)} event(s)</span>' if linked_indices else ""
+
         findings_html += f"""
-        <div class="finding-item">
+        <div class="finding-item {click_class}" {click_attr}>
           <div class="finding-header">
             <span class="badge {p_class}">{p_risk.upper()}</span>
             <span class="finding-name">{html_mod.escape(p.get("name", ""))}</span>
             {mitre_chips}
+            {event_count}
           </div>
           <div class="finding-desc">{html_mod.escape(p.get("description", ""))}</div>
           <div class="finding-rec">{html_mod.escape(p.get("recommendation", ""))}</div>
@@ -696,6 +719,85 @@ def generate_html_report(
     else:
         topo_section = f'<div class="section"><h2>Agent Topology</h2>{no_topo}</div>'
 
+    # === Build Ontology Knowledge Graph section ===
+    ontology_data = ontology_data or {}
+    onto_nodes = ontology_data.get("total_nodes", 0)
+    onto_edges = ontology_data.get("total_edges", 0)
+    onto_classes = ontology_data.get("node_classes", {})
+    onto_relations = ontology_data.get("relation_types", {})
+    onto_version = ontology_data.get("ontology_version", "")
+    onto_schema = ontology_data.get("schema", {})
+
+    if onto_nodes > 0:
+        # Class distribution cards
+        onto_class_cards = ""
+        class_colors = {
+            "Agent": "#4d65ff", "Session": "#22c55e", "ToolCall": "#f59e0b",
+            "Entity": "#a78bfa", "Decision": "#ec4899", "Risk": "#ef4444", "Policy": "#06b6d4"
+        }
+        for cls_name in ["Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"]:
+            cnt = onto_classes.get(cls_name, 0)
+            if cnt > 0:
+                color = class_colors.get(cls_name, "var(--muted)")
+                onto_class_cards += f'<div class="card"><div class="label" style="color:{color};">{cls_name}</div><div class="value">{cnt}</div></div>'
+
+        # Relation distribution table
+        onto_rel_rows = ""
+        rel_icons = {
+            "performed": "Agent → ToolCall", "partOf": "ToolCall → Session",
+            "used": "ToolCall → Entity", "generated": "ToolCall → Entity",
+            "triggeredBy": "ToolCall → Decision", "detected": "ToolCall → Risk",
+            "violates": "ToolCall → Policy", "precedes": "ToolCall → ToolCall",
+            "derivedFrom": "Entity → Entity", "signedBy": "Session → Agent"
+        }
+        for rel, cnt in sorted(onto_relations.items(), key=lambda x: -x[1]):
+            desc = rel_icons.get(rel, "")
+            onto_rel_rows += f"""
+        <tr>
+          <td><code style="color:var(--accent);">{html_mod.escape(rel)}</code></td>
+          <td style="color:var(--muted);font-size:0.75rem;">{desc}</td>
+          <td style="text-align:right;">{cnt}</td>
+        </tr>"""
+
+        # CQ results summary (if available)
+        cq_results = ontology_data.get("competency_results", {})
+        cq_html = ""
+        if cq_results:
+            for cq_name, cq_data in cq_results.items():
+                q = cq_data.get("question", cq_name)
+                answer = cq_data.get("answer", cq_data.get("violations_found", cq_data.get("affected_count", "—")))
+                is_risk = cq_data.get("exfiltration_risk", False) or cq_data.get("answer", False)
+                badge_class = "st-fail" if is_risk else "st-pass"
+                cq_html += f'<div style="padding:0.4rem 0;border-bottom:1px solid var(--border);"><span class="badge {badge_class}" style="margin-right:0.5rem;">{"YES" if is_risk else "NO"}</span><span style="font-size:0.8rem;">{html_mod.escape(q)}</span></div>'
+            cq_html = f'<div class="section"><h2>Competency Questions (CQ)</h2>{cq_html}</div>'
+
+        onto_section = f"""
+    <div class="section">
+      <h2>Knowledge Graph (W3C PROV)</h2>
+      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.8rem;">Ontology v{onto_version} &mdash; {len(onto_schema.get("classes", []))} classes, {len(onto_schema.get("relations", []))} relations</div>
+      <div class="cards" style="margin-bottom:1rem;">
+        <div class="card">
+          <div class="label">Total Nodes</div>
+          <div class="value" style="color:var(--accent);">{onto_nodes}</div>
+        </div>
+        <div class="card">
+          <div class="label">Total Edges</div>
+          <div class="value">{onto_edges}</div>
+        </div>
+        {onto_class_cards}
+      </div>
+      <h3 style="font-size:0.85rem;color:var(--muted);margin:1rem 0 0.4rem;">Relations</h3>
+      <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Relation</th><th>Pattern</th><th style="text-align:right;">Count</th></tr></thead>
+        <tbody>{onto_rel_rows}</tbody>
+      </table>
+      </div>
+    </div>
+    {cq_html}"""
+    else:
+        onto_section = '<div class="section"><h2>Knowledge Graph (W3C PROV)</h2><p style="color:var(--muted);font-size:0.82rem;">No ontology data. Run <code>ontology_populate</code> via MCP to build the knowledge graph.</p></div>'
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -795,6 +897,14 @@ def generate_html_report(
     font-family: monospace; font-size: 0.65rem; padding: 0.1rem 0.35rem;
     background: rgba(77,101,255,0.1); color: var(--accent); border-radius: 3px;
   }}
+  .finding-clickable {{ cursor: pointer; }}
+  .finding-clickable:hover {{ border-left-color: var(--accent); transform: translateX(2px); transition: all 0.15s ease; }}
+  .finding-count {{
+    font-size: 0.68rem; color: var(--accent); background: rgba(77,101,255,0.1);
+    padding: 0.1rem 0.4rem; border-radius: 3px; margin-left: auto;
+  }}
+  .tl-entry.tl-highlight {{ background: rgba(77,101,255,0.12); border-left: 3px solid var(--accent); animation: pulse-highlight 1.5s ease; }}
+  @keyframes pulse-highlight {{ 0% {{ background: rgba(77,101,255,0.25); }} 100% {{ background: rgba(77,101,255,0.12); }} }}
   .rec-item {{
     padding: 0.5rem 0.8rem; font-size: 0.82rem; color: var(--text);
     border-left: 2px solid var(--accent); margin-bottom: 0.4rem; background: var(--surface); border-radius: 0 4px 4px 0;
@@ -957,6 +1067,7 @@ def generate_html_report(
   <div class="tab" data-tab="timeline">Timeline ({max_entries})</div>
   <div class="tab" data-tab="security">Security</div>
   <div class="tab" data-tab="governance">Governance</div>
+  <div class="tab" data-tab="ontology">Knowledge Graph</div>
   <div class="tab" data-tab="ai">AI Analysis</div>
 </div>
 
@@ -1054,6 +1165,16 @@ def generate_html_report(
   {topo_section}
 </div>
 
+<!-- === KNOWLEDGE GRAPH === -->
+<div class="tab-panel" id="panel-ontology">
+  {onto_section}
+  <div class="section" id="onto-graph-section" style="display:{'block' if onto_nodes > 0 else 'none'};">
+    <h2>Graph Visualization</h2>
+    <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Force-directed layout. Hover nodes for details. Drag to reposition.</div>
+    <canvas id="onto-canvas" style="width:100%;height:500px;border-radius:8px;background:#0a0a0a;cursor:grab;"></canvas>
+  </div>
+</div>
+
 <!-- === AI ANALYSIS === -->
 <div class="tab-panel" id="panel-ai">
   <div class="ai-section">
@@ -1129,6 +1250,35 @@ SCRIPT_PLACEHOLDER
         "    });\n"
         "  });\n"
         "});\n"
+        "\n"
+        "// === Jump to events from findings ===\n"
+        "function jumpToEvents(el) {\n"
+        "  const indices = (el.dataset.linked || '').split(',').map(Number);\n"
+        "  if (!indices.length) return;\n"
+        "  // Switch to timeline tab\n"
+        "  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));\n"
+        "  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));\n"
+        "  document.querySelector('[data-tab=\"timeline\"]').classList.add('active');\n"
+        "  document.getElementById('panel-timeline').classList.add('active');\n"
+        "  // Clear previous highlights\n"
+        "  document.querySelectorAll('.tl-highlight').forEach(e => e.classList.remove('tl-highlight'));\n"
+        "  // Show all entries first\n"
+        "  document.querySelectorAll('.tl-filter-btn').forEach(b => b.classList.remove('active'));\n"
+        "  document.querySelector('[data-tlf=\"all\"]').classList.add('active');\n"
+        "  document.querySelectorAll('.tl-entry').forEach(e => e.style.display = '');\n"
+        "  // Highlight and scroll\n"
+        "  let first = null;\n"
+        "  indices.forEach(idx => {\n"
+        "    const entry = document.querySelector('.tl-entry[data-tl=\"'+idx+'\"]');\n"
+        "    if (entry) {\n"
+        "      entry.classList.add('tl-highlight');\n"
+        "      if (!first) first = entry;\n"
+        "    }\n"
+        "  });\n"
+        "  if (first) {\n"
+        "    setTimeout(() => first.scrollIntoView({behavior:'smooth',block:'center'}), 100);\n"
+        "  }\n"
+        "}\n"
         "\n"
         "// === Downloads ===\n"
         "function downloadJSON() {\n"
@@ -1217,6 +1367,147 @@ SCRIPT_PLACEHOLDER
         "  if (provider === 'openai') return data.choices?.[0]?.message?.content || JSON.stringify(data);\n"
         "  return data.content?.[0]?.text || JSON.stringify(data);\n"
         "}\n"
+        "\n"
+        "// === Ontology Knowledge Graph Canvas Visualization ===\n"
+        "const _ONTO = " + onto_graph_json + ";\n"
+        "(function() {\n"
+        "  const canvas = document.getElementById('onto-canvas');\n"
+        "  if (!canvas || !_ONTO.nodes.length) return;\n"
+        "  const ctx = canvas.getContext('2d');\n"
+        "  const dpr = window.devicePixelRatio || 1;\n"
+        "  const rect = canvas.getBoundingClientRect();\n"
+        "  canvas.width = rect.width * dpr;\n"
+        "  canvas.height = rect.height * dpr;\n"
+        "  ctx.scale(dpr, dpr);\n"
+        "  const W = rect.width, H = rect.height;\n"
+        "\n"
+        "  // Color palette (Neo4j Bloom inspired)\n"
+        "  const COLORS = {\n"
+        "    Agent:'#4d65ff', Session:'#22c55e', ToolCall:'#f59e0b',\n"
+        "    Entity:'#a78bfa', Decision:'#ec4899', Risk:'#ef4444', Policy:'#06b6d4'\n"
+        "  };\n"
+        "  const SIZES = {Agent:12, Session:14, ToolCall:5, Entity:4, Decision:7, Risk:9, Policy:8};\n"
+        "\n"
+        "  // Initialize node positions (circular layout then physics)\n"
+        "  const nodes = _ONTO.nodes.map((n, i) => {\n"
+        "    const angle = (i / _ONTO.nodes.length) * Math.PI * 2;\n"
+        "    const r = Math.min(W, H) * 0.35;\n"
+        "    return {...n, x: W/2 + Math.cos(angle)*r*(0.5+Math.random()*0.5),\n"
+        "                  y: H/2 + Math.sin(angle)*r*(0.5+Math.random()*0.5),\n"
+        "                  vx: 0, vy: 0, size: SIZES[n.class]||5};\n"
+        "  });\n"
+        "  const nodeMap = {};\n"
+        "  nodes.forEach(n => nodeMap[n.id] = n);\n"
+        "  const edges = _ONTO.edges.filter(e => nodeMap[e.s] && nodeMap[e.t]);\n"
+        "\n"
+        "  // Force-directed simulation\n"
+        "  function simulate(steps) {\n"
+        "    for (let step = 0; step < steps; step++) {\n"
+        "      // Repulsion\n"
+        "      for (let i = 0; i < nodes.length; i++) {\n"
+        "        for (let j = i+1; j < nodes.length; j++) {\n"
+        "          let dx = nodes[j].x - nodes[i].x, dy = nodes[j].y - nodes[i].y;\n"
+        "          let dist = Math.sqrt(dx*dx+dy*dy) || 1;\n"
+        "          let force = 800 / (dist*dist);\n"
+        "          let fx = dx/dist*force, fy = dy/dist*force;\n"
+        "          nodes[i].vx -= fx; nodes[i].vy -= fy;\n"
+        "          nodes[j].vx += fx; nodes[j].vy += fy;\n"
+        "        }\n"
+        "      }\n"
+        "      // Attraction (edges)\n"
+        "      edges.forEach(e => {\n"
+        "        let a = nodeMap[e.s], b = nodeMap[e.t];\n"
+        "        if (!a || !b) return;\n"
+        "        let dx = b.x-a.x, dy = b.y-a.y;\n"
+        "        let dist = Math.sqrt(dx*dx+dy*dy) || 1;\n"
+        "        let force = (dist-60) * 0.005;\n"
+        "        let fx = dx/dist*force, fy = dy/dist*force;\n"
+        "        a.vx += fx; a.vy += fy;\n"
+        "        b.vx -= fx; b.vy -= fy;\n"
+        "      });\n"
+        "      // Center gravity\n"
+        "      nodes.forEach(n => {\n"
+        "        n.vx += (W/2-n.x)*0.001; n.vy += (H/2-n.y)*0.001;\n"
+        "        n.vx *= 0.85; n.vy *= 0.85;\n"
+        "        n.x += n.vx; n.y += n.vy;\n"
+        "        n.x = Math.max(20, Math.min(W-20, n.x));\n"
+        "        n.y = Math.max(20, Math.min(H-20, n.y));\n"
+        "      });\n"
+        "    }\n"
+        "  }\n"
+        "  simulate(150);\n"
+        "\n"
+        "  let hovered = null;\n"
+        "  let dragging = null;\n"
+        "\n"
+        "  function draw() {\n"
+        "    ctx.clearRect(0, 0, W, H);\n"
+        "    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, W, H);\n"
+        "    // Edges\n"
+        "    edges.forEach(e => {\n"
+        "      let a = nodeMap[e.s], b = nodeMap[e.t];\n"
+        "      if (!a || !b) return;\n"
+        "      let isHighlight = hovered && (hovered.id===e.s || hovered.id===e.t);\n"
+        "      ctx.strokeStyle = isHighlight ? 'rgba(77,101,255,0.5)' : 'rgba(255,255,255,0.06)';\n"
+        "      ctx.lineWidth = isHighlight ? 1.5 : 0.5;\n"
+        "      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();\n"
+        "    });\n"
+        "    // Nodes\n"
+        "    nodes.forEach(n => {\n"
+        "      let color = COLORS[n.class] || '#888';\n"
+        "      let r = n.size;\n"
+        "      let isHov = hovered && hovered.id === n.id;\n"
+        "      if (isHov) { r *= 1.8;\n"
+        "        ctx.shadowColor = color; ctx.shadowBlur = 15;\n"
+        "      }\n"
+        "      // Radial gradient\n"
+        "      let grad = ctx.createRadialGradient(n.x-r*0.3, n.y-r*0.3, 0, n.x, n.y, r);\n"
+        "      grad.addColorStop(0, color); grad.addColorStop(1, color+'88');\n"
+        "      ctx.fillStyle = grad;\n"
+        "      ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI*2); ctx.fill();\n"
+        "      ctx.shadowBlur = 0;\n"
+        "      if (isHov) {\n"
+        "        ctx.fillStyle = '#fff'; ctx.font = '11px -apple-system,sans-serif';\n"
+        "        ctx.textAlign = 'center';\n"
+        "        ctx.fillText(n.label || n.class, n.x, n.y - r - 8);\n"
+        "        ctx.font = '9px monospace'; ctx.fillStyle = color;\n"
+        "        ctx.fillText(n.class, n.x, n.y - r - 20);\n"
+        "      }\n"
+        "    });\n"
+        "    // Legend\n"
+        "    let lx = 12, ly = H - 10;\n"
+        "    Object.entries(COLORS).forEach(([cls, col]) => {\n"
+        "      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI*2); ctx.fill();\n"
+        "      ctx.fillStyle = '#888'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';\n"
+        "      ctx.fillText(cls, lx+8, ly+3); lx += ctx.measureText(cls).width + 22;\n"
+        "    });\n"
+        "  }\n"
+        "  draw();\n"
+        "\n"
+        "  // Mouse interaction\n"
+        "  canvas.addEventListener('mousemove', e => {\n"
+        "    const br = canvas.getBoundingClientRect();\n"
+        "    const mx = e.clientX - br.left, my = e.clientY - br.top;\n"
+        "    if (dragging) {\n"
+        "      dragging.x = mx; dragging.y = my; draw(); return;\n"
+        "    }\n"
+        "    hovered = null;\n"
+        "    for (let n of nodes) {\n"
+        "      let dx = n.x-mx, dy = n.y-my;\n"
+        "      if (Math.sqrt(dx*dx+dy*dy) < n.size+5) { hovered = n; break; }\n"
+        "    }\n"
+        "    canvas.style.cursor = hovered ? 'pointer' : 'grab';\n"
+        "    draw();\n"
+        "  });\n"
+        "  canvas.addEventListener('mousedown', e => {\n"
+        "    if (hovered) { dragging = hovered; canvas.style.cursor = 'grabbing'; }\n"
+        "  });\n"
+        "  canvas.addEventListener('mouseup', () => {\n"
+        "    dragging = null; canvas.style.cursor = hovered ? 'pointer' : 'grab';\n"
+        "  });\n"
+        "  canvas.addEventListener('mouseleave', () => { hovered=null; dragging=null; draw(); });\n"
+        "})();\n"
+        "\n"
         "</script>"
     )
 

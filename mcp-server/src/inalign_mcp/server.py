@@ -175,6 +175,25 @@ try:
 except ImportError:
     TOPOLOGY_AVAILABLE = False
 
+# Ontology Layer (W3C PROV + SQLite Knowledge Graph)
+try:
+    from .ontology import (
+        populate_from_session as onto_populate,
+        populate_decisions as onto_populate_decisions,
+        populate_risks as onto_populate_risks,
+        query_neighbors as onto_neighbors,
+        get_ontology_stats as onto_stats,
+        cq1_agent_accessed_entity as onto_cq1,
+        cq2_files_before_external_call as onto_cq2,
+        cq3_policy_violations_in_risky_sessions as onto_cq3,
+        cq4_downstream_impact as onto_cq4,
+        cq5_context_around_hash_break as onto_cq5,
+        query_causal_chain as onto_causal,
+    )
+    ONTOLOGY_AVAILABLE = True
+except ImportError:
+    ONTOLOGY_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("inalign-mcp")
@@ -812,6 +831,61 @@ async def list_tools() -> list[Tool]:
                             "type": "string",
                             "description": "Filter by agent",
                         },
+                    },
+                },
+            ),
+        ])
+
+    # ---- Ontology Layer (W3C PROV Knowledge Graph) ----
+    if ONTOLOGY_AVAILABLE:
+        tools.extend([
+            Tool(
+                name="ontology_populate",
+                description="Build W3C PROV knowledge graph from a session's provenance records. Creates Agent, Session, ToolCall, Entity nodes with performed/partOf/used/generated/precedes edges.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {
+                            "type": "string",
+                            "description": "Session ID to populate (defaults to current)",
+                        },
+                        "include_risks": {
+                            "type": "boolean",
+                            "description": "Also populate Risk nodes from risk analysis (default: true)",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="ontology_query",
+                description="Query the knowledge graph. Supports: neighbors (graph traversal), causal_chain (trace back from an activity), cq1-cq5 (competency questions).",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "query_type": {
+                            "type": "string",
+                            "description": "Query type: neighbors, causal_chain, cq1_access, cq2_exfiltration, cq3_violations, cq4_impact, cq5_hash_break",
+                            "enum": ["neighbors", "causal_chain", "cq1_access", "cq2_exfiltration", "cq3_violations", "cq4_impact", "cq5_hash_break"],
+                        },
+                        "node_id": {"type": "string", "description": "Node ID (for neighbors/causal_chain/cq4_impact)"},
+                        "depth": {"type": "integer", "description": "Max traversal depth (default: 2)"},
+                        "direction": {"type": "string", "description": "For neighbors: outgoing/incoming/both"},
+                        "agent_label": {"type": "string", "description": "For cq1: agent name pattern"},
+                        "entity_pattern": {"type": "string", "description": "For cq1: entity name pattern (e.g., '.env')"},
+                        "session_id": {"type": "string", "description": "Session ID filter"},
+                        "risk_level": {"type": "string", "description": "For cq3: risk level (high/critical)"},
+                        "broken_seq": {"type": "integer", "description": "For cq5: sequence number of hash break"},
+                    },
+                    "required": ["query_type"],
+                },
+            ),
+            Tool(
+                name="ontology_stats",
+                description="Get knowledge graph statistics: node/edge counts, class distribution, relation types, ontology version.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Filter by session (omit for all)"},
                     },
                 },
             ),
@@ -1651,6 +1725,52 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         aid = arguments.get("agent_id")
         report = topo_cost_report(sid, aid)
         result = [TextContent(type="text", text=json.dumps(report, indent=2))]
+
+    # ============================================
+    # ONTOLOGY (W3C PROV Knowledge Graph)
+    # ============================================
+    elif name == "ontology_populate" and ONTOLOGY_AVAILABLE:
+        sid = arguments.get("session_id", SESSION_ID)
+        include_risks = arguments.get("include_risks", True)
+        populate_result = onto_populate(sid)
+        if populate_result.get("status") == "ok":
+            dec_result = onto_populate_decisions(sid)
+            populate_result["decision_nodes"] = dec_result.get("nodes", 0)
+            populate_result["decision_edges"] = dec_result.get("edges", 0)
+        if include_risks and populate_result.get("status") == "ok":
+            risk_result = onto_populate_risks(sid)
+            populate_result["risk_nodes"] = risk_result.get("nodes", 0)
+            populate_result["risk_edges"] = risk_result.get("edges", 0)
+        result = [TextContent(type="text", text=json.dumps(populate_result, indent=2))]
+
+    elif name == "ontology_query" and ONTOLOGY_AVAILABLE:
+        qt = arguments.get("query_type", "neighbors")
+        sid = arguments.get("session_id", SESSION_ID)
+        nid = arguments.get("node_id", "")
+        depth = arguments.get("depth", 2)
+
+        if qt == "neighbors":
+            qr = onto_neighbors(nid, depth, arguments.get("direction", "both"))
+        elif qt == "causal_chain":
+            qr = onto_causal(nid, depth)
+        elif qt == "cq1_access":
+            qr = onto_cq1(arguments.get("agent_label", ""), arguments.get("entity_pattern", ""), sid)
+        elif qt == "cq2_exfiltration":
+            qr = onto_cq2(sid)
+        elif qt == "cq3_violations":
+            qr = onto_cq3(arguments.get("risk_level", "high"), sid)
+        elif qt == "cq4_impact":
+            qr = onto_cq4(nid, depth)
+        elif qt == "cq5_hash_break":
+            qr = onto_cq5(sid, arguments.get("broken_seq", 0), depth)
+        else:
+            qr = {"error": f"Unknown query type: {qt}"}
+        result = [TextContent(type="text", text=json.dumps(qr, indent=2))]
+
+    elif name == "ontology_stats" and ONTOLOGY_AVAILABLE:
+        sid = arguments.get("session_id", "")
+        stats_data = onto_stats(sid)
+        result = [TextContent(type="text", text=json.dumps(stats_data, indent=2))]
 
     # Unknown tool
     else:
