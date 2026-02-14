@@ -232,7 +232,7 @@ def _check_llm06_sensitive_info(records: list[dict]) -> OWASPCheck:
             item_id="LLM06", name="Sensitive Information Disclosure",
             status=OWASPStatus.FAIL, score=75,
             description="Multiple sensitive resource accesses detected.",
-            evidence=[f"{len(hits)} sensitive access(es)", f"Resources: {', '.join(set(hits)[:5])}"],
+            evidence=[f"{len(hits)} sensitive access(es)", f"Resources: {', '.join(list(set(hits))[:5])}"],
             recommendation="Restrict file access scope. Enable PII masking via policy.",
         )
     elif hits:

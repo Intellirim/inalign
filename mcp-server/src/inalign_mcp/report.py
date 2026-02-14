@@ -169,6 +169,112 @@ def generate_html_report(
 
     total_log = len(session_log)
 
+    # === Build unified timeline ===
+    timeline_html = ""
+    max_entries = max(len(records), total_log)
+    for i in range(max_entries):
+        prov = records[i] if i < len(records) else None
+        log = session_log[i] if i < total_log else None
+
+        # Determine role and type from session log
+        role = log.get("role", "") if log else ""
+        rtype = log.get("type", log.get("record_type", "")) if log else ""
+        content = log.get("content", "") if log else ""
+        tool_name = log.get("tool_name", "") if log else ""
+        tool_input = log.get("tool_input", "") if log else ""
+        tool_output = log.get("tool_output", "") if log else ""
+
+        # Role badge
+        if role == "user":
+            badge_class = "tl-user"
+            badge_label = "USER"
+        elif role == "assistant" and rtype == "thinking":
+            badge_class = "tl-thinking"
+            badge_label = "THINKING"
+        elif role == "assistant" and rtype == "tool_call":
+            badge_class = "tl-tool"
+            badge_label = "TOOL CALL"
+        elif role == "assistant":
+            badge_class = "tl-assistant"
+            badge_label = "ASSISTANT"
+        elif rtype == "tool_result":
+            badge_class = "tl-result"
+            badge_label = "RESULT"
+        else:
+            badge_class = "tl-tool"
+            badge_label = rtype.upper() if rtype else "EVENT"
+
+        # Content preview
+        preview = ""
+        if rtype == "tool_call" and tool_name:
+            preview = f'<span class="tl-tool-name">{html_mod.escape(tool_name)}</span>'
+            if tool_input:
+                ti_str = str(tool_input)[:150]
+                preview += f'<span class="tl-muted"> {html_mod.escape(ti_str)}</span>'
+        elif rtype == "tool_result":
+            tn = html_mod.escape(tool_name) if tool_name else "result"
+            to_str = str(tool_output or content)[:150]
+            preview = f'<span class="tl-tool-name">{tn}</span> <span class="tl-muted">&rarr; {html_mod.escape(to_str)}</span>'
+        elif rtype == "thinking" and content:
+            preview = f'<span class="tl-muted">{html_mod.escape(content[:200])}</span>'
+        elif content:
+            preview = html_mod.escape(content[:200])
+            if len(content) > 200:
+                preview += '<span class="tl-muted">...</span>'
+
+        # Hash chain info from provenance
+        hash_chip = ""
+        if prov:
+            h = prov.get("hash", "")[:12]
+            chain_ok = bool(prov.get("previous_hash") or prov.get("sequence", 0) == 0)
+            chain_icon = "&#x1F512;" if chain_ok else "&#x26A0;"  # lock or warning
+            hash_chip = f'<span class="tl-hash" title="{prov.get("hash", "")}">{chain_icon} {h}</span>'
+
+        # Timestamp
+        ts = ""
+        if prov and prov.get("timestamp"):
+            ts = prov["timestamp"][:19]
+        elif log and log.get("timestamp"):
+            ts = log["timestamp"][:19]
+
+        # Sequence number
+        seq = prov.get("sequence", i) if prov else i
+
+        # Expandable detail
+        detail_parts = []
+        if content and len(content) > 200:
+            detail_parts.append(f'<div class="tl-detail-section"><div class="tl-detail-label">Content</div><pre class="tl-detail-pre">{html_mod.escape(content)}</pre></div>')
+        if tool_input and len(str(tool_input)) > 150:
+            detail_parts.append(f'<div class="tl-detail-section"><div class="tl-detail-label">Tool Input</div><pre class="tl-detail-pre">{html_mod.escape(str(tool_input)[:3000])}</pre></div>')
+        if tool_output and len(str(tool_output)) > 150:
+            detail_parts.append(f'<div class="tl-detail-section"><div class="tl-detail-label">Tool Output</div><pre class="tl-detail-pre">{html_mod.escape(str(tool_output)[:3000])}</pre></div>')
+        if prov:
+            detail_parts.append(f'<div class="tl-detail-section"><div class="tl-detail-label">Provenance</div><div class="tl-hash-detail">Hash: <code>{prov.get("hash", "")}</code></div><div class="tl-hash-detail">Previous: <code>{prov.get("previous_hash", "genesis")}</code></div><div class="tl-hash-detail">Type: {prov.get("type", "")}</div></div>')
+
+        has_detail = bool(detail_parts)
+        expand_class = "tl-expandable" if has_detail else ""
+        arrow = '<span class="tl-arrow">&#9654;</span>' if has_detail else '<span class="tl-arrow" style="visibility:hidden">&#9654;</span>'
+
+        # Role filter data attribute
+        filter_role = rtype if rtype in ("thinking", "tool_call", "tool_result") else role
+
+        timeline_html += f"""
+        <div class="tl-entry {expand_class}" data-tl="{i}" data-role="{filter_role}">
+          <div class="tl-row">
+            <div class="tl-seq">#{seq}</div>
+            <div class="tl-badge {badge_class}">{badge_label}</div>
+            <div class="tl-content">{arrow}{preview if preview else '<span class="tl-muted">(empty)</span>'}</div>
+            {hash_chip}
+            <div class="tl-ts">{ts}</div>
+          </div>
+        </div>"""
+        if has_detail:
+            detail_content = "".join(detail_parts)
+            timeline_html += f"""
+        <div class="tl-detail" id="tl-detail-{i}" style="display:none;">
+          {detail_content}
+        </div>"""
+
     # === Export data ===
     export_data = {
         "session_id": session_id,
@@ -657,6 +763,57 @@ def generate_html_report(
   .ai-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
   .ai-result {{ background: var(--bg); border-radius: 6px; padding: 1rem; margin-top: 1rem; display: none; }}
 
+  /* Unified Timeline */
+  .tl-entry {{ padding: 0.5rem 0.8rem; border-bottom: 1px solid rgba(48,54,61,0.4); font-size: 0.84rem; }}
+  .tl-entry.tl-expandable {{ cursor: pointer; }}
+  .tl-entry.tl-expandable:hover {{ background: rgba(88,166,255,0.05); }}
+  .tl-entry.open .tl-arrow {{ transform: rotate(90deg); }}
+  .tl-row {{ display: flex; align-items: center; gap: 0.6rem; }}
+  .tl-seq {{ color: var(--muted); font-size: 0.72rem; font-family: monospace; min-width: 42px; }}
+  .tl-badge {{
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.65rem; font-weight: 600; text-align: center; min-width: 72px; white-space: nowrap;
+  }}
+  .tl-user {{ background: rgba(63,185,80,0.15); color: var(--green); }}
+  .tl-assistant {{ background: rgba(88,166,255,0.15); color: var(--blue); }}
+  .tl-thinking {{ background: rgba(188,140,255,0.15); color: var(--purple); }}
+  .tl-tool {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
+  .tl-result {{ background: rgba(248,81,73,0.12); color: #f0883e; }}
+  .tl-content {{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; }}
+  .tl-tool-name {{ font-weight: 600; color: var(--blue); }}
+  .tl-muted {{ color: var(--muted); }}
+  .tl-arrow {{ display: inline-block; font-size: 0.5rem; margin-right: 0.3rem; transition: transform 0.15s; color: var(--muted); }}
+  .tl-hash {{
+    font-family: monospace; font-size: 0.68rem; color: var(--muted);
+    background: rgba(88,166,255,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
+  }}
+  .tl-ts {{ color: var(--muted); font-size: 0.68rem; font-family: monospace; white-space: nowrap; min-width: 120px; text-align: right; }}
+  .tl-detail {{
+    padding: 0.5rem 0.8rem 0.8rem 3.6rem;
+    border-bottom: 1px solid rgba(48,54,61,0.4);
+    background: rgba(13,17,23,0.5);
+  }}
+  .tl-detail-section {{ margin-bottom: 0.5rem; }}
+  .tl-detail-section:last-child {{ margin-bottom: 0; }}
+  .tl-detail-label {{ color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.2rem; }}
+  .tl-detail-pre {{
+    font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem;
+    color: var(--text); white-space: pre-wrap; word-break: break-word;
+    background: var(--bg); padding: 0.5rem; border-radius: 6px;
+    border-left: 3px solid var(--blue); max-height: 300px; overflow-y: auto;
+  }}
+  .tl-hash-detail {{ font-size: 0.75rem; margin-bottom: 0.15rem; }}
+  .tl-hash-detail code {{ color: var(--blue); font-size: 0.72rem; word-break: break-all; }}
+  .tl-filter {{ display: flex; gap: 0.4rem; margin-bottom: 0.8rem; flex-wrap: wrap; }}
+  .tl-filter-btn {{
+    padding: 0.2rem 0.7rem; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--muted); font-size: 0.75rem; cursor: pointer;
+    transition: all 0.15s;
+  }}
+  .tl-filter-btn:hover {{ border-color: var(--blue); color: var(--text); }}
+  .tl-filter-btn.active {{ border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,0.08); }}
+  #tl-container {{ max-height: 80vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }}
+
   .footer {{ text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 2rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }}
   .footer a {{ color: var(--blue); text-decoration: none; }}
 
@@ -678,8 +835,9 @@ def generate_html_report(
 
 <div class="tabs">
   <div class="tab active" data-tab="overview">Overview</div>
+  <div class="tab" data-tab="timeline">Timeline ({max_entries})</div>
   <div class="tab" data-tab="chain">Provenance Chain</div>
-  <div class="tab" data-tab="log">Session Log ({total_log})</div>
+  <div class="tab" data-tab="log">Session Log</div>
   <div class="tab" data-tab="security">Security</div>
   <div class="tab" data-tab="governance">Governance</div>
   <div class="tab" data-tab="ai">AI Analysis</div>
@@ -741,6 +899,25 @@ def generate_html_report(
   </div>
 
   {"<div class='section'><h2>Session Log Summary</h2><div>" + log_summary_html + "</div></div>" if log_summary_html else ""}
+</div>
+
+<!-- === UNIFIED TIMELINE === -->
+<div class="tab-panel" id="panel-timeline">
+  <div class="section">
+    <h2>Unified Timeline</h2>
+    <p style="color:var(--muted);font-size:0.75rem;margin-bottom:0.8rem;">Session log + provenance chain in chronological order. Click any row to expand details.</p>
+    <div class="tl-filter">
+      <span class="tl-filter-btn active" data-tlf="all">All ({max_entries})</span>
+      <span class="tl-filter-btn" data-tlf="user">User</span>
+      <span class="tl-filter-btn" data-tlf="assistant">Assistant</span>
+      <span class="tl-filter-btn" data-tlf="thinking">Thinking</span>
+      <span class="tl-filter-btn" data-tlf="tool_call">Tool Call</span>
+      <span class="tl-filter-btn" data-tlf="tool_result">Result</span>
+    </div>
+    <div id="tl-container">
+      {timeline_html if timeline_html else '<p style="color:var(--muted);padding:1rem;">No timeline data available.</p>'}
+    </div>
+  </div>
 </div>
 
 <!-- === PROVENANCE CHAIN === -->
@@ -832,6 +1009,33 @@ SCRIPT_PLACEHOLDER
         "    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));\n"
         "    tab.classList.add('active');\n"
         "    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');\n"
+        "  });\n"
+        "});\n"
+        "\n"
+        "// === Timeline toggle ===\n"
+        "document.querySelectorAll('.tl-entry.tl-expandable').forEach(entry => {\n"
+        "  entry.addEventListener('click', () => {\n"
+        "    const d = document.getElementById('tl-detail-' + entry.dataset.tl);\n"
+        "    if (!d) return;\n"
+        "    const open = d.style.display !== 'none';\n"
+        "    d.style.display = open ? 'none' : 'block';\n"
+        "    entry.classList.toggle('open', !open);\n"
+        "  });\n"
+        "});\n"
+        "\n"
+        "// === Timeline filter ===\n"
+        "document.querySelectorAll('.tl-filter-btn').forEach(btn => {\n"
+        "  btn.addEventListener('click', () => {\n"
+        "    document.querySelectorAll('.tl-filter-btn').forEach(b => b.classList.remove('active'));\n"
+        "    btn.classList.add('active');\n"
+        "    const f = btn.dataset.tlf;\n"
+        "    document.querySelectorAll('.tl-entry').forEach(e => {\n"
+        "      if (f === 'all') { e.style.display = ''; return; }\n"
+        "      const role = e.dataset.role || '';\n"
+        "      e.style.display = role === f ? '' : 'none';\n"
+        "      const detail = document.getElementById('tl-detail-' + e.dataset.tl);\n"
+        "      if (detail && e.style.display === 'none') detail.style.display = 'none';\n"
+        "    });\n"
         "  });\n"
         "});\n"
         "\n"
