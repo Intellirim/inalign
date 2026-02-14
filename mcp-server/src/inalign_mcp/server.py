@@ -7,8 +7,8 @@ MCP server for Claude Code, Cursor, and other AI agents.
 Features:
 - Provenance chain with cryptographic verification (tamper-proof audit trail)
 - Policy management for AI agent governance
-- GraphRAG pattern detection and risk analysis
-- Neo4j graph storage integration
+- Local risk analysis with pattern detection
+- SQLite local-first storage (Neo4j/API available as opt-in)
 """
 
 import asyncio
@@ -143,10 +143,8 @@ if os.path.exists(env_file):
                 if not os.getenv(key):
                     os.environ[key] = value.strip()
 
-# Debug: Log environment variables at startup
+# Startup log (no secrets)
 logger.info(f"[STARTUP] SESSION_ID: {SESSION_ID}")
-logger.info(f"[STARTUP] API_KEY env: {os.getenv('API_KEY', 'NOT SET')[:20] if os.getenv('API_KEY') else 'NOT SET'}...")
-logger.info(f"[STARTUP] NEO4J_URI env: {os.getenv('NEO4J_URI', 'NOT SET')}")
 
 # Client ID from API key (for data isolation)
 API_KEY = os.getenv("INALIGN_API_KEY") or os.getenv("API_KEY")
@@ -157,14 +155,24 @@ if API_KEY:
     CLIENT_ID = API_KEY[:12] if API_KEY.startswith("ial_") else hashlib.sha256(API_KEY.encode()).hexdigest()[:12]
     logger.info(f"[CLIENT] Initialized with client_id: {CLIENT_ID}")
 else:
-    logger.warning(f"[CLIENT] No API_KEY found - client_id will be None")
+    logger.debug("[CLIENT] No API_KEY found - client_id will be None")
 
-# Initialize storage: prefer direct Neo4j, fallback to API proxy, then in-memory only
-STORAGE_MODE = "memory"  # "neo4j" | "api" | "memory"
+# Initialize storage: SQLite-first (local), opt-in Neo4j/API for self-hosted setups
+STORAGE_MODE = "memory"  # "sqlite" | "neo4j" | "api" | "memory"
 NEO4J_URI = os.getenv("NEO4J_URI")
 API_URL = os.getenv("INALIGN_API_URL") or os.getenv("API_URL")
 
-if NEO4J_URI and GRAPHRAG_AVAILABLE:
+# 1. SQLite local persistent storage (default, zero-config)
+if SQLITE_AVAILABLE:
+    try:
+        if init_sqlite():
+            STORAGE_MODE = "sqlite"
+            logger.info(f"[STORAGE] SQLite local mode → {get_db_path()}")
+    except Exception as e:
+        logger.warning(f"[SQLITE] Failed to init: {e}")
+
+# 2. Neo4j (opt-in: only if explicitly configured AND SQLite not available)
+if STORAGE_MODE == "memory" and NEO4J_URI and GRAPHRAG_AVAILABLE:
     try:
         neo4j_ok = init_neo4j(
             uri=NEO4J_URI,
@@ -173,35 +181,26 @@ if NEO4J_URI and GRAPHRAG_AVAILABLE:
         )
         if neo4j_ok:
             STORAGE_MODE = "neo4j"
-            logger.info(f"[STORAGE] Direct Neo4j mode → {NEO4J_URI}")
+            logger.info("[STORAGE] Neo4j mode (opt-in)")
         else:
-            logger.warning(f"[NEO4J] Connection failed, trying next backend")
+            logger.debug("[NEO4J] Connection failed, trying next backend")
     except Exception as e:
-        logger.warning(f"[NEO4J] Failed to connect: {e}")
+        logger.debug(f"[NEO4J] Not available: {e}")
 
-if STORAGE_MODE != "neo4j" and API_URL and API_KEY and API_CLIENT_AVAILABLE:
+# 3. API proxy (opt-in: only if explicitly configured AND nothing else worked)
+if STORAGE_MODE == "memory" and API_URL and API_KEY and API_CLIENT_AVAILABLE:
     try:
         client = init_api_client(API_URL, API_KEY)
-        # Verify API is reachable before committing to api mode
         import urllib.request
         req = urllib.request.Request(f"{API_URL.rstrip('/')}/", method="HEAD")
         urllib.request.urlopen(req, timeout=3)
         STORAGE_MODE = "api"
-        logger.info(f"[STORAGE] API proxy mode → {API_URL}")
+        logger.info("[STORAGE] API proxy mode (opt-in)")
     except Exception as e:
-        logger.warning(f"[API] Server unreachable ({API_URL}), falling back: {e}")
-
-# SQLite local persistent storage (default for --local mode)
-if STORAGE_MODE == "memory" and SQLITE_AVAILABLE:
-    try:
-        if init_sqlite():
-            STORAGE_MODE = "sqlite"
-            logger.info(f"[STORAGE] SQLite local mode → {get_db_path()}")
-    except Exception as e:
-        logger.warning(f"[SQLITE] Failed to init: {e}")
+        logger.debug(f"[API] Not available: {e}")
 
 if STORAGE_MODE == "memory":
-    logger.info("[STORAGE] In-memory only mode (no Neo4j, API, or SQLite)")
+    logger.info("[STORAGE] In-memory only mode (no persistent backend)")
 
 
 def _persist_store(record) -> bool:
@@ -542,40 +541,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     "current_usage": usage_status.current_count,
                     "limit": usage_status.limit,
                     "plan": usage_status.plan,
-                    "upgrade_url": "http://15.165.20.75:8080"
+                    "upgrade_url": "https://inalign.dev"
                 })
             )]
         logger.info(f"[USAGE] {CLIENT_ID}: {usage_status.current_count}/{usage_status.limit} actions")
     # === END USAGE CHECK ===
 
-    # === AUTO PROVENANCE RECORDING ===
+    # === INIT: ensure chain + session exist before handler ===
     try:
-        # Include client_id for data isolation
-        args_with_client = {**arguments, "client_id": CLIENT_ID} if CLIENT_ID else arguments
-        # Ensure chain has client_id before recording
         chain = get_or_create_chain(SESSION_ID, "Claude Code", CLIENT_ID or "")
-        # Register session in SQLite on first call
         if STORAGE_MODE == "sqlite" and chain._sequence == 0:
             sqlite_store_session(SESSION_ID, chain.agent, CLIENT_ID or "")
-        auto_record = prov_record_tool(
-            session_id=SESSION_ID,
-            tool_name=name,
-            arguments=args_with_client,
-            agent_name="Claude Code"
-        )
-        stats["provenance_records"] += 1
-        logger.info(f"[PROVENANCE] Recorded: {name} (session: {SESSION_ID})")
-
-        # Store auto-provenance to persistent backend
-        if STORAGE_MODE != "memory":
-            _persist_store(auto_record)
     except Exception as e:
-        logger.warning(f"[PROVENANCE] Failed to record: {e}")
-    # === END PROVENANCE RECORDING ===
+        logger.warning(f"[PROVENANCE] Init failed: {e}")
 
     # ============================================
     # PROVENANCE HANDLERS
     # ============================================
+
+    # Tools that self-record provenance (skip auto-recording for these)
+    _self_recording_tools = {"record_user_command", "record_action"}
+    result = None
 
     if name == "record_user_command":
         command = arguments.get("command", "")
@@ -630,7 +616,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 except Exception as e:
                     logger.warning(f"[NEO4J] Failed to store content: {e}")
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({
                 "recorded": True,
@@ -692,7 +678,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 except Exception as e:
                     logger.warning(f"[NEO4J] Failed to store content: {e}")
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({
                 "recorded": True,
@@ -721,23 +707,23 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 }
                 for r in chain.records[-5:]
             ]
-            return [TextContent(type="text", text=json.dumps(summary, indent=2))]
+            result = [TextContent(type="text", text=json.dumps(summary, indent=2))]
 
         elif fmt == "full":
-            return [TextContent(type="text", text=chain.export_json())]
+            result = [TextContent(type="text", text=chain.export_json())]
 
         elif fmt == "prov-jsonld":
             prov = chain.export_prov_jsonld()
-            return [TextContent(type="text", text=json.dumps(prov, indent=2))]
+            result = [TextContent(type="text", text=json.dumps(prov, indent=2))]
 
         else:
-            return [TextContent(type="text", text=json.dumps({"error": "Unknown format"}))]
+            result = [TextContent(type="text", text=json.dumps({"error": "Unknown format"}))]
 
     elif name == "verify_provenance":
         chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
         is_valid, error = chain.verify_chain()
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({
                 "valid": is_valid,
@@ -753,7 +739,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if STORAGE_MODE == "sqlite" and SQLITE_AVAILABLE:
             limit = arguments.get("limit", 20)
             sessions = sqlite_list_sessions(limit=limit, client_id=CLIENT_ID)
-            return [TextContent(
+            result = [TextContent(
                 type="text",
                 text=json.dumps({
                     "storage_mode": "sqlite",
@@ -765,7 +751,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 }, indent=2)
             )]
         else:
-            return [TextContent(
+            result = [TextContent(
                 type="text",
                 text=json.dumps({
                     "storage_mode": STORAGE_MODE,
@@ -788,6 +774,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "hash": r.record_hash,
                 "previous_hash": r.previous_hash,
                 "timestamp": r.timestamp,
+                "attributes": r.activity_attributes or {},
             }
             for r in chain.records
         ]
@@ -798,7 +785,22 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             "merkle_root": chain.get_merkle_root(),
         }
 
-        html = generate_html_report(SESSION_ID, records_data, verification, stats)
+        # Load full session log from ~/.inalign/sessions/ (if available)
+        session_log = []
+        try:
+            import gzip
+            from pathlib import Path
+            sessions_dir = Path.home() / ".inalign" / "sessions"
+            if sessions_dir.exists():
+                gz_files = sorted(sessions_dir.glob("*.json.gz"), key=lambda f: f.stat().st_mtime, reverse=True)
+                if gz_files:
+                    with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
+                        sdata = json.load(gf)
+                    session_log = sdata.get("records", sdata) if isinstance(sdata, dict) else sdata
+        except Exception as e:
+            logger.debug(f"[REPORT] Could not load session log: {e}")
+
+        html = generate_html_report(SESSION_ID, records_data, verification, stats, session_log=session_log)
 
         output_path = arguments.get("output_path")
         if not output_path:
@@ -810,7 +812,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({
                 "success": True,
@@ -851,7 +853,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             ],
         }
 
-        return [TextContent(type="text", text=json.dumps(report, indent=2))]
+        result = [TextContent(type="text", text=json.dumps(report, indent=2))]
 
     elif name == "verify_third_party":
         session_id = arguments.get("session_id", SESSION_ID)
@@ -879,7 +881,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             "verification_instructions": "To verify: compute SHA-256 of each record's content and check hash chain links.",
         }
 
-        return [TextContent(type="text", text=json.dumps(proof, indent=2))]
+        result = [TextContent(type="text", text=json.dumps(proof, indent=2))]
 
     # ============================================
     # RISK ANALYSIS HANDLERS
@@ -893,27 +895,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 from .provenance_graph import _neo4j_driver as driver
 
                 if not driver:
-                    return [TextContent(type="text", text=json.dumps({
+                    result = [TextContent(type="text", text=json.dumps({
                         "error": "Neo4j driver is None",
                     }))]
+                else:
+                    if not session_id:
+                        with driver.session() as neo_session:
+                            neo_result = neo_session.run(
+                                "MATCH (r:ProvenanceRecord)-[:BELONGS_TO]->(s:Session) "
+                                "WHERE r.client_id = $client_id "
+                                "RETURN s.session_id as sid, count(r) as cnt "
+                                "ORDER BY cnt DESC LIMIT 1",
+                                client_id=CLIENT_ID,
+                            )
+                            row = neo_result.single()
+                            session_id = row["sid"] if row else SESSION_ID
 
-                if not session_id:
-                    with driver.session() as neo_session:
-                        result = neo_session.run(
-                            "MATCH (r:ProvenanceRecord)-[:BELONGS_TO]->(s:Session) "
-                            "WHERE r.client_id = $client_id "
-                            "RETURN s.session_id as sid, count(r) as cnt "
-                            "ORDER BY cnt DESC LIMIT 1",
-                            client_id=CLIENT_ID,
-                        )
-                        row = result.single()
-                        session_id = row["sid"] if row else SESSION_ID
-
-                risk = analyze_session_risk(session_id, driver)
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                    risk = analyze_session_risk(session_id, driver)
+                    result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
                 import traceback
-                return [TextContent(type="text", text=json.dumps({
+                result = [TextContent(type="text", text=json.dumps({
                     "error": str(e),
                     "traceback": traceback.format_exc(),
                     "session_id": session_id,
@@ -923,9 +925,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             try:
                 client = get_api_client()
                 risk = client.analyze_risk(session_id or "")
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
 
         else:
             # SQLite or memory mode: use local risk analyzer
@@ -933,25 +935,26 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             if LOCAL_RISK_AVAILABLE:
                 try:
                     risk = local_analyze_risk(sid)
-                    return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                    result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
                 except Exception as e:
-                    pass  # Fall through to basic analysis
+                    result = None  # Fall through to basic analysis
 
-            # Fallback: basic in-memory analysis
-            chain = get_or_create_chain(sid, "claude", CLIENT_ID or "")
-            tool_counts = {}
-            for r in chain.records:
-                tool_counts[r.activity_name] = tool_counts.get(r.activity_name, 0) + 1
+            if result is None:
+                # Fallback: basic in-memory analysis
+                chain = get_or_create_chain(sid, "claude", CLIENT_ID or "")
+                tool_counts = {}
+                for r in chain.records:
+                    tool_counts[r.activity_name] = tool_counts.get(r.activity_name, 0) + 1
 
-            return [TextContent(type="text", text=json.dumps({
-                "session_id": sid,
-                "storage_mode": STORAGE_MODE,
-                "risk_level": "low",
-                "total_actions": len(chain.records),
-                "tool_usage": tool_counts,
-                "patterns_detected": [],
-                "message": f"Local analysis ({STORAGE_MODE} mode) - {len(chain.records)} actions recorded",
-            }, indent=2))]
+                result = [TextContent(type="text", text=json.dumps({
+                    "session_id": sid,
+                    "storage_mode": STORAGE_MODE,
+                    "risk_level": "low",
+                    "total_actions": len(chain.records),
+                    "tool_usage": tool_counts,
+                    "patterns_detected": [],
+                    "message": f"Local analysis ({STORAGE_MODE} mode) - {len(chain.records)} actions recorded",
+                }, indent=2))]
 
     elif name == "get_behavior_profile":
         session_id = arguments.get("session_id", SESSION_ID)
@@ -960,27 +963,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if LOCAL_RISK_AVAILABLE:
             try:
                 profile = local_behavior_profile(session_id)
-                return [TextContent(type="text", text=json.dumps(profile, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(profile, indent=2))]
             except Exception:
-                pass  # Fall through to basic
+                result = None  # Fall through to basic
 
-        # Fallback: basic in-memory profile
-        chain = get_or_create_chain(session_id, "claude")
+        if result is None:
+            # Fallback: basic in-memory profile
+            chain = get_or_create_chain(session_id, "claude")
 
-        tool_counts = {}
-        for r in chain.records:
-            name_key = r.activity_name
-            tool_counts[name_key] = tool_counts.get(name_key, 0) + 1
+            tool_counts = {}
+            for r in chain.records:
+                name_key = r.activity_name
+                tool_counts[name_key] = tool_counts.get(name_key, 0) + 1
 
-        profile = {
-            "session_id": session_id,
-            "total_actions": len(chain.records),
-            "tool_usage": tool_counts,
-            "first_activity": chain.records[0].timestamp if chain.records else None,
-            "last_activity": chain.records[-1].timestamp if chain.records else None,
-        }
+            profile = {
+                "session_id": session_id,
+                "total_actions": len(chain.records),
+                "tool_usage": tool_counts,
+                "first_activity": chain.records[0].timestamp if chain.records else None,
+                "last_activity": chain.records[-1].timestamp if chain.records else None,
+            }
 
-        return [TextContent(type="text", text=json.dumps(profile, indent=2))]
+            result = [TextContent(type="text", text=json.dumps(profile, indent=2))]
 
     elif name == "get_agent_risk":
         agent_id = arguments.get("agent_id", "unknown")
@@ -989,18 +993,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             try:
                 from .provenance_graph import _neo4j_driver
                 risk = get_agent_risk(agent_id, _neo4j_driver)
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         elif STORAGE_MODE == "api":
             try:
                 client = get_api_client()
                 risk = client.get_agent_risk(agent_id)
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
-            return [TextContent(type="text", text=json.dumps({
+            result = [TextContent(type="text", text=json.dumps({
                 "agent_id": agent_id,
                 "message": "No remote backend configured",
             }))]
@@ -1012,18 +1016,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             try:
                 from .provenance_graph import _neo4j_driver
                 risk = get_user_risk(user_id, _neo4j_driver)
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         elif STORAGE_MODE == "api":
             try:
                 client = get_api_client()
                 risk = client.get_user_risk(user_id)
-                return [TextContent(type="text", text=json.dumps(risk, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(risk, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
-            return [TextContent(type="text", text=json.dumps({
+            result = [TextContent(type="text", text=json.dumps({
                 "user_id": user_id,
                 "message": "No remote backend configured",
             }))]
@@ -1034,18 +1038,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if STORAGE_MODE == "neo4j" and GRAPHRAG_AVAILABLE:
             try:
                 agents = get_all_agents_summary(limit)
-                return [TextContent(type="text", text=json.dumps(agents, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(agents, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         elif STORAGE_MODE == "api":
             try:
                 client = get_api_client()
                 agents = client.get_all_agents_summary(limit)
-                return [TextContent(type="text", text=json.dumps(agents, indent=2))]
+                result = [TextContent(type="text", text=json.dumps(agents, indent=2))]
             except Exception as e:
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
+                result = [TextContent(type="text", text=json.dumps({"error": str(e)}))]
         else:
-            return [TextContent(type="text", text=json.dumps({
+            result = [TextContent(type="text", text=json.dumps({
                 "message": "No remote backend configured",
                 "agents": [],
             }))]
@@ -1058,7 +1062,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         engine = get_policy_engine()
         policy = engine.get_policy()
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({
                 "preset": policy.get("name", "BALANCED"),
@@ -1073,7 +1077,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         if preset in PRESETS:
             engine.set_policy(preset)
             stats["policy_checks"] += 1
-            return [TextContent(
+            result = [TextContent(
                 type="text",
                 text=json.dumps({
                     "success": True,
@@ -1082,7 +1086,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 }, indent=2)
             )]
         else:
-            return [TextContent(
+            result = [TextContent(
                 type="text",
                 text=json.dumps({
                     "success": False,
@@ -1095,7 +1099,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         engine = get_policy_engine()
         presets = engine.list_presets()
 
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({"policies": presets}, indent=2)
         )]
@@ -1106,60 +1110,87 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         # Simulate: replay current session's recorded actions against the target preset
         target_policy = PRESETS.get(preset)
         if not target_policy:
-            return [TextContent(type="text", text=json.dumps({"error": f"Unknown preset: {preset}"}))]
+            result = [TextContent(type="text", text=json.dumps({"error": f"Unknown preset: {preset}"}))]
+        else:
+            chain = get_or_create_chain(SESSION_ID, "claude")
+            blocked = []
+            warned = []
+            masked = []
+            allowed = []
 
-        chain = get_or_create_chain(SESSION_ID, "claude")
-        blocked = []
-        warned = []
-        masked = []
-        allowed = []
+            # Map tool names to threat categories for simulation
+            sensitive_patterns = {
+                ThreatCategory.SENSITIVE_FILE: [".env", ".key", ".pem", ".ssh", "credentials", "secret"],
+                ThreatCategory.COMMAND_INJECTION: ["bash", "exec", "shell", "system"],
+                ThreatCategory.EXFILTRATION: ["curl", "wget", "http", "upload", "send"],
+            }
 
-        # Map tool names to threat categories for simulation
-        sensitive_patterns = {
-            ThreatCategory.SENSITIVE_FILE: [".env", ".key", ".pem", ".ssh", "credentials", "secret"],
-            ThreatCategory.COMMAND_INJECTION: ["bash", "exec", "shell", "system"],
-            ThreatCategory.EXFILTRATION: ["curl", "wget", "http", "upload", "send"],
-        }
+            for record in chain.records:
+                matched_category = None
+                for category, patterns in sensitive_patterns.items():
+                    if any(p in (record.activity_name or "").lower() for p in patterns):
+                        matched_category = category
+                        break
 
-        for record in chain.records:
-            matched_category = None
-            for category, patterns in sensitive_patterns.items():
-                if any(p in (record.activity_name or "").lower() for p in patterns):
-                    matched_category = category
-                    break
-
-            if matched_category:
-                action = target_policy.get_action(matched_category, confidence=0.9)
-                entry = {"action_name": record.activity_name, "category": matched_category.value, "policy_action": action.value}
-                if action == PolicyAction.BLOCK:
-                    blocked.append(entry)
-                elif action == PolicyAction.WARN:
-                    warned.append(entry)
-                elif action == PolicyAction.MASK:
-                    masked.append(entry)
+                if matched_category:
+                    action = target_policy.get_action(matched_category, confidence=0.9)
+                    entry = {"action_name": record.activity_name, "category": matched_category.value, "policy_action": action.value}
+                    if action == PolicyAction.BLOCK:
+                        blocked.append(entry)
+                    elif action == PolicyAction.WARN:
+                        warned.append(entry)
+                    elif action == PolicyAction.MASK:
+                        masked.append(entry)
+                    else:
+                        allowed.append(entry)
                 else:
-                    allowed.append(entry)
-            else:
-                allowed.append({"action_name": record.activity_name, "category": "none", "policy_action": "allow"})
+                    allowed.append({"action_name": record.activity_name, "category": "none", "policy_action": "allow"})
 
-        return [TextContent(type="text", text=json.dumps({
-            "preset": preset,
-            "total_events": len(chain.records),
-            "would_block": len(blocked),
-            "would_warn": len(warned),
-            "would_mask": len(masked),
-            "would_allow": len(allowed),
-            "blocked_details": blocked[:10],
-            "warned_details": warned[:10],
-            "masked_details": masked[:10],
-        }, indent=2))]
+            result = [TextContent(type="text", text=json.dumps({
+                "preset": preset,
+                "total_events": len(chain.records),
+                "would_block": len(blocked),
+                "would_warn": len(warned),
+                "would_mask": len(masked),
+                "would_allow": len(allowed),
+                "blocked_details": blocked[:10],
+                "warned_details": warned[:10],
+                "masked_details": masked[:10],
+            }, indent=2))]
 
     # Unknown tool
     else:
-        return [TextContent(
+        result = [TextContent(
             type="text",
             text=json.dumps({"error": f"Unknown tool: {name}"})
         )]
+
+    # === AUTO PROVENANCE RECORDING (after handler, includes result) ===
+    # Skip for tools that already self-record (record_user_command, record_action)
+    if name not in _self_recording_tools:
+        try:
+            args_with_client = {**arguments, "client_id": CLIENT_ID} if CLIENT_ID else arguments
+            # Extract result text for storage (truncate to prevent bloat)
+            result_text = ""
+            if result and isinstance(result, list) and hasattr(result[0], 'text'):
+                result_text = result[0].text[:2000]
+
+            auto_record = prov_record_tool(
+                session_id=SESSION_ID,
+                tool_name=name,
+                arguments=args_with_client,
+                result={"response": result_text} if result_text else None,
+                agent_name="Claude Code"
+            )
+            stats["provenance_records"] += 1
+
+            if STORAGE_MODE != "memory":
+                _persist_store(auto_record)
+        except Exception as e:
+            logger.warning(f"[PROVENANCE] Failed to record: {e}")
+    # === END PROVENANCE RECORDING ===
+
+    return result
 
 
 async def main():

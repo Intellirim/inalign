@@ -386,7 +386,7 @@ def record_tool_call(
         activity_name=tool_name,
         used=used,
         generated=generated,
-        attributes={"tool_name": tool_name},
+        attributes={"tool_name": tool_name, "arguments": arguments},
     )
 
 

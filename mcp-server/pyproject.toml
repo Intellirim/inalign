@@ -88,6 +88,7 @@ inalign-dashboard = "inalign_mcp.dashboard:run_dashboard"
 inalign-install = "inalign_mcp.install:main"
 inalign-ingest = "inalign_mcp.session_ingest:main"
 inalign-analyze = "inalign_mcp.ai_analyzer:main"
+inalign-report = "inalign_mcp.report_server:main"
 
 [project.urls]
 Homepage = "https://github.com/Intellirim/inalign"

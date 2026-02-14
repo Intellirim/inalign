@@ -2,40 +2,49 @@
 
 ## Title (max 80 chars)
 
-Show HN: InALign – Tamper-proof audit trails for AI coding agents (MCP server)
+Show HN: InALign – Tamper-proof audit trails for AI coding agents
 
 ## URL
 
 https://github.com/Intellirim/inalign
 
-## Text (if self-post, keep under ~300 words)
+## Text (keep under ~300 words)
 
-AI coding agents (Claude Code, Cursor, Copilot) can read, write, and execute anything on your machine. When an agent modifies a production config or runs a destructive command, you need to answer: what happened, who triggered it, and can you prove it?
+AI coding agents (Claude Code, Cursor, Copilot) do hundreds of actions per session — file reads, tool calls, code changes — but there's no way to audit what happened after the fact.
 
-InALign is an open-source MCP server that records every AI agent action into a SHA-256 hash chain. Each record is cryptographically linked to the previous one — modify any record and the chain breaks. Same principle as Git commits, applied to agent actions.
+InALign is an open-source MCP server that automatically records every agent action into a SHA-256 hash chain. Each record links to the previous one — modify any record and the chain breaks.
 
-What it does:
+**What it does:**
 
-- **Provenance chain**: Every action gets a SHA-256 hash linked to the previous record. Tamper with one → the chain breaks.
-- **Risk analysis**: GraphRAG pattern detection for data exfiltration, privilege escalation, and suspicious tool chains.
-- **Policy engine**: Three presets (Strict/Balanced/Sandbox). Simulate any policy against historical events before deploying.
-- **16 MCP tools**: Works automatically once installed. No code changes needed.
+- **Full session capture**: Prompts, responses, tool calls, thinking — everything. Not just metadata.
+- **Hash chain verification**: Tamper-proof provenance. Same principle as Git commits, applied to agent actions.
+- **Interactive reports**: HTML reports with graph visualization, conversation timeline, search, and JSON/CSV export.
+- **Auto-report on session end**: Install once, reports generate automatically when you close a session.
+- **Risk analysis**: GraphRAG pattern detection for data exfiltration and suspicious tool chains.
+- **Policy engine**: Strict/Balanced/Sandbox presets with simulation.
 
 Try it:
 
 ```
-pip install inalign-mcp && inalign-install --local
+pip install inalign-mcp
+inalign-install --local
 ```
 
-No API key, no account, no cloud. Runs 100% locally in memory. Restart your editor and every agent action is recorded.
+No API key, no account, no cloud. Runs 100% locally with SQLite. Restart your editor and every agent action is tracked. When a session ends, a full conversation report is auto-saved to `~/.inalign/sessions/`.
 
-For persistent storage, self-host with Neo4j or use an API key for the managed service.
+View your data anytime:
+```
+inalign-ingest --latest --save
+```
 
-Tech: Python, MCP protocol, SHA-256 hash chains, Neo4j (optional), PROV-O ontology for provenance modeling.
+This opens an interactive HTML report in your browser — full conversation graph, prompts, responses, tool calls with SHA-256 hashes on every record.
 
-I built this because I use Claude Code daily and wanted cryptographic proof of what my agents do — especially before handing off codebases to teammates or auditors. Happy to answer questions about the implementation.
+I built this because I use Claude Code daily and wanted cryptographic proof of what my agents do, especially for compliance and debugging "what prompt caused this code change?"
+
+MIT licensed. Zero telemetry.
 
 GitHub: https://github.com/Intellirim/inalign
+PyPI: https://pypi.org/project/inalign-mcp/
 
 ---
 
@@ -45,7 +54,13 @@ GitHub: https://github.com/Intellirim/inalign
 - **Do NOT**: Ask for upvotes, self-promote in comments
 - **DO**: Answer every comment honestly, admit limitations
 - **Key talking points if asked**:
-  - "Why not just use Git history?" → Git shows file changes, not agent intent. InALign captures the user command → agent action → outcome chain.
-  - "Is the hash chain actually useful?" → Same as Git's integrity model. Any tampering is immediately detectable via verify_provenance.
-  - "Memory mode loses data on restart" → Yes, by design for quick tryouts. Use Neo4j or API for persistence.
-  - "What about performance overhead?" → MCP calls are async, hash computation is ~microseconds. No measurable impact.
+  - "Why not just use Git history?" -> Git shows file changes, not agent intent. InALign captures user command -> agent action -> outcome chain with full prompt/response content.
+  - "Is the hash chain actually useful?" -> Same as Git's integrity model. Any tampering is immediately detectable via verify_provenance.
+  - "What about performance?" -> MCP calls are async, hash computation is microseconds. No measurable impact.
+  - "Why not just save the .jsonl logs?" -> InALign adds hash chain integrity, graph visualization, risk analysis, and policy enforcement on top of raw logs.
+  - "Cloud version?" -> Free tier is 100% local. Pro ($29/mo) adds cloud Neo4j, web dashboard, and team management.
+
+## Checklist
+- [ ] GitHub Pages enabled (intellirim.github.io/inalign/)
+- [ ] README updated with session ingest + auto-report features
+- [ ] Submit Tuesday-Thursday, 9-11am ET
