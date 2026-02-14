@@ -25,6 +25,13 @@ from typing import Any, Optional
 from enum import Enum
 import uuid
 
+# Optional Ed25519 signing
+try:
+    from .signing import sign_record, verify_signature, get_signer_id, is_signing_available
+    _SIGNING_IMPORTED = True
+except ImportError:
+    _SIGNING_IMPORTED = False
+
 
 class ActivityType(str, Enum):
     """Types of agent activities that can be recorded."""
@@ -228,6 +235,11 @@ class ProvenanceChain:
         # Compute and set hash
         record.record_hash = record.compute_hash()
 
+        # Sign the record hash with Ed25519 (if available)
+        if _SIGNING_IMPORTED and is_signing_available():
+            record.signature = sign_record(record.record_hash)
+            record.signer_id = get_signer_id()
+
         # Add to chain
         self.records.append(record)
         self._sequence += 1
@@ -265,7 +277,26 @@ class ProvenanceChain:
             if record.sequence_number != i:
                 return False, f"Sequence mismatch at record {i}: {record.id}"
 
+            # Verify signature (if present)
+            if record.signature and _SIGNING_IMPORTED:
+                if not verify_signature(record.record_hash, record.signature):
+                    return False, f"Invalid signature at record {i}: {record.id}"
+
         return True, None
+
+    def get_signature_stats(self) -> dict[str, Any]:
+        """Get signing statistics for this chain."""
+        if not self.records:
+            return {"total": 0, "signed": 0, "unsigned": 0, "signing_available": _SIGNING_IMPORTED}
+
+        signed = sum(1 for r in self.records if r.signature)
+        return {
+            "total": len(self.records),
+            "signed": signed,
+            "unsigned": len(self.records) - signed,
+            "signing_available": _SIGNING_IMPORTED and is_signing_available() if _SIGNING_IMPORTED else False,
+            "signer_id": self.records[-1].signer_id if self.records[-1].signature else None,
+        }
 
     def export_json(self) -> str:
         """Export chain as JSON."""

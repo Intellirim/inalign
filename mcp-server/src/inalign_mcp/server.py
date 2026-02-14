@@ -722,6 +722,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "verify_provenance":
         chain = get_or_create_chain(SESSION_ID, "claude", CLIENT_ID or "")
         is_valid, error = chain.verify_chain()
+        sig_stats = chain.get_signature_stats()
 
         result = [TextContent(
             type="text",
@@ -731,6 +732,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 "record_count": len(chain.records),
                 "merkle_root": chain.get_merkle_root(),
                 "session_id": SESSION_ID,
+                "signatures": sig_stats,
                 "message": "✅ Chain integrity VERIFIED" if is_valid else f"❌ Chain BROKEN: {error}",
             }, indent=2)
         )]
@@ -859,6 +861,15 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         session_id = arguments.get("session_id", SESSION_ID)
         chain = get_or_create_chain(session_id, "claude")
         is_valid, error = chain.verify_chain()
+        sig_stats = chain.get_signature_stats()
+
+        # Include public key for independent signature verification
+        public_key_pem = None
+        try:
+            from .signing import get_public_key_pem
+            public_key_pem = get_public_key_pem()
+        except ImportError:
+            pass
 
         proof = {
             "session_id": session_id,
@@ -866,6 +877,8 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             "chain_valid": is_valid,
             "merkle_root": chain.get_merkle_root(),
             "record_count": len(chain.records),
+            "signatures": sig_stats,
+            "public_key": public_key_pem,
             "records": [
                 {
                     "id": r.id,
@@ -875,10 +888,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     "timestamp": r.timestamp,
                     "activity_type": r.activity_type.value,
                     "activity_name": r.activity_name,
+                    "signature": r.signature,
+                    "signer_id": r.signer_id,
                 }
                 for r in chain.records
             ],
-            "verification_instructions": "To verify: compute SHA-256 of each record's content and check hash chain links.",
+            "verification_instructions": (
+                "To verify: (1) Compute SHA-256 of each record's content and check hash chain links. "
+                "(2) If signatures are present, verify each Ed25519 signature against the record_hash "
+                "using the provided public_key."
+            ),
         }
 
         result = [TextContent(type="text", text=json.dumps(proof, indent=2))]
