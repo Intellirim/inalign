@@ -29,14 +29,34 @@ export default function SessionDetail() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [tab, setTab] = useState('overview')
+  const [fullLoaded, setFullLoaded] = useState(false)
+  const [fullLoading, setFullLoading] = useState(false)
 
   useEffect(() => {
     setLoading(true)
+    setFullLoaded(false)
+    // Fast load: skip ontology pipeline
     fetchSessionData(id)
       .then(setData)
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [id])
+
+  // Lazy load full data (with ontology) when needed
+  const loadFull = useCallback(() => {
+    if (fullLoaded || fullLoading) return
+    setFullLoading(true)
+    fetch(`${window.location.origin}/api/sessions/${id}?full=true`)
+      .then(r => r.json())
+      .then(d => { setData(d); setFullLoaded(true) })
+      .catch(console.error)
+      .finally(() => setFullLoading(false))
+  }, [id, fullLoaded, fullLoading])
+
+  // Auto-load full data when switching to tabs that need it
+  useEffect(() => {
+    if ((tab === 'flows' || tab === 'security') && !fullLoaded) loadFull()
+  }, [tab, fullLoaded, loadFull])
 
   if (loading) return <div className="flex items-center justify-center h-full"><div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" /></div>
   if (error) return <div className="flex items-center justify-center h-full"><div className="card p-6 text-center"><XCircle size={28} className="text-danger/40 mx-auto mb-2" /><p className="text-xs text-t-tertiary">{error}</p></div></div>
@@ -96,7 +116,9 @@ export default function SessionDetail() {
         {tab === 'trace' && <TraceTreeTab data={data} />}
         {tab === 'provenance' && <ProvenanceTab data={data} />}
         {tab === 'security' && <SecurityTab data={data} />}
-        {tab === 'flows' && <DataFlowsTab data={data} />}
+        {tab === 'flows' && (fullLoading
+          ? <div className="flex items-center justify-center h-48"><div className="w-5 h-5 border-2 border-brand border-t-transparent rounded-full animate-spin" /><span className="ml-2 text-xs text-t-quaternary">Loading ontology graph...</span></div>
+          : <DataFlowsTab data={data} />)}
         {tab === 'governance' && <GovernanceTab data={data} />}
         {tab === 'ai' && <AIAnalysisTab data={data} />}
       </div>

@@ -869,7 +869,9 @@ class ReportHandler(BaseHTTPRequestHandler):
             if not gz.exists():
                 self._send_json(404, {"error": f"Session {session_id} not found"})
                 return
-            data = generate_session_data(session_id)
+            # Default: skip ontology for fast load. Use ?full=true for full data.
+            full = "full=true" in self.path
+            data = generate_session_data(session_id, skip_ontology=not full)
             self._send_json(200, data)
         except (ConnectionAbortedError, ConnectionResetError, BrokenPipeError):
             pass
