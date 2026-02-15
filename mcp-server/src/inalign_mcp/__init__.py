@@ -40,7 +40,7 @@ Run as services:
     python -m inalign_mcp.visualization_api  # Visualization API
 """
 
-__version__ = "0.2.7"
+__version__ = "0.7.4"
 __author__ = "In-A-Lign"
 
 # ============================================

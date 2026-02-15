@@ -208,12 +208,19 @@ SESSION_ID = str(uuid.uuid4())[:12]
 env_file = os.path.expanduser("~/.inalign.env")
 if os.path.exists(env_file):
     logger.info(f"[STARTUP] Loading config from {env_file}")
+    _ALLOWED_ENV_KEYS = {
+        "INALIGN_API_KEY", "API_KEY", "NEO4J_URI", "NEO4J_USERNAME",
+        "NEO4J_PASSWORD", "INALIGN_API_URL", "API_URL", "INALIGN_LICENSE_KEY",
+    }
     with open(env_file) as f:
         for line in f:
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 key, value = line.split("=", 1)
                 key = key.strip()
+                if key not in _ALLOWED_ENV_KEYS:
+                    logger.warning(f"[STARTUP] Ignoring unknown env key: {key}")
+                    continue
                 # Only set if not already in environment (env vars take precedence)
                 if not os.getenv(key):
                     os.environ[key] = value.strip()

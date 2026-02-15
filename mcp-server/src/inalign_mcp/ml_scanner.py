@@ -16,8 +16,8 @@ logger = logging.getLogger("inalign-ml-scanner")
 MODEL_PATHS = [
     # Relative to mcp-server
     Path(__file__).parent.parent.parent.parent / "backend" / "app" / "ml" / "models" / "injection_detector" / "best",
-    # Direct path
-    Path("C:/Users/hanso/in-a-lign/backend/app/ml/models/injection_detector/best"),
+    # User-local model cache
+    Path.home() / ".inalign" / "models" / "injection_detector",
 ]
 
 
