@@ -64,7 +64,7 @@ DANGEROUS_COMMANDS = [
 
 EXTERNAL_TOOLS = [
     "curl", "wget", "http", "upload", "send", "post",
-    "llm_request", "api_call", "fetch", "request",
+    "api_call", "fetch", "request",
 ]
 
 INJECTION_PATTERNS = [
@@ -302,7 +302,8 @@ def _detect_data_exfiltration(records: list[dict]) -> list[RiskPattern]:
     externals = []
     for r in records:
         text = _get_text(r)
-        if any(e in text for e in EXTERNAL_TOOLS) or r.get("activity_type") == "llm_request":
+        # Only flag actual external network tools, NOT llm_request (normal agent behavior)
+        if any(e in text for e in EXTERNAL_TOOLS) and r.get("activity_type") != "llm_request":
             externals.append(r)
     pats = []
     for fr in reads:

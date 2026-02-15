@@ -210,33 +210,37 @@ def store_record(record: ProvenanceRecord):
     ])
     attrs = json.dumps(record.activity_attributes, default=str)
 
-    conn.execute(
-        """INSERT OR REPLACE INTO records
-           (id, session_id, sequence_number, timestamp, activity_type, activity_name,
-            activity_attributes, used_entities, generated_entities,
-            agent_id, agent_name, agent_type, previous_hash, record_hash,
-            client_id, signature, signer_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            record.id,
-            record.session_id,
-            record.sequence_number,
-            record.timestamp,
-            record.activity_type.value,
-            record.activity_name,
-            attrs,
-            used,
-            generated,
-            record.agent.id if record.agent else None,
-            record.agent.name if record.agent else None,
-            record.agent.type if record.agent else None,
-            record.previous_hash,
-            record.record_hash,
-            record.client_id,
-            record.signature,
-            record.signer_id,
-        ),
-    )
+    try:
+        conn.execute(
+            """INSERT INTO records
+               (id, session_id, sequence_number, timestamp, activity_type, activity_name,
+                activity_attributes, used_entities, generated_entities,
+                agent_id, agent_name, agent_type, previous_hash, record_hash,
+                client_id, signature, signer_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                record.id,
+                record.session_id,
+                record.sequence_number,
+                record.timestamp,
+                record.activity_type.value,
+                record.activity_name,
+                attrs,
+                used,
+                generated,
+                record.agent.id if record.agent else None,
+                record.agent.name if record.agent else None,
+                record.agent.type if record.agent else None,
+                record.previous_hash,
+                record.record_hash,
+                record.client_id,
+                record.signature,
+                record.signer_id,
+            ),
+        )
+    except sqlite3.IntegrityError:
+        logger.warning(f"[SQLITE] Duplicate record {record.id} — refusing to overwrite (immutable chain)")
+        return
 
     # Update session record count
     conn.execute(
@@ -386,33 +390,37 @@ def store_records_batch(records: list, session_id: str = ""):
             ])
             attrs = json.dumps(record.activity_attributes, default=str)
 
-            conn.execute(
-                """INSERT OR REPLACE INTO records
-                   (id, session_id, sequence_number, timestamp, activity_type, activity_name,
-                    activity_attributes, used_entities, generated_entities,
-                    agent_id, agent_name, agent_type, previous_hash, record_hash,
-                    client_id, signature, signer_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    record.id,
-                    record.session_id,
-                    record.sequence_number,
-                    record.timestamp,
-                    record.activity_type.value,
-                    record.activity_name,
-                    attrs,
-                    used,
-                    generated,
-                    record.agent.id if record.agent else None,
-                    record.agent.name if record.agent else None,
-                    record.agent.type if record.agent else None,
-                    record.previous_hash,
-                    record.record_hash,
-                    record.client_id or "",
-                    record.signature,
-                    record.signer_id,
-                ),
-            )
+            try:
+                conn.execute(
+                    """INSERT INTO records
+                       (id, session_id, sequence_number, timestamp, activity_type, activity_name,
+                        activity_attributes, used_entities, generated_entities,
+                        agent_id, agent_name, agent_type, previous_hash, record_hash,
+                        client_id, signature, signer_id)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        record.id,
+                        record.session_id,
+                        record.sequence_number,
+                        record.timestamp,
+                        record.activity_type.value,
+                        record.activity_name,
+                        attrs,
+                        used,
+                        generated,
+                        record.agent.id if record.agent else None,
+                        record.agent.name if record.agent else None,
+                        record.agent.type if record.agent else None,
+                        record.previous_hash,
+                        record.record_hash,
+                        record.client_id or "",
+                        record.signature,
+                        record.signer_id,
+                    ),
+                )
+            except sqlite3.IntegrityError:
+                logger.debug(f"[SQLITE] Skipping duplicate record {record.id} in batch")
+                continue
 
         # Set final record count (not incremental)
         sid = session_id or (records[0].session_id if records else "")

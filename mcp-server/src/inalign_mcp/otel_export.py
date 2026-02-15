@@ -188,6 +188,18 @@ def export_otlp_json(session_id: str) -> dict[str, Any]:
     return otlp
 
 
+def _validate_output_path(output_path: str) -> str:
+    """Validate output path to prevent path traversal. Must be under ~/.inalign/ or system temp."""
+    import tempfile
+    resolved = Path(output_path).resolve()
+    allowed_parents = [INALIGN_DIR.resolve(), Path(tempfile.gettempdir()).resolve()]
+    if not any(str(resolved).startswith(str(p)) for p in allowed_parents):
+        raise ValueError(
+            f"Output path must be under ~/.inalign/ or system temp dir, got: {resolved}"
+        )
+    return str(resolved)
+
+
 def export_to_file(session_id: str, output_path: str = None) -> dict[str, Any]:
     """
     Export OTLP JSON to a file.
@@ -205,6 +217,8 @@ def export_to_file(session_id: str, output_path: str = None) -> dict[str, Any]:
         export_dir = INALIGN_DIR / "exports"
         export_dir.mkdir(parents=True, exist_ok=True)
         output_path = str(export_dir / f"otel-{session_id}.json")
+    else:
+        output_path = _validate_output_path(output_path)
 
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(otlp, f, indent=2)
@@ -221,6 +235,31 @@ def export_to_file(session_id: str, output_path: str = None) -> dict[str, Any]:
     }
 
 
+def _validate_endpoint(endpoint: str) -> str:
+    """Validate OTLP endpoint URL to prevent SSRF against internal networks."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(endpoint)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"Only http/https schemes allowed, got: {parsed.scheme}")
+    if not parsed.hostname:
+        raise ValueError("Endpoint must have a hostname")
+
+    # Resolve hostname and check for private IPs
+    try:
+        for info in socket.getaddrinfo(parsed.hostname, parsed.port or 443):
+            addr = info[4][0]
+            ip = ipaddress.ip_address(addr)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+                raise ValueError(f"Endpoint resolves to private/internal IP: {addr}")
+    except socket.gaierror:
+        raise ValueError(f"Cannot resolve hostname: {parsed.hostname}")
+
+    return endpoint
+
+
 def push_to_endpoint(session_id: str, endpoint: str) -> dict[str, Any]:
     """
     Push OTLP data to an OpenTelemetry collector endpoint.
@@ -228,6 +267,11 @@ def push_to_endpoint(session_id: str, endpoint: str) -> dict[str, Any]:
     This is the ONLY function that makes external calls.
     Requires explicit endpoint configuration — not enabled by default.
     """
+    try:
+        endpoint = _validate_endpoint(endpoint)
+    except ValueError as e:
+        return {"success": False, "error": str(e), "endpoint": endpoint}
+
     try:
         import httpx
     except ImportError:

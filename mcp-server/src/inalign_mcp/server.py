@@ -931,6 +931,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         logger.info(f"[USAGE] {CLIENT_ID}: {usage_status.current_count}/{usage_status.limit} actions")
     # === END USAGE CHECK ===
 
+    # === PERMISSION CHECK ===
+    if PERMISSIONS_AVAILABLE:
+        try:
+            agent_id = CLIENT_ID or "default"
+            perm_result = perm_check(agent_id, name)
+            if perm_result.get("permission") == "deny":
+                logger.warning(f"[PERM] Denied: agent={agent_id} tool={name}")
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "error": "permission_denied",
+                        "tool": name,
+                        "agent_id": agent_id,
+                        "message": f"Tool '{name}' is denied for agent '{agent_id}'",
+                    })
+                )]
+            if perm_result.get("permission") == "audit":
+                logger.info(f"[PERM] Audit: agent={agent_id} tool={name}")
+        except Exception as e:
+            logger.debug(f"[PERM] Check failed (allowing): {e}")
+    # === END PERMISSION CHECK ===
+
     # === INIT: ensure chain + session exist before handler ===
     try:
         chain = get_or_create_chain(SESSION_ID, "Claude Code", CLIENT_ID or "")
@@ -1264,6 +1286,17 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                 tempfile.gettempdir(),
                 f"inalign-report-{report_session_id}.html"
             )
+        else:
+            # Validate path to prevent path traversal
+            from pathlib import Path as _Path
+            resolved = _Path(output_path).resolve()
+            inalign_dir = _Path.home() / ".inalign"
+            allowed = [inalign_dir.resolve(), _Path(tempfile.gettempdir()).resolve()]
+            if not any(str(resolved).startswith(str(p)) for p in allowed):
+                return [TextContent(type="text", text=json.dumps({
+                    "error": "path_not_allowed",
+                    "message": "Output path must be under ~/.inalign/ or system temp dir",
+                }))]
 
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
