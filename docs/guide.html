@@ -309,6 +309,7 @@
                 <a href="#cli-install" class="sidebar-link">inalign-install</a>
                 <a href="#cli-report" class="sidebar-link">inalign-report</a>
                 <a href="#cli-analyze" class="sidebar-link">inalign-analyze</a>
+                <a href="#cli-ingest" class="sidebar-link">inalign-ingest</a>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-title">MCP Tools</div>
@@ -316,6 +317,12 @@
                 <a href="#tools-risk" class="sidebar-link">Risk Analysis</a>
                 <a href="#tools-policy" class="sidebar-link">Security Policy</a>
                 <a href="#tools-report" class="sidebar-link">Reports & Export</a>
+                <a href="#tools-compliance" class="sidebar-link">Compliance</a>
+                <a href="#tools-permissions" class="sidebar-link">Permissions</a>
+                <a href="#tools-drift" class="sidebar-link">Drift Detection</a>
+                <a href="#tools-otel" class="sidebar-link">OpenTelemetry</a>
+                <a href="#tools-topology" class="sidebar-link">Topology</a>
+                <a href="#tools-ontology" class="sidebar-link">Ontology</a>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-title">Reference</div>
@@ -393,12 +400,17 @@ inalign-report</pre>
             <div class="file-tree">
 <span class="dir">~/.inalign/</span>
     <span class="file">provenance.db</span>        <span class="desc"># Cryptographic hash chain (SQLite WAL)</span>
+    <span class="file">ontology.db</span>           <span class="desc"># W3C PROV knowledge graph (SQLite)</span>
     <span class="file">license.json</span>          <span class="desc"># License info + cached validation</span>
     <span class="file">usage.json</span>            <span class="desc"># Monthly action counter</span>
+    <span class="file">signing_key</span>           <span class="desc"># Ed25519 private key (local only)</span>
+    <span class="file">signing_key.pub</span>       <span class="desc"># Ed25519 public key</span>
     <span class="dir">sessions/</span>
         <span class="file">*.json.gz</span>          <span class="desc"># Full session transcripts (compressed)</span>
     <span class="dir">analysis/</span>
         <span class="file">*.html</span>             <span class="desc"># AI analysis reports (Pro)</span>
+    <span class="dir">exports/</span>
+        <span class="file">*.json</span>             <span class="desc"># OpenTelemetry OTLP exports</span>
 
 <span class="dir">~/.claude/</span>
     <span class="file">settings.json</span>         <span class="desc"># MCP server configuration</span>
@@ -452,7 +464,7 @@ inalign-report --port <span class="n">9000</span>
 inalign-report --no-open</pre>
             </div>
 
-            <p>The report is a <strong style="color:white;">4-tab interactive dashboard</strong>:</p>
+            <p>The report is a <strong style="color:white;">6-tab interactive dashboard</strong>:</p>
 
             <div class="tool-card">
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
@@ -467,6 +479,14 @@ inalign-report --no-open</pre>
                     <div>
                         <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Session Log</div>
                         <div style="font-size:13px; color:#94a3b8;">Full conversation transcript with role filtering (user, assistant, tool)</div>
+                    </div>
+                    <div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Security</div>
+                        <div style="font-size:13px; color:#94a3b8;">GraphRAG risk analysis with MITRE ATT&amp;CK mapped findings</div>
+                    </div>
+                    <div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Governance</div>
+                        <div style="font-size:13px; color:#94a3b8;">EU AI Act compliance, OWASP LLM Top 10, agent permissions</div>
                     </div>
                     <div>
                         <div style="color:#a78bfa; font-weight:600; margin-bottom:4px;">AI Analysis <span class="badge badge-pro" style="font-size:10px;">Pro</span></div>
@@ -508,6 +528,29 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
             <div class="info-box">
                 <strong>Your API key, your cost.</strong> InALign never stores or transmits your API key. Analysis runs directly from your machine to the LLM provider.
             </div>
+
+            <!-- CLI: inalign-ingest -->
+            <h2 id="cli-ingest">inalign-ingest</h2>
+            <p>Parse session logs and convert them into provenance chains and reports.</p>
+
+            <div class="code-block">
+<pre><span class="c"># Parse latest session log and generate a report</span>
+inalign-ingest --latest --save
+
+<span class="c"># Parse a specific session file and save the report</span>
+inalign-ingest <span class="s">path/to/file.jsonl</span> --save --output <span class="s">report.html</span>
+
+<span class="c"># Export as JSON (for programmatic use)</span>
+inalign-ingest --latest --json</pre>
+            </div>
+
+            <p>The ingest command automatically:</p>
+            <ul style="margin: 8px 0 16px 24px; color: #94a3b8;">
+                <li>Converts session log events into SHA-256 hash-chained provenance records</li>
+                <li>Maps events to provenance types (USER_INPUT, LLM_RESPONSE, TOOL_CALL, TOOL_RESULT, DECISION)</li>
+                <li>Stores records in batch to <code>provenance.db</code> via single transaction</li>
+                <li>Idempotent &mdash; re-running on the same session is safe (completes in ~0.05s)</li>
+            </ul>
 
             <!-- MCP Tools: Provenance -->
             <h2 id="tools-provenance">Provenance Tools</h2>
@@ -586,7 +629,7 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
                     <span class="tool-name">analyze_risk</span>
                     <span class="badge badge-free">Free</span>
                 </div>
-                <div class="tool-desc">Run pattern detection on the session. Detects data exfiltration, privilege escalation, suspicious tool chains, and other attack patterns.</div>
+                <div class="tool-desc">Run GraphRAG pattern detection with 11 MITRE ATT&amp;CK mapped patterns including data exfiltration, privilege escalation, prompt injection, reconnaissance, persistence, defense evasion, and chain integrity checks.</div>
                 <div class="tool-params">
                     Params: <span>session_id</span> (optional)
                 </div>
@@ -713,6 +756,195 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
                 </div>
             </div>
 
+            <!-- MCP Tools: Compliance & Frameworks -->
+            <h2 id="tools-compliance">Compliance & Frameworks</h2>
+            <p>Map your agent activity against industry standards and regulatory frameworks.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">generate_compliance_report</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Generate EU AI Act compliance report. Maps provenance data to Articles 9, 12, 14, 15 requirements with PASS/PARTIAL/FAIL checklist.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional), <span>format</span> (json | html)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">check_owasp_compliance</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Run OWASP LLM Top 10 compliance check. Returns per-item PASS/WARN/FAIL scores for prompt injection, output handling, DoS, supply chain, sensitive info, plugin security, agency, and overreliance.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Agent Permissions -->
+            <h2 id="tools-permissions">Agent Permissions</h2>
+            <p>Control which tools each agent is allowed to use with fine-grained allow/deny/audit rules.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_permission_matrix</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get agent tool permission matrix. Shows allow/deny/audit settings per agent per tool.</div>
+                <div class="tool-params">
+                    Params: <span>agent_id</span> (optional, omit for all agents)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">set_agent_permissions</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Set tool permissions for an agent. Each tool can be set to allow, deny, or audit mode.</div>
+                <div class="tool-params">
+                    Params: <span>agent_id</span> (required), <span>permissions</span> (dict of tool &rarr; allow/deny/audit), <span>default_permission</span> (optional)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Drift Detection -->
+            <h2 id="tools-drift">Drift Detection</h2>
+            <p>Detect behavioral anomalies by comparing agent activity against historical baselines.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">detect_drift</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Detect behavioral drift in a session compared to historical baseline. Flags new tools, frequency spikes, and timing anomalies using z-score analysis.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional), <span>agent_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_behavior_baseline</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get or build behavior baseline for an agent. Shows average tool usage, timing patterns, and known tools from historical sessions.</div>
+                <div class="tool-params">
+                    Params: <span>agent_id</span> (required)
+                </div>
+            </div>
+
+            <!-- MCP Tools: OpenTelemetry Export -->
+            <h2 id="tools-otel">OpenTelemetry Export</h2>
+            <p>Export provenance data in OpenTelemetry format for integration with observability platforms.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">export_otel</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Export provenance data as OpenTelemetry (OTLP) JSON. Supports file export and optional push to an OTLP collector endpoint.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional), <span>output_path</span> (optional, default: ~/.inalign/exports/), <span>endpoint</span> (optional, OTLP collector URL)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Multi-Agent Topology -->
+            <h2 id="tools-topology">Multi-Agent Topology</h2>
+            <p>Track interactions between multiple agents and monitor token usage and costs.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">track_agent_interaction</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Record an interaction between two agents. Builds a multi-agent topology graph showing delegation, query, and response patterns.</div>
+                <div class="tool-params">
+                    Params: <span>source_agent</span> (required), <span>target_agent</span> (required), <span>interaction_type</span> (delegate | query | respond)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_agent_topology</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get multi-agent interaction topology. Shows nodes (agents) and edges (interactions) as a graph.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">track_cost</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Track token usage and API cost for an agent or session. Auto-computes cost from model pricing.</div>
+                <div class="tool-params">
+                    Params: <span>model</span> (required), <span>input_tokens</span> (required), <span>output_tokens</span> (required), <span>provider</span> (optional), <span>agent_id</span> (optional), <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">get_cost_report</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get cost attribution report. Shows total cost, breakdown by agent and model.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional), <span>agent_id</span> (optional)
+                </div>
+            </div>
+
+            <!-- MCP Tools: Knowledge Graph (Ontology) -->
+            <h2 id="tools-ontology">Knowledge Graph (Ontology)</h2>
+            <p>Build and query W3C PROV-compliant knowledge graphs from your agent sessions for deep causal analysis.</p>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">ontology_populate</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Build a W3C PROV knowledge graph from a session. Creates entities, activities, and derivation relationships for full traceability.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional), <span>include_risks</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">ontology_query</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Query the knowledge graph with multiple query types: neighbors, causal chains, and five competency questions covering access patterns, exfiltration paths, policy violations, impact analysis, and hash chain breaks.</div>
+                <div class="tool-params">
+                    Params: <span>query_type</span> (neighbors | causal_chain | cq1_access | cq2_exfiltration | cq3_violations | cq4_impact | cq5_hash_break), <span>node_id</span> (optional), <span>depth</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">ontology_stats</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Get statistics about the knowledge graph &mdash; node counts, edge counts, and type distributions.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">ontology_security_scan</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Run a graph-powered security analysis with MITRE ATT&amp;CK mapping. Leverages the knowledge graph structure for deeper threat detection than pattern matching alone.</div>
+                <div class="tool-params">
+                    Params: <span>session_id</span> (optional)
+                </div>
+            </div>
+
             <!-- Plan Comparison -->
             <h2 id="plan-comparison">Plan Comparison</h2>
             <p>All plans run 100% locally. License keys unlock features &mdash; not servers.</p>
@@ -740,7 +972,7 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
                         <td class="check">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>HTML audit dashboard (4 tabs)</td>
+                        <td>HTML audit dashboard (6 tabs)</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
@@ -752,7 +984,7 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
                         <td class="check">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>Basic risk analysis</td>
+                        <td>GraphRAG risk analysis (11 patterns)</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
@@ -766,6 +998,60 @@ inalign-analyze --api-key <span class="s">sk-ant-xxxxx</span> --latest --json</p
                     <tr>
                         <td>Third-party verifiable proofs</td>
                         <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>EU AI Act compliance</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>OWASP LLM Top 10</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Agent permission matrix</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Behavioral drift detection</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>OpenTelemetry export</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>W3C PROV knowledge graph</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Multi-agent topology</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>MITRE ATT&CK mapping</td>
+                        <td class="cross">&mdash;</td>
+                        <td class="check">&#10003;</td>
+                        <td class="check">&#10003;</td>
+                    </tr>
+                    <tr>
+                        <td>Causal chain analysis</td>
+                        <td class="cross">&mdash;</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
                     </tr>
@@ -844,9 +1130,12 @@ pip install inalign-mcp && inalign-install --local
 <span class="c"># 3. When done, view your audit trail:</span>
 inalign-report
 
-<span class="c"># Opens a 4-tab dashboard in your browser with:</span>
+<span class="c"># Opens a 6-tab dashboard in your browser with:</span>
+<span class="c">#   - Overview (session stats, Merkle root, chain validity)</span>
 <span class="c">#   - Provenance chain (every action with hashes)</span>
 <span class="c">#   - Session log (full conversation transcript)</span>
+<span class="c">#   - Security (GraphRAG risk analysis, MITRE ATT&amp;CK findings)</span>
+<span class="c">#   - Governance (EU AI Act, OWASP LLM Top 10, permissions)</span>
 <span class="c">#   - Data export (JSON / CSV download)</span></pre>
             </div>
 
