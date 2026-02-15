@@ -34,8 +34,9 @@ _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f
 def _is_uuid(s: str) -> bool:
     return bool(_UUID_RE.match(s))
 
-# Store report HTML in memory
+# Store report HTML in memory (with cache invalidation)
 _report_html = ""
+_report_source_mtime = 0.0  # mtime of the source session file when report was generated
 
 
 def auto_ingest_new_sessions() -> tuple[int, str | None]:
@@ -106,12 +107,15 @@ def auto_ingest_new_sessions() -> tuple[int, str | None]:
     return ingested, latest_id
 
 
-def generate_report_data():
+def generate_report_data(skip_ingest: bool = False):
     """Generate report data from local storage.
 
     Auto-converts session log events into SHA-256 hash-chained provenance
     records if not already converted. This ensures the Provenance Chain tab
     shows a full tamper-proof audit trail (not just MCP tool calls).
+
+    Args:
+        skip_ingest: If True, skip auto_ingest (use existing .json.gz files).
     """
     from .provenance import get_or_create_chain, ActivityType
     from .sqlite_storage import init_sqlite, list_sessions, load_chain
@@ -121,12 +125,13 @@ def generate_report_data():
 
     # --- Auto-ingest new Claude Code sessions ---
     latest_session_hint = None
-    try:
-        n_ingested, latest_session_hint = auto_ingest_new_sessions()
-        if n_ingested > 0:
-            print(f"  Auto-ingested {n_ingested} new session(s)")
-    except Exception:
-        pass
+    if not skip_ingest:
+        try:
+            n_ingested, latest_session_hint = auto_ingest_new_sessions()
+            if n_ingested > 0:
+                print(f"  Auto-ingested {n_ingested} new session(s)")
+        except Exception:
+            pass
 
     # --- Load session log first (needed for auto-conversion) ---
     # Priority: 1) latest active session from auto-ingest, 2) newest non-empty gz
@@ -284,6 +289,7 @@ def generate_report_data():
         from .ontology import (
             populate_from_session, populate_decisions, populate_risks,
             populate_data_flow,
+            populate_prompt_response_entities, link_cross_session_entities,
             get_ontology_stats,
             cq2_files_before_external_call, cq3_policy_violations_in_risky_sessions,
         )
@@ -293,8 +299,13 @@ def generate_report_data():
         populate_risks(session_id)
         # Build real data flow: derivedFrom + used/generated + sensitivity
         df_result = populate_data_flow(session_id)
+        # v2: Prompt/Response entities + cross-session links
+        pr_result = populate_prompt_response_entities(session_id)
+        xs_result = link_cross_session_entities(session_id)
         ontology_data = get_ontology_stats(session_id)
         ontology_data["data_flow"] = df_result
+        ontology_data["prompt_response"] = pr_result
+        ontology_data["cross_session_links"] = xs_result
 
         # Auto-run competency queries
         try:
@@ -330,8 +341,8 @@ def generate_report_data():
                         "source": "ontology_security",
                         "mitre_tactic": f.get("mitre", ""),
                     })
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("ontology_security analysis failed: %s", e)
 
         # Add graph data for visualization (connectivity-preserving sampling)
         from .ontology import _get_db
@@ -410,6 +421,62 @@ def generate_report_data():
     )
 
 
+def _get_gz_mtime() -> float:
+    """Get mtime of the latest ingested .json.gz session file (fast)."""
+    try:
+        sessions_dir = Path.home() / ".inalign" / "sessions"
+        if not sessions_dir.exists():
+            return 0.0
+        best = 0.0
+        for gz in sessions_dir.glob("*.json.gz"):
+            mt = gz.stat().st_mtime
+            if mt > best:
+                best = mt
+        return best
+    except Exception:
+        return 0.0
+
+
+def _regenerate_report(skip_ingest: bool = True) -> str:
+    """Regenerate report HTML from current data."""
+    global _report_html, _report_source_mtime
+
+    try:
+        from .report import generate_html_report
+        (
+            session_id, records, verification, stats, session_log,
+            compliance_data, owasp_data, drift_data,
+            permissions_data, cost_data, topology_data, risk_data,
+            ontology_data,
+        ) = generate_report_data(skip_ingest=skip_ingest)
+        _report_html = generate_html_report(
+            session_id, records, verification, stats,
+            session_log=session_log,
+            compliance_data=compliance_data,
+            owasp_data=owasp_data,
+            drift_data=drift_data,
+            permissions_data=permissions_data,
+            cost_data=cost_data,
+            topology_data=topology_data,
+            risk_data=risk_data,
+            ontology_data=ontology_data,
+        )
+        _report_source_mtime = _get_gz_mtime()
+        print(f"  [Refresh] Session: {session_id} | {len(records)} records | {len(session_log)} log events")
+    except Exception as e:
+        if not _report_html:
+            _report_html = f"<html><body><h1>Error: {e}</h1></body></html>"
+
+    return _report_html
+
+
+def _get_fresh_report() -> str:
+    """Return report HTML, regenerating if .json.gz data changed since last render."""
+    if _report_html and _get_gz_mtime() <= _report_source_mtime:
+        return _report_html
+    return _regenerate_report()
+
+
 class ReportHandler(BaseHTTPRequestHandler):
     """HTTP handler for report serving and API proxying."""
 
@@ -429,11 +496,26 @@ class ReportHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/" or self.path == "/report":
+            html = _get_fresh_report()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self._send_cors_headers()
             self.end_headers()
-            self.wfile.write(_report_html.encode("utf-8"))
+            self.wfile.write(html.encode("utf-8"))
+        elif self.path == "/refresh":
+            # Full re-ingest from source .jsonl + regenerate
+            global _report_source_mtime
+            try:
+                auto_ingest_new_sessions()
+            except Exception:
+                pass
+            _report_source_mtime = 0.0  # force regeneration
+            html = _get_fresh_report()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self._send_cors_headers()
+            self.end_headers()
+            self.wfile.write(html.encode("utf-8"))
         elif self.path == "/health":
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -545,37 +627,13 @@ def main():
     parser.add_argument("--no-open", action="store_true", help="Don't open browser automatically")
     args = parser.parse_args()
 
-    # Generate report
+    # Generate report (first load)
     print("\n  InALign Report Server")
     print("  " + "=" * 40)
-    print(f"\n  Generating report...")
+    print(f"\n  Generating initial report...")
 
-    try:
-        from .report import generate_html_report
-        (
-            session_id, records, verification, stats, session_log,
-            compliance_data, owasp_data, drift_data,
-            permissions_data, cost_data, topology_data, risk_data,
-            ontology_data,
-        ) = generate_report_data()
-        _report_html = generate_html_report(
-            session_id, records, verification, stats,
-            session_log=session_log,
-            compliance_data=compliance_data,
-            owasp_data=owasp_data,
-            drift_data=drift_data,
-            permissions_data=permissions_data,
-            cost_data=cost_data,
-            topology_data=topology_data,
-            risk_data=risk_data,
-            ontology_data=ontology_data,
-        )
-        print(f"  Session: {session_id}")
-        print(f"  Records: {len(records)} provenance, {len(session_log)} session log")
-    except Exception as e:
-        print(f"  Error generating report: {e}")
-        print(f"  Starting with empty report...")
-        _report_html = f"<html><body><h1>Error: {e}</h1></body></html>"
+    _regenerate_report(skip_ingest=False)  # Full ingest on startup
+    print(f"  Auto-refresh: ON (regenerates when session data changes)")
 
     # Start server
     server = HTTPServer(("127.0.0.1", args.port), ReportHandler)

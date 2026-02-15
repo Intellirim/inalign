@@ -331,9 +331,11 @@ def generate_html_report(
     onto_vis_edges = ontology_data.get("vis_edges", [])
     onto_cq2 = ontology_data.get("cq2", {})
     onto_cq3 = ontology_data.get("cq3", {})
+    onto_security = ontology_data.get("security", {})
     onto_graph_json = json.dumps({
         "nodes": onto_vis_nodes, "edges": onto_vis_edges,
         "cq2": onto_cq2, "cq3": onto_cq3,
+        "security": onto_security,
     }, ensure_ascii=False).replace("</", "<\\/")
 
     # Type counts
@@ -731,77 +733,163 @@ def generate_html_report(
     onto_classes = ontology_data.get("node_classes", {})
     onto_relations = ontology_data.get("relation_types", {})
     onto_version = ontology_data.get("ontology_version", "")
-    onto_schema = ontology_data.get("schema", {})
 
     if onto_nodes > 0:
-        # Class distribution cards
-        onto_class_cards = ""
-        class_colors = {
-            "Agent": "#5878a8", "Session": "#4a7a6a", "ToolCall": "#7a6a50",
-            "Entity": "#606070", "Decision": "#6a5a6a", "Risk": "#8a5050", "Policy": "#4a6a7a"
-        }
-        for cls_name in ["Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"]:
-            cnt = onto_classes.get(cls_name, 0)
-            if cnt > 0:
-                color = class_colors.get(cls_name, "var(--muted)")
-                onto_class_cards += f'<div class="card"><div class="label" style="color:{color};">{cls_name}</div><div class="value">{cnt}</div></div>'
+        sec = onto_security  # from ontology_security engine
+        es = sec.get("entity_sensitivity", {})
+        df = sec.get("data_flows", {})
+        pv = sec.get("policy_violations", {})
+        ia = sec.get("impact_analysis", {})
+        findings = sec.get("findings", [])
+        n_critical_ent = len(es.get("critical", []))
+        n_high_ent = len(es.get("high", []))
+        n_flows = df.get("flow_count", 0)
+        n_violations = pv.get("violation_count", 0)
+        n_findings = len(findings)
+        cq2_cnt = onto_cq2.get("patterns_found", 0)
+        cq3_cnt = onto_cq3.get("violations_found", 0)
 
-        # Relation distribution table
-        onto_rel_rows = ""
-        rel_icons = {
-            "performed": "Agent → ToolCall", "partOf": "ToolCall → Session",
-            "used": "ToolCall → Entity", "generated": "ToolCall → Entity",
-            "triggeredBy": "ToolCall → Decision", "detected": "ToolCall → Risk",
-            "violates": "ToolCall → Policy", "precedes": "ToolCall → ToolCall",
-            "derivedFrom": "Entity → Entity", "signedBy": "Session → Agent"
-        }
-        for rel, cnt in sorted(onto_relations.items(), key=lambda x: -x[1]):
-            desc = rel_icons.get(rel, "")
-            onto_rel_rows += f"""
-        <tr>
-          <td><code style="color:var(--accent);">{html_mod.escape(rel)}</code></td>
-          <td style="color:var(--muted);font-size:0.75rem;">{desc}</td>
-          <td style="text-align:right;">{cnt}</td>
-        </tr>"""
+        # Summary line
+        n_toolcalls = onto_classes.get("ToolCall", 0)
+        n_entities = onto_classes.get("Entity", 0)
+        n_risks = onto_classes.get("Risk", 0)
+        n_decisions = onto_classes.get("Decision", 0)
 
-        # CQ results summary (if available)
-        cq_results = ontology_data.get("competency_results", {})
-        cq_html = ""
-        if cq_results:
-            for cq_name, cq_data in cq_results.items():
-                q = cq_data.get("question", cq_name)
-                answer = cq_data.get("answer", cq_data.get("violations_found", cq_data.get("affected_count", "—")))
-                is_risk = cq_data.get("exfiltration_risk", False) or cq_data.get("answer", False)
-                badge_class = "st-fail" if is_risk else "st-pass"
-                cq_html += f'<div style="padding:0.4rem 0;border-bottom:1px solid var(--border);"><span class="badge {badge_class}" style="margin-right:0.5rem;">{"YES" if is_risk else "NO"}</span><span style="font-size:0.8rem;">{html_mod.escape(q)}</span></div>'
-            cq_html = f'<div class="section"><h2>Competency Questions (CQ)</h2>{cq_html}</div>'
+        # --- Findings rows ---
+        findings_html = ""
+        sev_colors = {"CRITICAL": "var(--red)", "HIGH": "#c07040", "MEDIUM": "var(--orange)", "LOW": "var(--muted)"}
+        for f in findings:
+            sev = f.get("severity", "MEDIUM")
+            color = sev_colors.get(sev, "var(--muted)")
+            mitre = f.get("mitre", "")
+            mitre_badge = f'<span style="font-size:0.65rem;color:var(--dim);background:var(--bg);padding:0.1rem 0.4rem;border-radius:3px;margin-left:0.5rem;">{html_mod.escape(mitre)}</span>' if mitre else ""
+            findings_html += f'''<div style="padding:0.6rem 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:0.6rem;">
+              <span style="font-size:0.65rem;font-weight:700;color:{color};background:rgba(255,255,255,0.04);padding:0.15rem 0.5rem;border-radius:3px;min-width:55px;text-align:center;">{html_mod.escape(sev)}</span>
+              <div><div style="font-size:0.82rem;color:var(--text);">{html_mod.escape(f.get("title", ""))}{mitre_badge}</div>
+              <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem;">{html_mod.escape(f.get("description", ""))}</div></div>
+            </div>'''
+        if not findings_html:
+            findings_html = '<div style="padding:0.8rem 0;color:var(--muted);font-size:0.82rem;">No security findings from graph analysis.</div>'
+
+        # --- Sensitive entities list ---
+        crit_list = es.get("critical", [])
+        high_list = es.get("high", [])
+        ent_rows = ""
+        for e in (crit_list + high_list)[:15]:
+            elevel = e.get("sensitivity", "HIGH")
+            ecolor = "var(--red)" if elevel == "CRITICAL" else "#c07040"
+            ent_rows += f'''<div style="display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+              <span style="font-size:0.6rem;font-weight:600;color:{ecolor};min-width:55px;">{html_mod.escape(elevel)}</span>
+              <span style="font-size:0.78rem;color:var(--text);word-break:break-all;">{html_mod.escape(str(e.get("file", ""))[:80])}</span>
+              <span style="font-size:0.65rem;color:var(--dim);margin-left:auto;white-space:nowrap;">{html_mod.escape(str(e.get("tool", "")))}</span>
+            </div>'''
+        if not ent_rows:
+            ent_rows = '<div style="padding:0.5rem 0;color:var(--muted);font-size:0.82rem;">No sensitive entities detected.</div>'
+
+        # --- Data flow alerts ---
+        flow_rows = ""
+        for fl in df.get("suspicious_flows", [])[:8]:
+            fl_sev = fl.get("severity", "HIGH")
+            fl_color = "var(--red)" if fl_sev == "CRITICAL" else "#c07040"
+            flow_rows += f'''<div style="display:flex;align-items:center;gap:0.5rem;padding:0.35rem 0;border-bottom:1px solid rgba(255,255,255,0.03);">
+              <span style="font-size:0.6rem;font-weight:600;color:{fl_color};min-width:55px;">{html_mod.escape(fl_sev)}</span>
+              <span style="font-size:0.78rem;color:var(--text);word-break:break-all;">{html_mod.escape(str(fl.get("source_file",""))[:50])}</span>
+              <span style="color:var(--dim);font-size:0.72rem;margin:0 0.3rem;">&rarr;</span>
+              <span style="font-size:0.78rem;color:var(--orange);">{html_mod.escape(str(fl.get("target_tool","")))} {html_mod.escape(str(fl.get("target_detail",""))[:30])}</span>
+            </div>'''
+
+        # --- Policy violations ---
+        pol_rows = ""
+        for v in pv.get("violations", []):
+            v_sev = v.get("severity", "HIGH")
+            v_color = "var(--red)" if v_sev == "CRITICAL" else "#c07040"
+            pol_rows += f'''<div style="padding:0.5rem 0;border-bottom:1px solid var(--border);">
+              <div style="display:flex;align-items:center;gap:0.5rem;">
+                <span style="font-size:0.6rem;font-weight:600;color:{v_color};min-width:55px;">{html_mod.escape(v_sev)}</span>
+                <span style="font-size:0.82rem;color:var(--text);">{html_mod.escape(v.get("id",""))} &mdash; {html_mod.escape(v.get("name",""))}</span>
+                <span style="font-size:0.65rem;color:var(--dim);margin-left:auto;">{v.get("count",0)} hit(s)</span>
+              </div>
+              <div style="font-size:0.7rem;color:var(--dim);margin-top:0.15rem;margin-left:calc(55px + 0.5rem);">{html_mod.escape(v.get("mitre",""))}</div>
+            </div>'''
+
+        # --- Graph stats (compact) ---
+        rel_summary = " / ".join(f"{r}: {c}" for r, c in sorted(onto_relations.items(), key=lambda x: -x[1])[:5])
 
         onto_section = f"""
     <div class="section">
-      <h2>Knowledge Graph (W3C PROV)</h2>
-      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.8rem;">Ontology v{onto_version} &mdash; {len(onto_schema.get("classes", []))} classes, {len(onto_schema.get("relations", []))} relations</div>
-      <div class="cards" style="margin-bottom:1rem;">
+      <h2>Graph Intelligence</h2>
+      <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem;">
+        Agent performed <strong style="color:var(--text);">{n_toolcalls:,}</strong> tool calls
+        across <strong style="color:var(--text);">{n_entities:,}</strong> resources.
+        {f'<strong style="color:var(--red);">{n_findings}</strong> security finding(s) detected via graph analysis.' if n_findings else '<span style="color:var(--green);">No security findings.</span>'}
+      </p>
+      <div class="cards" style="margin-bottom:1.2rem;">
         <div class="card">
-          <div class="label">Total Nodes</div>
-          <div class="value" style="color:var(--accent);">{onto_nodes}</div>
+          <div class="value" style="color:{'var(--red)' if n_critical_ent + n_high_ent > 0 else 'var(--green)'};">{n_critical_ent + n_high_ent}</div>
+          <div class="label">Sensitive Entities</div>
         </div>
         <div class="card">
-          <div class="label">Total Edges</div>
-          <div class="value">{onto_edges}</div>
+          <div class="value" style="color:{'var(--red)' if n_flows > 0 else 'var(--green)'};">{n_flows}</div>
+          <div class="label">Data Flow Alerts</div>
         </div>
-        {onto_class_cards}
-      </div>
-      <h3 style="font-size:0.85rem;color:var(--muted);margin:1rem 0 0.4rem;">Relations</h3>
-      <div style="overflow-x:auto;">
-      <table>
-        <thead><tr><th>Relation</th><th>Pattern</th><th style="text-align:right;">Count</th></tr></thead>
-        <tbody>{onto_rel_rows}</tbody>
-      </table>
+        <div class="card">
+          <div class="value" style="color:{'var(--red)' if n_violations > 0 else 'var(--green)'};">{n_violations}</div>
+          <div class="label">Policy Violations</div>
+        </div>
+        <div class="card">
+          <div class="value" style="color:{'var(--red)' if cq2_cnt > 0 else 'var(--green)'};">{cq2_cnt}</div>
+          <div class="label">Exfiltration Risk</div>
+        </div>
+        <div class="card">
+          <div class="value">{n_decisions}</div>
+          <div class="label">Decisions</div>
+        </div>
+        <div class="card">
+          <div class="value" style="color:{'var(--red)' if n_risks > 0 else 'var(--green)'};">{n_risks}</div>
+          <div class="label">Risks Detected</div>
+        </div>
       </div>
     </div>
-    {cq_html}"""
+
+    <div class="section" style="{'display:block' if n_findings else 'display:none'};">
+      <h2>Security Findings</h2>
+      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Detected by graph-based ontology security engine with MITRE ATT&amp;CK mapping</div>
+      {findings_html}
+    </div>
+
+    <div class="section" style="{'display:block' if crit_list or high_list else 'display:none'};">
+      <h2>Sensitive Entities</h2>
+      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">{n_critical_ent} CRITICAL, {n_high_ent} HIGH sensitivity files/resources accessed</div>
+      {ent_rows}
+    </div>
+
+    <div class="section" style="{'display:block' if flow_rows else 'display:none'};">
+      <h2>Data Flow Tracking</h2>
+      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Sensitive data read followed by external/shell calls</div>
+      {flow_rows}
+    </div>
+
+    <div class="section" style="{'display:block' if pol_rows else 'display:none'};">
+      <h2>Policy Violations</h2>
+      <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">{n_violations} violation(s) across {pv.get("policies_checked", 4)} graph security policies</div>
+      {pol_rows}
+    </div>
+
+    <div class="section">
+      <details style="cursor:pointer;">
+        <summary style="font-size:0.85rem;color:var(--muted);font-weight:600;">Graph Metadata &mdash; {onto_nodes:,} nodes, {onto_edges:,} edges</summary>
+        <div style="margin-top:0.6rem;display:flex;flex-wrap:wrap;gap:0.4rem;">
+          <span style="font-size:0.72rem;background:var(--surface);border:1px solid var(--border);padding:0.2rem 0.6rem;border-radius:4px;">v{onto_version}</span>
+          <span style="font-size:0.72rem;background:var(--surface);border:1px solid var(--border);padding:0.2rem 0.6rem;border-radius:4px;">ToolCall: {n_toolcalls}</span>
+          <span style="font-size:0.72rem;background:var(--surface);border:1px solid var(--border);padding:0.2rem 0.6rem;border-radius:4px;">Entity: {n_entities}</span>
+          <span style="font-size:0.72rem;background:var(--surface);border:1px solid var(--border);padding:0.2rem 0.6rem;border-radius:4px;">Decision: {n_decisions}</span>
+          <span style="font-size:0.72rem;background:var(--surface);border:1px solid var(--border);padding:0.2rem 0.6rem;border-radius:4px;">Risk: {n_risks}</span>
+        </div>
+        <div style="font-size:0.7rem;color:var(--dim);margin-top:0.5rem;">{html_mod.escape(rel_summary)}</div>
+      </details>
+    </div>"""
     else:
-        onto_section = '<div class="section"><h2>Knowledge Graph (W3C PROV)</h2><p style="color:var(--muted);font-size:0.82rem;">No ontology data. Run <code>ontology_populate</code> via MCP to build the knowledge graph.</p></div>'
+        onto_section = '<div class="section"><h2>Graph Intelligence</h2><p style="color:var(--muted);font-size:0.82rem;">No ontology data available for this session.</p></div>'
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1174,23 +1262,8 @@ def generate_html_report(
 <div class="tab-panel" id="panel-ontology">
   {onto_section}
   <div class="section" id="onto-graph-section" style="display:{'block' if onto_nodes > 0 else 'none'};">
-    <h2>Graph Visualization</h2>
-    <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.5rem;">Click a node for details. Drag to reposition. Risk nodes glow red.</div>
-
-    <!-- Security Insights Cards -->
-    <div id="onto-insights" style="display:flex;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap;">
-      <div class="onto-insight-card" id="insight-cq2" onclick="window._ontoHighlightCQ('cq2')" style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;cursor:pointer;transition:border-color 0.2s;">
-        <div style="font-size:0.7rem;color:var(--muted);font-weight:600;margin-bottom:0.3rem;">Exfiltration Risk (CQ2)</div>
-        <div id="cq2-count" style="font-size:1.4rem;font-weight:700;color:var(--text);">—</div>
-        <div style="font-size:0.68rem;color:var(--muted);">Files read before external calls</div>
-      </div>
-      <div class="onto-insight-card" id="insight-cq3" onclick="window._ontoHighlightCQ('cq3')" style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;cursor:pointer;transition:border-color 0.2s;">
-        <div style="font-size:0.7rem;color:var(--muted);font-weight:600;margin-bottom:0.3rem;">Policy Violations (CQ3)</div>
-        <div id="cq3-count" style="font-size:1.4rem;font-weight:700;color:var(--text);">—</div>
-        <div style="font-size:0.68rem;color:var(--muted);">High-risk tool invocations</div>
-      </div>
-    </div>
-
+    <h2>Interactive Graph</h2>
+    <div style="font-size:0.72rem;color:var(--dim);margin-bottom:0.6rem;">Click a node for details. Drag to reposition. Risk nodes glow red. Sampled view of {onto_nodes:,} total nodes.</div>
     <canvas id="onto-canvas" style="width:100%;height:500px;border-radius:8px;background:#0e0e12;cursor:grab;"></canvas>
 
     <!-- Node Detail Panel -->
@@ -1404,19 +1477,6 @@ SCRIPT_PLACEHOLDER
         "window._ontoHighlightSet = null;\n"
         "window._ontoDraw = null;\n"
         "\n"
-        "// Populate CQ insight cards\n"
-        "(function() {\n"
-        "  const cq2 = _ONTO.cq2 || {};\n"
-        "  const cq3 = _ONTO.cq3 || {};\n"
-        "  const el2 = document.getElementById('cq2-count');\n"
-        "  const el3 = document.getElementById('cq3-count');\n"
-        "  if (el2) el2.textContent = cq2.patterns_found != null ? cq2.patterns_found : '0';\n"
-        "  if (el3) el3.textContent = cq3.violations_found != null ? cq3.violations_found : '0';\n"
-        "  if (cq2.patterns_found > 0 && el2) el2.style.color = 'var(--orange)';\n"
-        "  if (cq3.violations_found > 0 && el3) el3.style.color = 'var(--red)';\n"
-        "  if (el2 && !cq2.patterns_found) el2.style.color = 'var(--dim)';\n"
-        "  if (el3 && !cq3.violations_found) el3.style.color = 'var(--dim)';\n"
-        "})();\n"
         "\n"
         "// HTML escape helper to prevent XSS\n"
         "function escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'); }\n"

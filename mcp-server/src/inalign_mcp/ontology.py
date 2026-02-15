@@ -18,17 +18,25 @@ Classes (7):
   Risk       — Detected risk pattern
   Policy     — Applied policy rule
 
-Relations (10):
+Relations (11):
   performed    — Agent → ToolCall
   partOf       — ToolCall → Session
-  used         — ToolCall → Entity
-  generated    — ToolCall → Entity
+  used         — ToolCall → Entity (incl. Prompt entities)
+  generated    — ToolCall → Entity (incl. Response entities)
   triggeredBy  — ToolCall → Decision
   detected     — ToolCall → Risk
   violates     — ToolCall → Policy
   precedes     — ToolCall → ToolCall (temporal ordering)
   derivedFrom  — Entity → Entity
   signedBy     — Session → Agent (hash chain signature)
+  sameAs       — Entity → Entity (cross-session identity)
+
+Entity subtypes (v0.8.0):
+  file         — Filesystem path
+  url          — HTTP/HTTPS URL
+  secret       — API key, credential, etc.
+  prompt       — User prompt/command (what triggered agent action)
+  response     — Agent response (what the agent produced)
 
 Competency Questions (CQ):
   Q1: "Has this agent accessed .env files?"
@@ -41,6 +49,10 @@ Competency Questions (CQ):
       Entity -derivedFrom→ Entity -derivedFrom→ ... (recursive)
   Q5: "What happened before/after a hash chain break?"
       ToolCall(broken) -precedes/preceded→ ToolCall chain
+  Q6: "Which prompts led to sensitive file access?" (v2)
+      Entity(prompt) ←used- ToolCall -used→ Entity(.env)
+  Q7: "Was this file accessed across multiple sessions?" (v2)
+      Entity(file,sess1) -sameAs→ Entity(file,sess2)
 """
 
 import json
@@ -57,7 +69,7 @@ INALIGN_DIR = Path.home() / ".inalign"
 DB_PATH = INALIGN_DIR / "provenance.db"
 
 # Ontology schema version
-ONTOLOGY_VERSION = "0.7.0"
+ONTOLOGY_VERSION = "0.8.0"
 
 # Valid node classes (W3C PROV + InALign)
 NODE_CLASSES = {"Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"}
@@ -66,14 +78,15 @@ NODE_CLASSES = {"Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "P
 RELATION_TYPES = {
     "performed",     # Agent → ToolCall
     "partOf",        # ToolCall → Session
-    "used",          # ToolCall → Entity
-    "generated",     # ToolCall → Entity
+    "used",          # ToolCall → Entity (incl. Prompt)
+    "generated",     # ToolCall → Entity (incl. Response)
     "triggeredBy",   # ToolCall → Decision
     "detected",      # ToolCall → Risk
     "violates",      # ToolCall → Policy
     "precedes",      # ToolCall → ToolCall (temporal)
     "derivedFrom",   # Entity → Entity
     "signedBy",      # Session → Agent
+    "sameAs",        # Entity → Entity (cross-session identity)
 }
 
 
@@ -134,6 +147,14 @@ def init_ontology_schema(conn: sqlite3.Connection) -> None:
             ON ontology_edges(session_id);
         CREATE INDEX IF NOT EXISTS idx_onto_edges_hash
             ON ontology_edges(record_hash);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_onto_edges_unique
+            ON ontology_edges(source_id, target_id, relation, session_id);
+
+        -- Composite indexes for CTE/join performance
+        CREATE INDEX IF NOT EXISTS idx_onto_edges_src_rel_sess
+            ON ontology_edges(source_id, relation, session_id);
+        CREATE INDEX IF NOT EXISTS idx_onto_edges_tgt_rel_sess
+            ON ontology_edges(target_id, relation, session_id);
     """)
     conn.commit()
 
@@ -206,15 +227,25 @@ def _insert_edge(
     confidence: float = 1.0,
     record_hash: str = "",
     attributes: dict | None = None,
-) -> None:
-    """Insert a knowledge graph edge with hash chain link."""
-    conn.execute(
-        """INSERT INTO ontology_edges
-           (source_id, target_id, relation, session_id, timestamp, confidence, record_hash, attributes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (source_id, target_id, relation, session_id, timestamp,
-         confidence, record_hash, json.dumps(attributes or {}, default=str)),
-    )
+) -> bool:
+    """Insert a knowledge graph edge with hash chain link.
+
+    Returns True if inserted, False if skipped (FK or duplicate).
+    Gracefully handles FOREIGN KEY failures (e.g., session log index
+    doesn't match provenance sequence number for ToolCall nodes).
+    """
+    try:
+        conn.execute(
+            """INSERT OR IGNORE INTO ontology_edges
+               (source_id, target_id, relation, session_id, timestamp, confidence, record_hash, attributes)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (source_id, target_id, relation, session_id, timestamp,
+             confidence, record_hash, json.dumps(attributes or {}, default=str)),
+        )
+        return True
+    except sqlite3.IntegrityError:
+        # FOREIGN KEY constraint — source/target node doesn't exist
+        return False
 
 
 # ---- Auto-populate from Provenance Records -----------------------------------
@@ -305,39 +336,9 @@ def populate_from_session(session_id: str) -> dict[str, Any]:
                 edges_created += 1
             prev_toolcall_id = tc_id
 
-            # --- Entity nodes from used_entities ---
-            for ent in json.loads(row["used_entities"] or "[]"):
-                ent_raw_id = ent.get("id", "")
-                ent_type = ent.get("type", "unknown")
-                ent_id = _make_id("ent", session_id[:8], ent_raw_id or str(ent))
-                ent_label = ent_raw_id or ent_type
-                _upsert_node(conn, ent_id, "Entity", ent_label,
-                              session_id, ts,
-                              {"entity_type": ent_type,
-                               "value_hash": ent.get("value_hash", ""),
-                               **ent.get("attributes", {})})
-                nodes_created += 1
-                # used: ToolCall → Entity
-                _insert_edge(conn, tc_id, ent_id,
-                              "used", session_id, ts, record_hash=rec_hash)
-                edges_created += 1
-
-            # --- Entity nodes from generated_entities ---
-            for ent in json.loads(row["generated_entities"] or "[]"):
-                ent_raw_id = ent.get("id", "")
-                ent_type = ent.get("type", "unknown")
-                ent_id = _make_id("ent", session_id[:8], ent_raw_id or str(ent))
-                ent_label = ent_raw_id or ent_type
-                _upsert_node(conn, ent_id, "Entity", ent_label,
-                              session_id, ts,
-                              {"entity_type": ent_type,
-                               "value_hash": ent.get("value_hash", ""),
-                               **ent.get("attributes", {})})
-                nodes_created += 1
-                # generated: ToolCall → Entity
-                _insert_edge(conn, tc_id, ent_id,
-                              "generated", session_id, ts, record_hash=rec_hash)
-                edges_created += 1
+            # Entity nodes are created by populate_data_flow() from session log
+            # (with real file paths, sensitivity, etc.) — not from hash-only
+            # provenance records which lack meaningful content.
 
         conn.commit()
         logger.info(f"[ONTOLOGY] Populated session {session_id[:8]}: {nodes_created} nodes, {edges_created} edges")
@@ -498,16 +499,281 @@ def populate_risks(session_id: str) -> dict[str, Any]:
     return {"nodes": nodes_created, "edges": edges_created, "status": "ok"}
 
 
+# ---- Prompt/Response Entity Population (v2) ----------------------------------
+
+# Injection/suspicious prompt patterns
+_INJECTION_PATTERNS = [
+    "ignore previous", "ignore above", "disregard", "override",
+    "system prompt", "you are now", "act as", "pretend",
+    "jailbreak", "dan mode", "bypass", "hack",
+    "base64", "eval(", "exec(", "__import__",
+    r"<script", "javascript:", "onerror=",
+]
+
+
+def populate_prompt_response_entities(session_id: str) -> dict[str, Any]:
+    """Populate Prompt and Response Entity nodes from session log.
+
+    v2 feature: Promotes user prompts and agent responses to Entity nodes.
+    This enables tracking:
+      - Which prompts led to sensitive file access
+      - Prompt injection detection via content analysis
+      - Full data lineage: Prompt → ToolCall → File → Response
+
+    Creates:
+      - Entity(type=prompt) for each user message
+      - Entity(type=response) for each assistant message
+      - used edge: first ToolCall after prompt → PromptEntity
+      - generated edge: last ToolCall before response → ResponseEntity
+      - derivedFrom edge: ResponseEntity → PromptEntity (causal link)
+    """
+    import gzip
+    conn = _get_db()
+    nodes_created = 0
+    edges_created = 0
+    injection_flags = 0
+
+    try:
+        session_log = _load_session_log_for_ontology(session_id)
+        if not session_log:
+            return {"nodes": 0, "edges": 0, "status": "no_session_log"}
+
+        # Clean up previous prompt/response entities
+        conn.execute(
+            "DELETE FROM ontology_edges WHERE session_id=? AND "
+            "(source_id LIKE 'prompt:%' OR target_id LIKE 'prompt:%' "
+            "OR source_id LIKE 'resp:%' OR target_id LIKE 'resp:%')",
+            (session_id,),
+        )
+        conn.execute(
+            "DELETE FROM ontology_nodes WHERE session_id=? AND id LIKE 'prompt:%'",
+            (session_id,),
+        )
+        conn.execute(
+            "DELETE FROM ontology_nodes WHERE session_id=? AND id LIKE 'resp:%'",
+            (session_id,),
+        )
+        conn.commit()
+
+        prompt_seq = 0
+        resp_seq = 0
+        pending_prompt_id = None
+        last_tc_id = None
+        last_tc_idx = None
+
+        for idx, entry in enumerate(session_log):
+            role = entry.get("role", "")
+            content = entry.get("content", "")
+            rtype = entry.get("type", entry.get("record_type", ""))
+            ts = entry.get("timestamp", "")
+
+            if role == "user" and content:
+                # === Prompt Entity ===
+                text = content if isinstance(content, str) else str(content)
+                preview = text[:200]
+                prompt_id = f"prompt:{session_id[:8]}:{prompt_seq:04d}"
+
+                # Check for injection patterns
+                text_lower = text.lower()
+                is_suspicious = any(p in text_lower for p in _INJECTION_PATTERNS)
+                if is_suspicious:
+                    injection_flags += 1
+
+                # Check if prompt mentions sensitive files
+                from .ontology_security import _classify_sensitivity as _cs
+                prompt_sensitivity = "LOW"
+                for token in text.split():
+                    if "/" in token or "\\" in token:
+                        level = _cs(token)
+                        if level in ("CRITICAL", "HIGH"):
+                            prompt_sensitivity = level
+                            break
+
+                _upsert_node(conn, prompt_id, "Entity", preview, session_id, ts,
+                             attributes={
+                                 "entity_type": "prompt",
+                                 "full_length": len(text),
+                                 "sequence_index": idx,
+                                 "sensitivity": prompt_sensitivity,
+                                 "injection_suspect": is_suspicious,
+                             })
+                nodes_created += 1
+
+                # Link previous response → this prompt (conversation flow)
+                if pending_prompt_id:
+                    # derivedFrom: new prompt may reference previous context
+                    pass  # Only link prompt→response, not prompt→prompt
+
+                pending_prompt_id = prompt_id
+                prompt_seq += 1
+
+            elif role == "assistant" and content:
+                # === Response Entity ===
+                text = content if isinstance(content, str) else str(content)
+                preview = text[:200]
+                resp_id = f"resp:{session_id[:8]}:{resp_seq:04d}"
+
+                _upsert_node(conn, resp_id, "Entity", preview, session_id, ts,
+                             attributes={
+                                 "entity_type": "response",
+                                 "full_length": len(text),
+                                 "sequence_index": idx,
+                                 "sensitivity": "LOW",
+                             })
+                nodes_created += 1
+
+                # generated: last ToolCall → ResponseEntity
+                if last_tc_id:
+                    _insert_edge(conn, last_tc_id, resp_id, "generated",
+                                 session_id, ts, confidence=0.7)
+                    edges_created += 1
+
+                # derivedFrom: Response ← Prompt (causal)
+                if pending_prompt_id:
+                    _insert_edge(conn, resp_id, pending_prompt_id, "derivedFrom",
+                                 session_id, ts, confidence=0.9,
+                                 attributes={"heuristic": "prompt_response_pair"})
+                    edges_created += 1
+
+                resp_seq += 1
+
+            elif rtype == "tool_call":
+                tc_id = f"tc:{session_id[:8]}:{idx:06d}"
+
+                # used: first ToolCall after prompt → PromptEntity
+                if pending_prompt_id:
+                    _insert_edge(conn, tc_id, pending_prompt_id, "used",
+                                 session_id, ts, confidence=0.8,
+                                 attributes={"reason": "prompt_triggered"})
+                    edges_created += 1
+                    pending_prompt_id = None  # Only link to first TC
+
+                last_tc_id = tc_id
+                last_tc_idx = idx
+
+        conn.commit()
+        logger.info(
+            f"[ONTOLOGY] Prompt/Response for {session_id[:8]}: "
+            f"{nodes_created} entities ({prompt_seq} prompts, {resp_seq} responses), "
+            f"{edges_created} edges, {injection_flags} injection suspects"
+        )
+
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[ONTOLOGY] Prompt/Response failed: {e}")
+        return {"nodes": 0, "edges": 0, "error": str(e)}
+    finally:
+        conn.close()
+
+    return {
+        "session_id": session_id,
+        "prompt_entities": prompt_seq,
+        "response_entities": resp_seq,
+        "edges": edges_created,
+        "injection_suspects": injection_flags,
+        "status": "ok",
+    }
+
+
+# ---- Cross-Session Entity Linking (v2) --------------------------------------
+
+def link_cross_session_entities(session_id: str) -> dict[str, Any]:
+    """Link Entity nodes that refer to the same file across sessions.
+
+    Creates sameAs edges between Entity nodes with matching normalized
+    file paths in different sessions. Enables cross-session queries like:
+      "Was this .env file accessed in other sessions?"
+
+    Only links file-type entities (not prompts/responses/URLs).
+    Uses normalized paths (lowercase, forward slashes) for matching.
+    """
+    conn = _get_db()
+    links_created = 0
+
+    try:
+        # Get all file entities for the current session
+        current_ents = conn.execute(
+            "SELECT id, label, attributes FROM ontology_nodes "
+            "WHERE session_id=? AND node_class='Entity' "
+            "AND json_extract(attributes, '$.entity_type') = 'file'",
+            (session_id,),
+        ).fetchall()
+
+        if not current_ents:
+            return {"links_created": 0, "status": "no_file_entities"}
+
+        # Build normalized path → entity_id map for current session
+        def _norm(p: str) -> str:
+            return p.replace("\\", "/").lower().strip().rstrip("/")
+
+        current_map: dict[str, str] = {}
+        for ent in current_ents:
+            attrs = json.loads(ent["attributes"] or "{}")
+            full_path = attrs.get("full_path", ent["label"])
+            norm = _norm(full_path)
+            current_map[norm] = ent["id"]
+
+        if not current_map:
+            return {"links_created": 0, "status": "no_paths"}
+
+        # Find matching entities in OTHER sessions
+        other_ents = conn.execute(
+            "SELECT id, label, attributes, session_id FROM ontology_nodes "
+            "WHERE session_id != ? AND node_class='Entity' "
+            "AND json_extract(attributes, '$.entity_type') = 'file'",
+            (session_id,),
+        ).fetchall()
+
+        seen_pairs: set[tuple[str, str]] = set()
+        for ent in other_ents:
+            attrs = json.loads(ent["attributes"] or "{}")
+            full_path = attrs.get("full_path", ent["label"])
+            norm = _norm(full_path)
+
+            if norm in current_map:
+                src = current_map[norm]
+                tgt = ent["id"]
+                pair = tuple(sorted([src, tgt]))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+
+                _insert_edge(conn, src, tgt, "sameAs",
+                             session_id, "",
+                             confidence=1.0,
+                             attributes={
+                                 "cross_session": True,
+                                 "other_session": ent["session_id"][:8],
+                                 "path": norm,
+                             })
+                links_created += 1
+
+        conn.commit()
+        logger.info(
+            f"[ONTOLOGY] Cross-session links for {session_id[:8]}: "
+            f"{links_created} sameAs edges"
+        )
+
+    except Exception as e:
+        conn.rollback()
+        return {"links_created": 0, "error": str(e)}
+    finally:
+        conn.close()
+
+    return {
+        "session_id": session_id,
+        "links_created": links_created,
+        "current_files": len(current_map),
+        "status": "ok",
+    }
+
+
 # ---- Data Flow Population (derivedFrom + used/generated + sensitivity) -------
 
-# Sensitivity patterns for Entity classification
-_SENSITIVITY = {
-    "CRITICAL": [".env", ".pem", ".key", "credentials", "id_rsa", "id_ed25519",
-                 "api_key", "secret", ".pypirc", "token", ".p12", ".pfx"],
-    "HIGH": [".conf", ".yaml", ".yml", ".db", ".sqlite", "docker-compose",
-             ".ssh", "config", "password", ".htpasswd", ".pgpass"],
-    "MEDIUM": [".py", ".js", ".ts", ".go", ".rs", ".java", "src/", "lib/"],
-}
+# Import canonical sensitivity classification from ontology_security
+# (strict matching: extension-end check, basename-only keyword match)
+from .ontology_security import SENSITIVITY_PATTERNS as _SENSITIVITY
+from .ontology_security import _classify_sensitivity
 
 # Tool names that read files
 _READ_TOOLS = {"Read", "read_file", "view", "cat", "Glob", "Grep", "head", "tail"}
@@ -526,41 +792,38 @@ _PATH_RE = re.compile(
 _URL_RE = re.compile(r'https?://[^\s"\'<>]+', re.IGNORECASE)
 
 
-def _classify_sensitivity(path_or_label: str) -> str:
-    """Classify an entity path into CRITICAL/HIGH/MEDIUM/LOW."""
-    lower = path_or_label.lower()
-    for level in ("CRITICAL", "HIGH", "MEDIUM"):
-        for pattern in _SENSITIVITY[level]:
-            if pattern in lower:
-                return level
-    return "LOW"
-
-
 def _extract_paths_from_input(tool_input_str: str) -> list[str]:
-    """Extract file paths from tool_input JSON string."""
+    """Extract file paths from tool_input JSON string.
+
+    Only extracts actual filesystem paths and URLs; ignores regex/glob
+    patterns (from Grep/Glob) which are not real file paths.
+    """
     paths = []
     if not tool_input_str:
         return paths
     try:
         data = json.loads(tool_input_str) if isinstance(tool_input_str, str) else tool_input_str
         if isinstance(data, dict):
+            # Direct file path keys (Read, Edit, Write, etc.)
             for key in ("file_path", "path", "filename", "target", "notebook_path"):
                 if key in data and isinstance(data[key], str) and len(data[key]) > 2:
-                    paths.append(data[key])
-            # Glob patterns
-            if "pattern" in data and isinstance(data["pattern"], str):
-                paths.append(data["pattern"])
-            # Bash commands — extract paths
+                    val = data[key]
+                    # Only include if it looks like a real path (has / or \)
+                    if "/" in val or "\\" in val:
+                        paths.append(val)
+            # Bash commands — extract paths and URLs
             if "command" in data and isinstance(data["command"], str):
                 cmd = data["command"]
-                # Extract file-like paths from commands
                 for match in _PATH_RE.finditer(cmd):
                     paths.append(match.group(1))
-                # Extract URLs
                 for match in _URL_RE.finditer(cmd):
                     paths.append(match.group(0))
+            # WebFetch URL
+            if "url" in data and isinstance(data["url"], str):
+                url = data["url"]
+                if url.startswith("http://") or url.startswith("https://"):
+                    paths.append(url)
     except (json.JSONDecodeError, TypeError):
-        # Try regex on raw string
         for match in _PATH_RE.finditer(str(tool_input_str)):
             paths.append(match.group(1))
         for match in _URL_RE.finditer(str(tool_input_str)):
@@ -568,206 +831,183 @@ def _extract_paths_from_input(tool_input_str: str) -> list[str]:
     return paths
 
 
+def _load_session_log_for_ontology(session_id: str) -> list[dict]:
+    """Load session log from json.gz for ontology population."""
+    import gzip
+    sessions_dir = INALIGN_DIR / "sessions"
+    if not sessions_dir.exists():
+        return []
+    # Try exact match first
+    for f in sorted(sessions_dir.glob("*.json.gz"),
+                    key=lambda x: x.stat().st_mtime, reverse=True):
+        fname = f.name.replace(".json.gz", "")
+        if session_id in fname or session_id[:8] in fname:
+            try:
+                with gzip.open(f, "rt", encoding="utf-8") as gz:
+                    data = json.load(gz)
+                if isinstance(data, dict):
+                    return data.get("records", [])
+                elif isinstance(data, list):
+                    return data
+            except Exception:
+                continue
+    # Fallback: latest file
+    gz_files = sorted(sessions_dir.glob("*.json.gz"),
+                      key=lambda x: x.stat().st_mtime, reverse=True)
+    for f in gz_files[:3]:
+        try:
+            with gzip.open(f, "rt", encoding="utf-8") as gz:
+                data = json.load(gz)
+            if isinstance(data, dict):
+                records = data.get("records", [])
+                if records:
+                    return records
+        except Exception:
+            continue
+    return []
+
+
 def populate_data_flow(session_id: str) -> dict[str, Any]:
-    """Build real data flow edges from session log tool calls.
+    """Build Entity nodes for trackable data only: files, URLs, secrets.
 
-    This is the key function that brings the ontology to life. It:
-    1. Creates Entity nodes with REAL file paths (not generic ingest IDs)
-    2. Creates used edges: ToolCall → Entity (for tool inputs)
-    3. Creates generated edges: ToolCall → Entity (for tool outputs)
-    4. Creates derivedFrom edges: Entity(written) → Entity(read) on read→write patterns
-    5. Tags all Entity nodes with sensitivity (CRITICAL/HIGH/MEDIUM/LOW)
+    W3C PROV principle: Entity = data worth tracking flow of.
+    Prompts, responses, thinking → Activity attributes (NOT entities).
+    Only files, URLs, and secrets become Entity nodes.
 
-    The derivedFrom heuristic: if a file is read and later another file is written,
-    the written file derivedFrom the read file. This captures data lineage.
+    Target: ~30-100 Entity nodes, edges < 3x node count.
     """
     import gzip
     conn = _get_db()
+    # Disable FK checks during re-population (session log indices may not
+    # match provenance sequence numbers for ToolCall nodes)
+    conn.execute("PRAGMA foreign_keys=OFF")
     nodes_created = 0
     edges_created = 0
     derived_from_created = 0
 
     try:
-        # Load session log from json.gz
-        sessions_dir = INALIGN_DIR / "sessions"
-        if not sessions_dir.exists():
-            return {"nodes": 0, "edges": 0, "derived_from": 0, "status": "no_session_dir"}
-
-        session_log = []
-        for f in sorted(sessions_dir.glob("*.json.gz"),
-                        key=lambda x: x.stat().st_mtime, reverse=True):
-            fname = f.name.replace(".json.gz", "")
-            if session_id in fname or session_id[:8] in fname:
-                try:
-                    with gzip.open(f, "rt", encoding="utf-8") as gz:
-                        data = json.load(gz)
-                    if isinstance(data, dict):
-                        session_log = data.get("records", [])
-                    elif isinstance(data, list):
-                        session_log = data
-                    if session_log:
-                        break
-                except Exception:
-                    continue
-        # Fallback: try latest file
-        if not session_log:
-            gz_files = sorted(sessions_dir.glob("*.json.gz"),
-                              key=lambda x: x.stat().st_mtime, reverse=True)
-            for f in gz_files[:3]:
-                try:
-                    with gzip.open(f, "rt", encoding="utf-8") as gz:
-                        data = json.load(gz)
-                    if isinstance(data, dict):
-                        session_log = data.get("records", [])
-                    if session_log:
-                        break
-                except Exception:
-                    continue
-
+        session_log = _load_session_log_for_ontology(session_id)
         if not session_log:
             return {"nodes": 0, "edges": 0, "derived_from": 0, "status": "no_session_log"}
 
-        # Check if already populated (idempotent)
-        existing_df = conn.execute(
-            "SELECT COUNT(*) as cnt FROM ontology_edges WHERE session_id=? AND relation='derivedFrom'",
+        # Clean up previous file/url Entity nodes + their edges for re-population
+        # Preserve prompt/response entities (created by populate_prompt_response_entities)
+        conn.execute(
+            "DELETE FROM ontology_edges WHERE session_id=? AND "
+            "(source_id IN (SELECT id FROM ontology_nodes WHERE session_id=? AND node_class='Entity' "
+            "  AND id LIKE 'ent:%') "
+            "OR target_id IN (SELECT id FROM ontology_nodes WHERE session_id=? AND node_class='Entity' "
+            "  AND id LIKE 'ent:%'))",
+            (session_id, session_id, session_id),
+        )
+        conn.execute(
+            "DELETE FROM ontology_nodes WHERE session_id=? AND node_class='Entity' AND id LIKE 'ent:%'",
             (session_id,),
-        ).fetchone()["cnt"]
-        if existing_df > 0:
-            return {"nodes": 0, "edges": 0, "derived_from": existing_df,
-                    "status": "already_populated"}
+        )
+        conn.commit()
 
-        # Track read entities for derivedFrom (recent window only)
-        _MAX_READ_WINDOW = 50  # Only link to most recent N reads
-        read_entities: list[tuple[str, str]] = []  # [(normalized_path, entity_node_id), ...]
-        read_entity_set: set[str] = set()  # For dedup
-        entity_nodes: dict[str, str] = {}   # normalized_path → entity_node_id (all)
+        # === File/URL entity tracking ===
+        _MAX_READ_WINDOW = 10
+        read_files: list[tuple[str, str]] = []
+        read_file_set: set[str] = set()
+        entity_map: dict[str, str] = {}  # norm_path → entity_node_id
 
-        def _normalize_path(p: str) -> str:
-            """Normalize a path for matching (lowercase, forward slashes)."""
+        def _norm(p: str) -> str:
             return p.replace("\\", "/").lower().strip().rstrip("/")
 
-        def _get_or_create_entity(path: str, ts: str) -> str:
-            """Get or create Entity node for a path, return node_id."""
+        def _get_entity(path: str, ts: str) -> str:
+            """Get or create Entity node for a file/URL."""
             nonlocal nodes_created
-            norm = _normalize_path(path)
-            if norm in entity_nodes:
-                return entity_nodes[norm]
-
+            norm = _norm(path)
+            if norm in entity_map:
+                return entity_map[norm]
             sensitivity = _classify_sensitivity(path)
-            # Use shortened path for label
-            label = path
-            if len(label) > 60:
-                label = "..." + label[-57:]
-
+            label = path if len(path) <= 60 else "..." + path[-57:]
             ent_id = _make_id("ent", session_id[:8], norm)
             is_url = path.startswith("http://") or path.startswith("https://")
-            _upsert_node(
-                conn, ent_id, "Entity", label, session_id, ts,
-                attributes={
-                    "full_path": path,
-                    "sensitivity": sensitivity,
-                    "entity_type": "url" if is_url else "file",
-                    "normalized": norm,
-                },
-            )
+            _upsert_node(conn, ent_id, "Entity", label, session_id, ts,
+                         attributes={
+                             "entity_type": "url" if is_url else "file",
+                             "full_path": path,
+                             "sensitivity": sensitivity,
+                         })
             nodes_created += 1
-            entity_nodes[norm] = ent_id
+            entity_map[norm] = ent_id
             return ent_id
 
-        # Process tool calls
+        # Process only tool_call events — extract files/URLs
         for idx, entry in enumerate(session_log):
-            record_type = entry.get("type", entry.get("record_type", ""))
+            rtype = entry.get("type", entry.get("record_type", ""))
+            if rtype != "tool_call":
+                continue
             tool_name = entry.get("tool_name", "")
+            if not tool_name:
+                continue
             tool_input = entry.get("tool_input", "")
             ts = entry.get("timestamp", "")
-
-            if record_type != "tool_call" or not tool_name:
-                continue
-
-            # ToolCall node ID (must match populate_from_session)
             tc_id = f"tc:{session_id[:8]}:{idx:06d}"
 
-            # Extract paths from tool_input
             paths = _extract_paths_from_input(tool_input)
             if not paths:
                 continue
 
-            # Determine if this is a read, write, or external tool
+            # Classify tool action
             is_read = tool_name in _READ_TOOLS
             is_write = tool_name in _WRITE_TOOLS
             is_external = tool_name in _EXTERNAL_TOOLS
 
-            # For Bash, check command content for direction
-            if tool_name == "Bash" and tool_input:
-                try:
-                    cmd_data = json.loads(tool_input) if isinstance(tool_input, str) else tool_input
-                    cmd = cmd_data.get("command", "") if isinstance(cmd_data, dict) else ""
-                    cmd_lower = cmd.lower()
-                    if any(w in cmd_lower for w in ("curl", "wget", "fetch", "ssh", "scp", "git push")):
+            if tool_name == "Bash":
+                ti = tool_input
+                if isinstance(ti, str):
+                    try:
+                        ti = json.loads(ti)
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+                if isinstance(ti, dict):
+                    cmd_lower = ti.get("command", "").lower()
+                    if any(w in cmd_lower for w in ("curl", "wget", "ssh", "scp", "git push")):
                         is_external = True
-                    elif any(w in cmd_lower for w in ("cat ", "head ", "tail ", "less ", "more ")):
+                    elif any(w in cmd_lower for w in ("cat ", "head ", "tail ")):
                         is_read = True
-                    elif any(w in cmd_lower for w in ("echo ", "tee ", "> ", ">> ", "mv ", "cp ")):
+                    elif any(w in cmd_lower for w in ("echo ", "tee ", "> ", ">> ")):
                         is_write = True
-                except Exception:
-                    pass
 
             for path in paths:
-                ent_id = _get_or_create_entity(path, ts)
-                norm = _normalize_path(path)
+                ent_id = _get_entity(path, ts)
+                norm = _norm(path)
 
                 if is_read:
-                    # Track for derivedFrom heuristic
-                    if norm not in read_entity_set:
-                        read_entities.append((norm, ent_id))
-                        read_entity_set.add(norm)
-                    # used edge: try linking to ToolCall (may not exist)
-                    try:
-                        _insert_edge(conn, tc_id, ent_id, "used",
-                                     session_id, ts, confidence=0.9)
-                        edges_created += 1
-                    except sqlite3.IntegrityError:
-                        pass  # ToolCall node not in ontology yet
+                    if norm not in read_file_set:
+                        read_files.append((norm, ent_id))
+                        read_file_set.add(norm)
+                    _insert_edge(conn, tc_id, ent_id, "used",
+                                 session_id, ts, confidence=0.9)
+                    edges_created += 1
 
                 elif is_write:
-                    # generated edge: try linking to ToolCall
-                    try:
-                        _insert_edge(conn, tc_id, ent_id, "generated",
-                                     session_id, ts, confidence=0.9)
-                        edges_created += 1
-                    except sqlite3.IntegrityError:
-                        pass
-
-                    # derivedFrom: written entity → recent reads (windowed)
-                    recent_reads = read_entities[-_MAX_READ_WINDOW:]
-                    for i, (read_norm, read_ent_id) in enumerate(recent_reads):
-                        if read_ent_id != ent_id:  # Don't self-derive
-                            recency = (i + 1) / len(recent_reads)
-                            conf = 0.5 + 0.4 * recency
-                            _insert_edge(
-                                conn, ent_id, read_ent_id, "derivedFrom",
-                                session_id, ts, confidence=round(conf, 2),
-                                attributes={"heuristic": "read_before_write"},
-                            )
+                    _insert_edge(conn, tc_id, ent_id, "generated",
+                                 session_id, ts, confidence=0.9)
+                    edges_created += 1
+                    # derivedFrom: written → recently read (data lineage)
+                    for i, (rn, re_id) in enumerate(read_files[-_MAX_READ_WINDOW:]):
+                        if re_id != ent_id:
+                            recency = (i + 1) / min(len(read_files), _MAX_READ_WINDOW)
+                            _insert_edge(conn, ent_id, re_id, "derivedFrom",
+                                         session_id, ts,
+                                         confidence=round(0.5 + 0.4 * recency, 2),
+                                         attributes={"heuristic": "read_before_write"})
                             derived_from_created += 1
                             edges_created += 1
 
                 elif is_external:
-                    try:
-                        _insert_edge(conn, tc_id, ent_id, "used",
-                                     session_id, ts, confidence=0.8,
-                                     attributes={"access_type": "external"})
-                        edges_created += 1
-                    except sqlite3.IntegrityError:
-                        pass
-
+                    _insert_edge(conn, tc_id, ent_id, "used",
+                                 session_id, ts, confidence=0.8,
+                                 attributes={"access_type": "external"})
+                    edges_created += 1
                 else:
-                    try:
-                        _insert_edge(conn, tc_id, ent_id, "used",
-                                     session_id, ts, confidence=0.6)
-                        edges_created += 1
-                    except sqlite3.IntegrityError:
-                        pass
+                    _insert_edge(conn, tc_id, ent_id, "used",
+                                 session_id, ts, confidence=0.6)
+                    edges_created += 1
 
         conn.commit()
         logger.info(
@@ -781,6 +1021,7 @@ def populate_data_flow(session_id: str) -> dict[str, Any]:
         logger.error(f"[ONTOLOGY] Data flow failed: {e}")
         return {"nodes": 0, "edges": 0, "derived_from": 0, "error": str(e)}
     finally:
+        conn.execute("PRAGMA foreign_keys=ON")
         conn.close()
 
     return {
@@ -788,8 +1029,7 @@ def populate_data_flow(session_id: str) -> dict[str, Any]:
         "entity_nodes": nodes_created,
         "edges": edges_created,
         "derived_from": derived_from_created,
-        "read_entities_tracked": len(read_entities),
-        "total_entities": len(entity_nodes),
+        "total_unique_files": len(entity_map),
         "status": "ok",
     }
 
