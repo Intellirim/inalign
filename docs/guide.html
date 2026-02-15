@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InALign Guide - Complete Usage Documentation</title>
+    <title>InALign v0.9.0 Guide - Complete Usage Documentation</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -323,6 +323,8 @@
                 <a href="#tools-otel" class="sidebar-link">OpenTelemetry</a>
                 <a href="#tools-topology" class="sidebar-link">Topology</a>
                 <a href="#tools-ontology" class="sidebar-link">Ontology</a>
+                <a href="#prov-agent" class="sidebar-link">PROV-AGENT</a>
+                <a href="#ai-analysis" class="sidebar-link">AI Analysis</a>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-title">Reference</div>
@@ -335,7 +337,7 @@
         <main class="main-content">
             <h1>InALign Guide</h1>
             <p class="subtitle">
-                Everything you need to know about using InALign &mdash; from installation to advanced AI security analysis.
+                v0.9.0 &mdash; Everything you need to know about using InALign, from installation to advanced AI security analysis.
             </p>
 
             <!-- Quick Start -->
@@ -464,7 +466,7 @@ inalign-report --port <span class="n">9000</span>
 inalign-report --no-open</pre>
             </div>
 
-            <p>The report is a <strong style="color:white;">6-tab interactive dashboard</strong>:</p>
+            <p>The report launches a <strong style="color:white;">React SPA dashboard</strong> at <code>localhost:8275</code> with a full REST API backend. The dashboard features 6 interactive tabs:</p>
 
             <div class="tool-card">
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
@@ -899,7 +901,7 @@ inalign-ingest --latest --json</pre>
 
             <!-- MCP Tools: Knowledge Graph (Ontology) -->
             <h2 id="tools-ontology">Knowledge Graph (Ontology)</h2>
-            <p>Build and query W3C PROV-compliant knowledge graphs from your agent sessions for deep causal analysis.</p>
+            <p>Build and query W3C PROV-compliant knowledge graphs from your agent sessions for deep causal analysis. The v0.9.0 ontology defines <strong style="color:white;">8 classes</strong> (Agent, Session, ToolCall, AIModelInvocation, Entity, Decision, Risk, Policy) and <strong style="color:white;">13 relations</strong> covering W3C PROV core plus PROV-AGENT extensions.</p>
 
             <div class="tool-card">
                 <div class="tool-header">
@@ -944,6 +946,150 @@ inalign-ingest --latest --json</pre>
                     Params: <span>session_id</span> (optional)
                 </div>
             </div>
+
+            <!-- PROV-AGENT: AIModelInvocation -->
+            <h2 id="prov-agent">PROV-AGENT: AIModelInvocation</h2>
+            <p>v0.9.0 introduces the <strong style="color:white;">PROV-AGENT</strong> ontology extension, adding first-class support for tracking LLM reasoning steps as knowledge graph nodes.</p>
+
+            <p>The core idea: every time the AI agent "thinks" (reasoning, planning, or generating output), InALign records it as an <code>AIModelInvocation</code> activity node &mdash; a W3C PROV Activity that represents a single LLM API call or reasoning step.</p>
+
+            <h3>How It Works</h3>
+            <div class="step-flow">
+                <div class="step-item">
+                    <div class="step-num">1</div>
+                    <div>User sends a prompt</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">2</div>
+                    <div>Agent "thinks" (reasoning step)</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">3</div>
+                    <div>AIModelInvocation node created</div>
+                </div>
+                <div class="step-arrow">&rarr;</div>
+                <div class="step-item">
+                    <div class="step-num">4</div>
+                    <div>Linked to prompt &amp; response via edges</div>
+                </div>
+            </div>
+
+            <h3>New Relations</h3>
+            <div class="code-block">
+<pre><span class="c"># PROV-AGENT relations added in v0.9.0</span>
+<span class="k">invokedModel</span>  <span class="c"># ToolCall &rarr; AIModelInvocation</span>
+               <span class="c"># Links the tool call that triggered an LLM reasoning step</span>
+
+<span class="k">usedPrompt</span>    <span class="c"># AIModelInvocation &rarr; Prompt Entity</span>
+               <span class="c"># Links the LLM call to the user prompt that triggered it</span>
+
+<span class="k">generated</span>     <span class="c"># AIModelInvocation &rarr; Response Entity</span>
+               <span class="c"># Links the LLM call to the agent's output</span></pre>
+            </div>
+
+            <p>This creates a complete <strong style="color:white;">Prompt &rarr; Reasoning &rarr; Action &rarr; Result</strong> causal chain in the knowledge graph, enabling competency queries like:</p>
+
+            <ul style="margin: 8px 0 16px 24px; color: #94a3b8;">
+                <li><strong style="color:#e2e8f0;">Q6:</strong> "Which prompts led to sensitive file access?" &mdash; trace from Prompt entity through AIModelInvocation to ToolCall to Entity(.env)</li>
+                <li><strong style="color:#e2e8f0;">Q7:</strong> "Was this file accessed across multiple sessions?" &mdash; cross-session identity linking via <code>sameAs</code> relation</li>
+            </ul>
+
+            <div class="info-box">
+                <strong>Automatic population.</strong> AIModelInvocation nodes are created automatically during <code>ontology_populate</code> &mdash; no manual recording needed. Every "thinking" block in the session log becomes a traceable graph node.
+            </div>
+
+            <!-- AI Analysis -->
+            <h2 id="ai-analysis">AI Analysis Modes</h2>
+            <p>v0.9.0 offers two AI analysis modes for deep security review of your agent sessions. Both run <strong style="color:white;">entirely from your machine</strong> &mdash; InALign never stores or routes your data through any intermediary.</p>
+
+            <h3>Zero-Trust Mode (Ollama)</h3>
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">--provider local</span>
+                    <span class="badge badge-free">Free</span>
+                </div>
+                <div class="tool-desc">Run AI analysis using a local Ollama instance. No data ever leaves your machine &mdash; true zero-trust. Requires <a href="https://ollama.com">Ollama</a> running locally.</div>
+            </div>
+
+            <div class="code-block">
+                <span class="label">Terminal</span>
+<pre><span class="c"># 1. Install and start Ollama</span>
+ollama serve
+
+<span class="c"># 2. Run zero-trust analysis (default model: llama3.2)</span>
+inalign-analyze --provider <span class="s">local</span> --latest --save
+
+<span class="c"># 3. Use a different local model</span>
+inalign-analyze --provider <span class="s">local</span> --model <span class="s">mistral</span> --latest --save</pre>
+            </div>
+
+            <div class="info-box">
+                <strong>No API key needed.</strong> Zero-Trust mode connects directly to Ollama at <code>localhost:11434</code>. Your session data stays entirely on your machine &mdash; nothing is sent to any external service.
+            </div>
+
+            <h3>Advanced Mode (Claude / OpenAI)</h3>
+            <div class="tool-card">
+                <div class="tool-header">
+                    <span class="tool-name">--provider anthropic | openai</span>
+                    <span class="badge badge-pro">Pro</span>
+                </div>
+                <div class="tool-desc">Deep analysis using cloud LLMs (Claude Sonnet or GPT-4o). Uses your own API key &mdash; InALign never stores it. PII is automatically masked (14 patterns) before sending.</div>
+            </div>
+
+            <div class="code-block">
+                <span class="label">Terminal</span>
+<pre><span class="c"># Analyze with Anthropic Claude</span>
+inalign-analyze --provider <span class="s">anthropic</span> --api-key <span class="s">sk-ant-xxxxx</span> --latest --save
+
+<span class="c"># Analyze with OpenAI GPT-4o</span>
+inalign-analyze --provider <span class="s">openai</span> --api-key <span class="s">sk-xxxxx</span> --latest --save</pre>
+            </div>
+
+            <p>Both modes are also available from the <strong style="color:white;">React SPA dashboard</strong> at <code>localhost:8275</code> via the AI Analysis tab. The dashboard proxies requests through the local API server &mdash; your API key is sent directly to the provider from your machine.</p>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Zero-Trust (Ollama)</th>
+                        <th>Advanced (Claude/OpenAI)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Data leaves machine</td>
+                        <td class="check">Never</td>
+                        <td>PII-masked summary only</td>
+                    </tr>
+                    <tr>
+                        <td>API key required</td>
+                        <td class="check">No</td>
+                        <td>Yes (yours)</td>
+                    </tr>
+                    <tr>
+                        <td>Analysis depth</td>
+                        <td>Good</td>
+                        <td class="check">Deep</td>
+                    </tr>
+                    <tr>
+                        <td>PII masking</td>
+                        <td>N/A (local)</td>
+                        <td class="check">14 patterns</td>
+                    </tr>
+                    <tr>
+                        <td>Plan required</td>
+                        <td>Free</td>
+                        <td>Pro</td>
+                    </tr>
+                    <tr>
+                        <td>Speed</td>
+                        <td>Depends on hardware</td>
+                        <td class="check">Fast</td>
+                    </tr>
+                </tbody>
+            </table>
 
             <!-- Plan Comparison -->
             <h2 id="plan-comparison">Plan Comparison</h2>

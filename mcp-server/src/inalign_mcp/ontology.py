@@ -9,34 +9,38 @@ Knowledge Graph (data):
 W3C PROV-O compatible with InALign extensions. The ontology is the schema;
 the nodes/edges tables hold the knowledge graph instances.
 
-Classes (7):
-  Agent      — AI agent (Claude, GPT, Cursor)
-  Session    — Work session
-  ToolCall   — Tool invocation (read_file, bash, web_search)
-  Entity     — Artifact (file, URL, env var, secret)
-  Decision   — Agent judgment/choice
-  Risk       — Detected risk pattern
-  Policy     — Applied policy rule
+Classes (8) — W3C PROV + PROV-AGENT:
+  Agent              — AI agent (Claude, GPT, Cursor) [prov:Agent]
+  Session            — Work session [prov:Activity]
+  ToolCall           — Tool invocation [prov:Activity]
+  AIModelInvocation  — LLM API call [prov:Activity, PROV-AGENT]
+  Entity             — Artifact [prov:Entity]
+  Decision           — Agent judgment/choice
+  Risk               — Detected risk pattern
+  Policy             — Applied policy rule
 
-Relations (11):
-  performed    — Agent → ToolCall
-  partOf       — ToolCall → Session
-  used         — ToolCall → Entity (incl. Prompt entities)
-  generated    — ToolCall → Entity (incl. Response entities)
+Relations (13) — W3C PROV + PROV-AGENT:
+  performed    — Agent → ToolCall [prov:wasAssociatedWith]
+  partOf       — ToolCall → Session [prov:wasInformedBy]
+  used         — ToolCall → Entity [prov:used]
+  generated    — ToolCall → Entity [prov:wasGeneratedBy]
   triggeredBy  — ToolCall → Decision
   detected     — ToolCall → Risk
   violates     — ToolCall → Policy
-  precedes     — ToolCall → ToolCall (temporal ordering)
-  derivedFrom  — Entity → Entity
-  signedBy     — Session → Agent (hash chain signature)
+  precedes     — ToolCall → ToolCall [inalign:precedes]
+  derivedFrom  — Entity → Entity [prov:wasDerivedFrom]
+  signedBy     — Session → Agent
   sameAs       — Entity → Entity (cross-session identity)
+  invokedModel — ToolCall → AIModelInvocation [PROV-AGENT]
+  usedPrompt   — AIModelInvocation → Prompt [PROV-AGENT]
 
-Entity subtypes (v0.8.0):
-  file         — Filesystem path
-  url          — HTTP/HTTPS URL
-  secret       — API key, credential, etc.
-  prompt       — User prompt/command (what triggered agent action)
-  response     — Agent response (what the agent produced)
+Entity subtypes (v0.9.0):
+  file         — Filesystem path [inalign:File]
+  url          — HTTP/HTTPS URL [inalign:URL]
+  secret       — API key, credential [inalign:Secret]
+  prompt       — User prompt/command [inalign:Prompt, prov:Entity]
+  response     — Agent response [inalign:Response, prov:Entity]
+  telemetry    — Execution metrics [inalign:TelemetryData]
 
 Competency Questions (CQ):
   Q1: "Has this agent accessed .env files?"
@@ -69,15 +73,14 @@ INALIGN_DIR = Path.home() / ".inalign"
 DB_PATH = INALIGN_DIR / "provenance.db"
 
 # Ontology schema version
-ONTOLOGY_VERSION = "0.8.0"
+ONTOLOGY_VERSION = "0.9.0"
 
-# Valid node classes (W3C PROV + InALign)
-NODE_CLASSES = {"Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"}
+# Valid node classes (W3C PROV + PROV-AGENT + InALign)
+NODE_CLASSES = {"Agent", "Session", "ToolCall", "AIModelInvocation", "Entity", "Decision", "Risk", "Policy"}
 
 # Valid relation types
 RELATION_TYPES = {
     "performed",     # Agent → ToolCall
-    "partOf",        # ToolCall → Session
     "used",          # ToolCall → Entity (incl. Prompt)
     "generated",     # ToolCall → Entity (incl. Response)
     "triggeredBy",   # ToolCall → Decision
@@ -87,6 +90,8 @@ RELATION_TYPES = {
     "derivedFrom",   # Entity → Entity
     "signedBy",      # Session → Agent
     "sameAs",        # Entity → Entity (cross-session identity)
+    "invokedModel",  # ToolCall → AIModelInvocation (PROV-AGENT)
+    "usedPrompt",    # AIModelInvocation → Prompt (PROV-AGENT)
 }
 
 
@@ -497,6 +502,111 @@ def populate_risks(session_id: str) -> dict[str, Any]:
         conn.close()
 
     return {"nodes": nodes_created, "edges": edges_created, "status": "ok"}
+
+
+# ---- AIModelInvocation Population (PROV-AGENT) --------------------------------
+
+def populate_llm_invocations(session_id: str) -> dict[str, Any]:
+    """Populate AIModelInvocation nodes from session log.
+
+    PROV-AGENT pattern: Each LLM reasoning step (thinking) is an
+    AIModelInvocation Activity. Links:
+      - invokedModel: preceding ToolCall → AIModelInvocation
+      - usedPrompt: AIModelInvocation → Prompt Entity (user message that triggered it)
+      - generated: AIModelInvocation → Response Entity (agent's output)
+
+    This captures the LLM's internal reasoning as a first-class provenance
+    activity, enabling queries like:
+      "What LLM reasoning led to this file access?"
+    """
+    conn = _get_db()
+    nodes_created = 0
+    edges_created = 0
+
+    try:
+        session_log = _load_session_log_for_ontology(session_id)
+        if not session_log:
+            return {"nodes": 0, "edges": 0, "status": "no_session_log"}
+
+        # Clean previous AIModelInvocation nodes
+        conn.execute(
+            "DELETE FROM ontology_edges WHERE session_id=? AND "
+            "(source_id LIKE 'llm:%' OR target_id LIKE 'llm:%')",
+            (session_id,),
+        )
+        conn.execute(
+            "DELETE FROM ontology_nodes WHERE session_id=? AND node_class='AIModelInvocation'",
+            (session_id,),
+        )
+        conn.commit()
+
+        inv_seq = 0
+        last_prompt_id = None
+        last_tc_id = None
+
+        for idx, entry in enumerate(session_log):
+            role = entry.get("role", "")
+            rtype = entry.get("type", entry.get("record_type", ""))
+            ts = entry.get("timestamp", "")
+            content = entry.get("content", "")
+            model = entry.get("model", "")
+
+            # Track user messages → prompt entity
+            if role == "user" and content:
+                prompt_count = sum(1 for e in session_log[:idx] if e.get("role") == "user")
+                last_prompt_id = f"prompt:{session_id[:8]}:{prompt_count:04d}"
+
+            # Track tool calls
+            elif rtype == "tool_call":
+                last_tc_id = f"tc:{session_id[:8]}:{idx:06d}"
+
+            # thinking = AIModelInvocation
+            elif rtype == "thinking" and content:
+                inv_id = f"llm:{session_id[:8]}:{inv_seq:04d}"
+                text = content if isinstance(content, str) else str(content)
+                preview = text[:150]
+
+                _upsert_node(conn, inv_id, "AIModelInvocation", preview,
+                             session_id, ts,
+                             attributes={
+                                 "model": model or "claude",
+                                 "reasoning_length": len(text),
+                                 "sequence_index": idx,
+                             })
+                nodes_created += 1
+
+                # invokedModel: last ToolCall → this LLM invocation
+                if last_tc_id:
+                    _insert_edge(conn, last_tc_id, inv_id, "invokedModel",
+                                 session_id, ts, confidence=0.8)
+                    edges_created += 1
+
+                # usedPrompt: LLM invocation → Prompt that triggered it
+                if last_prompt_id:
+                    _insert_edge(conn, inv_id, last_prompt_id, "usedPrompt",
+                                 session_id, ts, confidence=0.7)
+                    edges_created += 1
+
+                inv_seq += 1
+
+        conn.commit()
+        logger.info(
+            f"[ONTOLOGY] LLM invocations for {session_id[:8]}: "
+            f"{nodes_created} AIModelInvocation nodes, {edges_created} edges"
+        )
+
+    except Exception as e:
+        conn.rollback()
+        return {"nodes": 0, "edges": 0, "error": str(e)}
+    finally:
+        conn.close()
+
+    return {
+        "session_id": session_id,
+        "invocations": inv_seq,
+        "edges": edges_created,
+        "status": "ok",
+    }
 
 
 # ---- Prompt/Response Entity Population (v2) ----------------------------------

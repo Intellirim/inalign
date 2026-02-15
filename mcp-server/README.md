@@ -26,6 +26,14 @@ InALign is **fully decentralized by design**. There is no InALign server. No acc
 
 Even Pro features like the AI Security Analyzer use **your own LLM API key** and run entirely on your machine. Your data never touches our infrastructure because **we don't have infrastructure**.
 
+## What's New in v0.9.0
+
+- **PROV-AGENT Ontology** — W3C PROV + PROV-AGENT compliant knowledge graph with 8 node classes, 13 relation types, and LLM reasoning tracked as first-class PROV activities
+- **AI Security Analysis** — Two modes: Zero-Trust (local Ollama, data never leaves your machine) and Advanced (Claude/OpenAI API with 14 PII patterns masked)
+- **React SPA Dashboard** — Modern dark-theme dashboard at `localhost:8275` with Overview, Sessions, Security, and AI Analysis pages
+- **Performance** — Session detail API optimized from 57s to 0.2s (600s cache + truncated payloads)
+- **AIModelInvocation** — LLM reasoning steps tracked as first-class PROV activities in the knowledge graph
+
 ## The Problem
 
 AI coding agents (Claude Code, Cursor, Copilot) can read, write, and execute anything on your machine. When something goes wrong:
@@ -94,15 +102,16 @@ inalign-install --status             # Show current license status
 inalign-install --uninstall          # Remove InALign configuration
 ```
 
-### `inalign-report` — Interactive Dashboard
+### `inalign-report` — React Dashboard
 
 ```bash
 inalign-report                       # Open dashboard in browser (port 8275)
 inalign-report --port 9000           # Custom port
 inalign-report --no-open             # Start server without opening browser
+inalign-report --legacy              # Serve old single-HTML report
 ```
 
-Opens a 4-tab interactive dashboard. See [Report Dashboard](#report-dashboard) below.
+Opens a React SPA dashboard with dark theme. See [Report Dashboard](#report-dashboard) below.
 
 ### `inalign-ingest` — Session Log Parser
 
@@ -119,17 +128,22 @@ Parses Claude Code session logs (`.jsonl`) and saves compressed session data to 
 ### `inalign-analyze` — AI Security Analysis (Pro)
 
 ```bash
+# Zero-Trust mode (local Ollama — data never leaves your machine)
+inalign-analyze --provider local --latest --save
+inalign-analyze --provider local --model llama3.2 --latest
+
+# Advanced mode (cloud LLM — PII masked, your own API key)
 inalign-analyze --api-key sk-ant-xxx --latest --save     # Analyze with Claude API
 inalign-analyze --api-key sk-xxx --provider openai --latest  # Analyze with OpenAI
-inalign-analyze --latest --api-key KEY --max-records 50  # Limit records (for API rate limits)
+inalign-analyze --latest --api-key KEY --max-records 50  # Limit records
 inalign-analyze --latest --api-key KEY --json            # Raw JSON output
 ```
 
-Deep security analysis powered by your own LLM API key. See [AI Security Analyzer](#ai-security-analyzer-pro) below.
+Deep security analysis powered by LLM. See [AI Security Analyzer](#ai-security-analyzer-pro) below.
 
 ## What You Get
 
-### 16 MCP Tools, Zero Configuration
+### 32 MCP Tools, Zero Configuration
 
 Once installed, your AI agent automatically gains:
 
@@ -137,9 +151,52 @@ Once installed, your AI agent automatically gains:
 |----------|-------|-------------|
 | **Provenance** | `record_action`, `record_user_command`, `get_provenance`, `verify_provenance` | Cryptographic audit trail for every action |
 | **Audit** | `generate_audit_report`, `verify_third_party`, `export_report` | Compliance reports, HTML export, third-party verifiable proof |
-| **Risk** | `analyze_risk`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | Pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
+| **Risk** | `analyze_risk`, `ontology_security_scan`, `get_behavior_profile`, `get_agent_risk`, `get_user_risk`, `list_agents_risk` | Pattern detection: data exfiltration, privilege escalation, suspicious tool chains |
 | **Policy** | `get_policy`, `set_policy`, `list_policies`, `simulate_policy` | Runtime guardrails with 3 presets |
+| **Compliance** | `generate_compliance_report`, `check_owasp_compliance` | EU AI Act, OWASP LLM Top 10 |
+| **Permissions** | `get_permission_matrix`, `set_agent_permissions` | Per-tool allow/deny/audit controls |
+| **Drift** | `detect_drift`, `get_behavior_baseline` | Behavioral anomaly detection (z-score) |
+| **Telemetry** | `export_otel` | OpenTelemetry OTLP JSON export |
+| **Topology** | `track_agent_interaction`, `get_agent_topology`, `track_cost`, `get_cost_report` | Multi-agent graph + cost tracking |
+| **Ontology** | `ontology_populate`, `ontology_query`, `ontology_stats` | PROV-AGENT knowledge graph |
 | **Sessions** | `list_sessions` | Browse past audit sessions |
+
+### PROV-AGENT Ontology (v0.9.0)
+
+InALign builds a W3C PROV + PROV-AGENT compliant knowledge graph from every agent session:
+
+**8 Node Classes:**
+
+| Class | W3C PROV Type | Description |
+|-------|---------------|-------------|
+| `Agent` | prov:Agent | AI agent (Claude, GPT, Cursor) |
+| `Session` | prov:Activity | Work session |
+| `ToolCall` | prov:Activity | Tool invocation |
+| `AIModelInvocation` | prov:Activity | LLM API call (PROV-AGENT extension) |
+| `Entity` | prov:Entity | Artifact (file, URL, secret, prompt, response) |
+| `Decision` | — | Agent judgment/choice |
+| `Risk` | — | Detected risk pattern |
+| `Policy` | — | Applied policy rule |
+
+**13 Relation Types** including PROV-AGENT extensions:
+
+| Relation | Path | Standard |
+|----------|------|----------|
+| `performed` | Agent -> ToolCall | prov:wasAssociatedWith |
+| `partOf` | ToolCall -> Session | prov:wasInformedBy |
+| `used` | ToolCall -> Entity | prov:used |
+| `generated` | ToolCall -> Entity | prov:wasGeneratedBy |
+| `derivedFrom` | Entity -> Entity | prov:wasDerivedFrom |
+| `precedes` | ToolCall -> ToolCall | inalign:precedes |
+| `sameAs` | Entity -> Entity | cross-session identity |
+| `signedBy` | Session -> Agent | — |
+| `triggeredBy` | ToolCall -> Decision | — |
+| `detected` | ToolCall -> Risk | — |
+| `violates` | ToolCall -> Policy | — |
+| `invokedModel` | ToolCall -> AIModelInvocation | **PROV-AGENT** |
+| `usedPrompt` | AIModelInvocation -> Prompt | **PROV-AGENT** |
+
+The `AIModelInvocation` class and `invokedModel`/`usedPrompt` relations are PROV-AGENT extensions that track LLM reasoning steps as first-class PROV activities — enabling questions like "Which prompts led to sensitive file access?" and "What model was used when this risky action was taken?"
 
 ### How the Hash Chain Works
 
@@ -218,20 +275,38 @@ simulate_policy("STRICT_ENTERPRISE")
 
 ## Report Dashboard
 
-Run `inalign-report` to open an interactive dashboard with 4 tabs:
+Run `inalign-report` to open a React SPA dashboard (dark theme) at `localhost:8275`:
 
-| Tab | What it shows |
-|-----|---------------|
+| Page | What it shows |
+|------|---------------|
 | **Overview** | Session summary, record counts, verification status, risk score |
-| **Provenance Chain** | Full hash chain with timestamps, action types, and hash values |
-| **Session Log** | Complete conversation history from Claude Code sessions |
-| **AI Analysis** | Deep security analysis results (requires Pro + API key) |
+| **Sessions** | Session list with drill-down to full conversation history and provenance chain |
+| **Security** | Ontology security scan results, graph-based threat analysis |
+| **AI Analysis** | Deep LLM-powered security analysis results (requires API key or local Ollama) |
 
 The dashboard includes JSON/CSV export for all data. Session logs are loaded from `~/.inalign/sessions/` (use `inalign-ingest --latest --save` to populate).
 
+**Performance:** Session detail API optimized from 57s to 0.2s with 600s caching and truncated payloads.
+
 ## AI Security Analyzer (Pro)
 
-Deep LLM-powered security analysis of agent sessions. Uses **your own API key** — data goes directly from your machine to your LLM provider. InALign never sees it, because there is no InALign server to see it.
+Deep LLM-powered security analysis of agent sessions with two modes:
+
+### Zero-Trust Mode (Local Ollama)
+
+Data **never leaves your machine**. Runs entirely on local Ollama:
+
+```bash
+inalign-analyze --provider local --latest --save
+```
+
+Requires [Ollama](https://ollama.com) running locally. No API key needed.
+
+### Advanced Mode (Cloud LLM)
+
+Uses **your own API key** — data goes directly from your machine to your LLM provider. InALign never sees it. Before sending, 14 PII patterns are automatically masked (API keys, passwords, emails, SSH keys, JWTs, sensitive file paths, and more).
+
+> **Zero-trust exception disclosure:** In Advanced mode, PII-masked session data is sent to your chosen LLM provider (Anthropic or OpenAI) via your own API key. This is the only scenario where any data leaves your machine, and you opt in explicitly by providing an API key.
 
 **How it works:**
 1. Reads your session data locally
@@ -240,6 +315,7 @@ Deep LLM-powered security analysis of agent sessions. Uses **your own API key** 
 4. Returns risk score, findings, and recommendations
 
 **Supported providers:**
+- **Local Ollama** — zero-trust, no data leaves your machine
 - **Claude API** (Anthropic) — auto-detected from `sk-ant-*` keys
 - **OpenAI API** (GPT-4o) — auto-detected from `sk-*` keys
 
@@ -303,20 +379,22 @@ From vague concern to **cryptographic proof** in seconds.
 |  |                                              | |
 |  |  Action -> SHA-256 Hash Chain + Ed25519 Sign  | |
 |  |              |                               | |
-|  |     +--------+--------+--------+             | |
-|  |     v        v        v        v             | |
-|  |  SQLite   Neo4j    Cloud    Memory           | |
-|  |  (default) (opt.)  (opt.)  (fallback)        | |
+|  |     +--------+--------+                      | |
+|  |     v        v        v                      | |
+|  |  SQLite   Memory   PROV-AGENT                | |
+|  |  (default) (fallback) Ontology               | |
 |  |                                              | |
-|  |  + Risk Analysis                             | |
+|  |  + GraphRAG Risk Analysis (11 patterns)      | |
 |  |  + Policy Engine (3 presets)                 | |
-|  |  + Report Dashboard (4-tab UI)               | |
-|  |  + AI Security Analyzer (Pro)                | |
+|  |  + React Dashboard (4-page SPA)              | |
+|  |  + AI Security Analyzer (Ollama / Cloud)     | |
+|  |  + Ontology Security Engine                  | |
+|  |  + EU AI Act & OWASP Compliance              | |
 |  +---------------------------------------------+ |
 +--------------------------------------------------+
 ```
 
-**Privacy by architecture**: InALign has no server, no cloud, no database you connect to. The MCP server runs entirely on your machine. Your code, credentials, and session data never leave your local environment. Even Pro features (AI analysis) use your own API key directly — we literally cannot access your data because there is nowhere for it to go.
+**Privacy by architecture**: InALign has no server, no cloud, no database you connect to. The MCP server runs entirely on your machine. Your code, credentials, and session data never leave your local environment. Even Pro features (AI analysis) can run fully local with Ollama — or use your own API key with automatic PII masking.
 
 **Performance**: Recording 1,000 actions adds ~50ms total overhead. Hash chain verification of 10,000 records completes in <200ms. No measurable impact on agent response time.
 
@@ -326,7 +404,6 @@ From vague concern to **cryptographic proof** in seconds.
 |------|-------|-------------|----------|
 | **SQLite** | `--local` (default) | Permanent, `~/.inalign/provenance.db` | Most users, local dev, compliance |
 | **Memory** | Automatic fallback | Per session only | Quick testing |
-| **Neo4j** | Optional, self-host | Permanent | Graph queries, large teams |
 
 SQLite is the recommended default. It requires no external services and persists across sessions.
 
@@ -339,21 +416,6 @@ pip install inalign-mcp && inalign-install --local
 ```
 
 That's it. SQLite storage, local dashboard, full functionality. No external dependencies.
-
-<details>
-<summary><strong>Optional: Neo4j for graph storage</strong></summary>
-
-For teams that need graph-based querying:
-
-```bash
-pip install inalign-mcp[neo4j]
-
-export NEO4J_URI=neo4j://localhost:7687
-export NEO4J_USER=neo4j
-export NEO4J_PASSWORD=your-password
-```
-
-</details>
 
 ## Development
 
