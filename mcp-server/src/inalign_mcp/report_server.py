@@ -22,11 +22,88 @@ from datetime import datetime, timezone
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
+import re
+
 # Default port
 DEFAULT_PORT = 8275
 
+# UUID pattern for session IDs
+_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
+
+
+def _is_uuid(s: str) -> bool:
+    return bool(_UUID_RE.match(s))
+
 # Store report HTML in memory
 _report_html = ""
+
+
+def auto_ingest_new_sessions() -> tuple[int, str | None]:
+    """Auto-discover and ingest new Claude Code sessions.
+
+    Scans ~/.claude/projects/*/ for .jsonl session files that haven't
+    been ingested yet into ~/.inalign/sessions/*.json.gz.
+
+    Returns (number_ingested, latest_session_id).
+    """
+    from .session_ingest import SessionIngestor
+
+    sessions_dir = Path.home() / ".inalign" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+
+    # Already ingested session IDs (from .json.gz filenames)
+    # Note: "abc.json.gz" has stem "abc.json", need to strip .json too
+    existing_gz = {}
+    for gz in sessions_dir.glob("*.json.gz"):
+        key = gz.name.replace(".json.gz", "")
+        existing_gz[key] = gz.stat().st_mtime
+
+    # Scan Claude Code session directories
+    claude_base = Path.home() / ".claude" / "projects"
+    if not claude_base.exists():
+        return 0, None
+
+    ingested = 0
+    latest_mtime = 0.0
+    latest_id = None
+
+    for jsonl in claude_base.rglob("*.jsonl"):
+        # Skip subagent/compact files (check full path, not just filename)
+        full_path_lower = str(jsonl).lower()
+        if "subagent" in full_path_lower or "compact" in full_path_lower:
+            continue
+        # Only accept UUID-named sessions (skip agent-xxx files)
+        if not _is_uuid(jsonl.stem):
+            continue
+
+        stem = jsonl.stem  # UUID session ID
+        jsonl_mtime = jsonl.stat().st_mtime
+
+        # Track latest session by source file mtime
+        if jsonl_mtime > latest_mtime:
+            latest_mtime = jsonl_mtime
+            latest_id = stem
+
+        # Skip if already ingested AND source hasn't been updated
+        # Use 2-second tolerance for filesystem mtime precision
+        if stem in existing_gz and jsonl_mtime <= existing_gz[stem] + 2:
+            continue
+
+        # Ingest: parse .jsonl → save as .json.gz
+        try:
+            ingestor = SessionIngestor()
+            ingestor.ingest_file(str(jsonl))
+
+            # Save compressed — use jsonl stem as session_id to ensure consistency
+            if ingestor.session_id != stem:
+                ingestor.session_id = stem
+
+            ingestor.save_compressed(str(sessions_dir))
+            ingested += 1
+        except Exception:
+            continue
+
+    return ingested, latest_id
 
 
 def generate_report_data():
@@ -42,27 +119,66 @@ def generate_report_data():
     # Init storage
     init_sqlite()
 
+    # --- Auto-ingest new Claude Code sessions ---
+    latest_session_hint = None
+    try:
+        n_ingested, latest_session_hint = auto_ingest_new_sessions()
+        if n_ingested > 0:
+            print(f"  Auto-ingested {n_ingested} new session(s)")
+    except Exception:
+        pass
+
     # --- Load session log first (needed for auto-conversion) ---
+    # Priority: 1) latest active session from auto-ingest, 2) newest non-empty gz
     session_log = []
     log_session_id = None
     try:
         sessions_dir = Path.home() / ".inalign" / "sessions"
         if sessions_dir.exists():
-            gz_files = sorted(
-                sessions_dir.glob("*.json.gz"),
-                key=lambda f: f.stat().st_mtime,
-                reverse=True,
-            )
-            if gz_files:
-                with gzip.open(gz_files[0], "rt", encoding="utf-8") as gf:
-                    sdata = json.load(gf)
-                session_log = (
-                    sdata.get("records", sdata)
-                    if isinstance(sdata, dict)
-                    else sdata
+            # If auto-ingest found the latest session, try that first
+            if latest_session_hint:
+                target_gz = sessions_dir / f"{latest_session_hint}.json.gz"
+                if target_gz.exists() and target_gz.stat().st_size >= 500:
+                    try:
+                        with gzip.open(target_gz, "rt", encoding="utf-8") as gf:
+                            sdata = json.load(gf)
+                        records = (
+                            sdata.get("records", sdata)
+                            if isinstance(sdata, dict)
+                            else sdata
+                        )
+                        if records and len(records) > 0:
+                            session_log = records
+                            if isinstance(sdata, dict):
+                                log_session_id = sdata.get("session_id")
+                    except Exception:
+                        pass
+
+            # Fallback: try newest non-empty gz files
+            if not session_log:
+                gz_files = sorted(
+                    sessions_dir.glob("*.json.gz"),
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True,
                 )
-                if isinstance(sdata, dict):
-                    log_session_id = sdata.get("session_id")
+                for gz in gz_files[:20]:
+                    if gz.stat().st_size < 500:
+                        continue
+                    try:
+                        with gzip.open(gz, "rt", encoding="utf-8") as gf:
+                            sdata = json.load(gf)
+                        records = (
+                            sdata.get("records", sdata)
+                            if isinstance(sdata, dict)
+                            else sdata
+                        )
+                        if records and len(records) > 0:
+                            session_log = records
+                            if isinstance(sdata, dict):
+                                log_session_id = sdata.get("session_id")
+                            break
+                    except Exception:
+                        continue
     except Exception:
         pass
 
