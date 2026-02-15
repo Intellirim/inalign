@@ -57,7 +57,7 @@ INALIGN_DIR = Path.home() / ".inalign"
 DB_PATH = INALIGN_DIR / "provenance.db"
 
 # Ontology schema version
-ONTOLOGY_VERSION = "0.6.0"
+ONTOLOGY_VERSION = "0.7.0"
 
 # Valid node classes (W3C PROV + InALign)
 NODE_CLASSES = {"Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"}

@@ -454,6 +454,19 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="ontology_security_scan",
+            description="Run ontology-powered security analysis. Uses the knowledge graph for: entity sensitivity classification, data flow tracking (exfiltration paths), cross-session threat detection, graph-based policy enforcement, and impact/blast radius analysis. Returns findings with MITRE ATT&CK mappings.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID to analyze (defaults to current session)",
+                    },
+                },
+            },
+        ),
+        Tool(
             name="get_behavior_profile",
             description="Get behavioral profile for a session. Shows tool usage patterns, timing analysis, and anomalies.",
             inputSchema={
@@ -1342,6 +1355,28 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         }
 
         result = [TextContent(type="text", text=json.dumps(proof, indent=2))]
+
+    # ============================================
+    # ONTOLOGY SECURITY SCAN
+    # ============================================
+
+    elif name == "ontology_security_scan":
+        session_id = arguments.get("session_id", SESSION_ID)
+        try:
+            from .ontology import populate_from_session, populate_decisions, populate_risks
+            from .ontology_security import run_ontology_security_analysis
+            # Ensure ontology is populated
+            populate_from_session(session_id)
+            populate_decisions(session_id)
+            populate_risks(session_id)
+            # Run graph-powered security analysis
+            scan = run_ontology_security_analysis(session_id)
+            result = [TextContent(type="text", text=json.dumps(scan, indent=2, default=str))]
+        except Exception as e:
+            import traceback
+            result = [TextContent(type="text", text=json.dumps({
+                "error": str(e), "traceback": traceback.format_exc(),
+            }))]
 
     # ============================================
     # RISK ANALYSIS HANDLERS

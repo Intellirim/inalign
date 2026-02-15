@@ -168,6 +168,7 @@ def generate_report_data():
         from .ontology import (
             populate_from_session, populate_decisions, populate_risks,
             get_ontology_stats,
+            cq2_files_before_external_call, cq3_policy_violations_in_risky_sessions,
         )
         # Auto-populate ontology from this session's data
         populate_from_session(session_id)
@@ -175,25 +176,93 @@ def generate_report_data():
         populate_risks(session_id)
         ontology_data = get_ontology_stats(session_id)
 
-        # Add graph data for visualization (sampled for performance)
+        # Auto-run competency queries
+        try:
+            ontology_data["cq2"] = cq2_files_before_external_call(session_id)
+        except Exception:
+            ontology_data["cq2"] = {}
+        try:
+            ontology_data["cq3"] = cq3_policy_violations_in_risky_sessions(
+                risk_level="high", session_id=session_id
+            )
+        except Exception:
+            ontology_data["cq3"] = {}
+
+        # Ontology Security Engine — graph-powered threat detection
+        try:
+            from .ontology_security import run_ontology_security_analysis
+            onto_sec = run_ontology_security_analysis(session_id)
+            ontology_data["security"] = onto_sec
+
+            # Feed findings back into risk_data
+            boost = onto_sec.get("combined_risk_boost", 0)
+            if boost > 0 and risk_data:
+                risk_data["risk_score"] = min(
+                    100, risk_data.get("risk_score", 0) + boost
+                )
+                for f in onto_sec.get("findings", []):
+                    risk_data.setdefault("patterns", []).append({
+                        "id": "ONTO-" + f["title"][:20].upper().replace(" ", "-").replace(":", ""),
+                        "name": f["title"],
+                        "risk": f["severity"].lower(),
+                        "confidence": 0.85,
+                        "description": f["description"],
+                        "source": "ontology_security",
+                        "mitre_tactic": f.get("mitre", ""),
+                    })
+        except Exception:
+            pass
+
+        # Add graph data for visualization (connectivity-preserving sampling)
         from .ontology import _get_db
         conn = _get_db()
         try:
-            # Sample nodes (up to 200 for vis)
-            vis_nodes = []
+            MAX_NODES = 150
+            MAX_EDGES = 300
+
+            # Step 1: Always include hub nodes (Agent, Session, Decision, Risk)
+            hub_classes = ("Agent", "Session", "Decision", "Risk", "Policy")
+            node_map = {}  # id -> {id, class, label, ...}
             for row in conn.execute(
-                "SELECT id, node_class, label, timestamp FROM ontology_nodes WHERE session_id=? ORDER BY RANDOM() LIMIT 200",
-                (session_id,),
+                "SELECT id, node_class, label, timestamp, attributes FROM ontology_nodes WHERE session_id=? AND node_class IN (?,?,?,?,?)",
+                (session_id, *hub_classes),
             ).fetchall():
-                vis_nodes.append({
+                node_map[row["id"]] = {
                     "id": row["id"], "class": row["node_class"],
                     "label": (row["label"] or "")[:30],
-                })
-            # Sample edges for those nodes
-            node_ids = {n["id"] for n in vis_nodes}
+                    "ts": (row["timestamp"] or "")[:19],
+                    "attrs": json.loads(row["attributes"] or "{}"),
+                }
+
+            # Step 2: Get edges connected to hub nodes, include their ToolCall/Entity endpoints
+            remaining = MAX_NODES - len(node_map)
+            if remaining > 0:
+                hub_ids = list(node_map.keys())
+                if hub_ids:
+                    placeholders = ",".join("?" * len(hub_ids))
+                    # Get ToolCall/Entity nodes connected to hubs
+                    neighbor_rows = conn.execute(
+                        f"""SELECT DISTINCT n.id, n.node_class, n.label, n.timestamp, n.attributes
+                            FROM ontology_edges e
+                            JOIN ontology_nodes n ON n.id = e.target_id AND n.session_id = e.session_id
+                            WHERE e.session_id=? AND e.source_id IN ({placeholders})
+                            AND n.node_class IN ('ToolCall','Entity')
+                            ORDER BY RANDOM() LIMIT ?""",
+                        (session_id, *hub_ids, remaining),
+                    ).fetchall()
+                    for row in neighbor_rows:
+                        node_map[row["id"]] = {
+                            "id": row["id"], "class": row["node_class"],
+                            "label": (row["label"] or "")[:30],
+                            "ts": (row["timestamp"] or "")[:19],
+                            "attrs": json.loads(row["attributes"] or "{}"),
+                        }
+
+            # Step 3: Collect all edges between selected nodes
+            node_ids = set(node_map.keys())
             vis_edges = []
             for row in conn.execute(
-                "SELECT source_id, target_id, relation FROM ontology_edges WHERE session_id=? LIMIT 500",
+                "SELECT source_id, target_id, relation FROM ontology_edges WHERE session_id=?",
                 (session_id,),
             ).fetchall():
                 if row["source_id"] in node_ids and row["target_id"] in node_ids:
@@ -201,8 +270,11 @@ def generate_report_data():
                         "s": row["source_id"], "t": row["target_id"],
                         "r": row["relation"],
                     })
-            ontology_data["vis_nodes"] = vis_nodes
-            ontology_data["vis_edges"] = vis_edges[:300]
+                    if len(vis_edges) >= MAX_EDGES:
+                        break
+
+            ontology_data["vis_nodes"] = list(node_map.values())
+            ontology_data["vis_edges"] = vis_edges
         except Exception:
             pass
         finally:
