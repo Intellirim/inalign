@@ -283,6 +283,7 @@ def generate_report_data():
     try:
         from .ontology import (
             populate_from_session, populate_decisions, populate_risks,
+            populate_data_flow,
             get_ontology_stats,
             cq2_files_before_external_call, cq3_policy_violations_in_risky_sessions,
         )
@@ -290,7 +291,10 @@ def generate_report_data():
         populate_from_session(session_id)
         populate_decisions(session_id)
         populate_risks(session_id)
+        # Build real data flow: derivedFrom + used/generated + sensitivity
+        df_result = populate_data_flow(session_id)
         ontology_data = get_ontology_stats(session_id)
+        ontology_data["data_flow"] = df_result
 
         # Auto-run competency queries
         try:

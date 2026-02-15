@@ -120,8 +120,8 @@ class SessionIngestor:
 
     def detect_agent_type(self, first_line: dict) -> str:
         """Detect which agent produced this log."""
-        # Claude Code: has sessionId, slug, version fields
-        if "sessionId" in first_line and "slug" in first_line:
+        # Claude Code: has sessionId (slug is optional in newer versions)
+        if "sessionId" in first_line and ("slug" in first_line or "version" in first_line):
             return "claude-code"
         # Cursor: has composerId or similar
         if "composerId" in first_line or "cursorVersion" in first_line:
