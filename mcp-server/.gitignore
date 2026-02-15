@@ -48,3 +48,7 @@ htmlcov/
 audit_export-*.json
 certificate_*.html
 proof_export-*.json
+
+# Proprietary / closed-source modules
+src/inalign_mcp/ontology.py
+src/inalign_mcp/ontology_security.py
