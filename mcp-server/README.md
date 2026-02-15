@@ -26,12 +26,12 @@ InALign is **fully decentralized by design**. There is no InALign server. No acc
 
 Even Pro features like the AI Security Analyzer use **your own LLM API key** and run entirely on your machine. Your data never touches our infrastructure because **we don't have infrastructure**.
 
-## What's New in v0.9.0
+## What's New in v0.9.1
 
 - **PROV-AGENT Ontology** — W3C PROV + PROV-AGENT compliant knowledge graph with 8 node classes, 13 relation types, and LLM reasoning tracked as first-class PROV activities
 - **AI Security Analysis** — Two modes: Zero-Trust (local Ollama, data never leaves your machine) and Advanced (Claude/OpenAI API with 14 PII patterns masked)
 - **React SPA Dashboard** — Modern dark-theme dashboard at `localhost:8275` with Overview, Sessions, Security, and AI Analysis pages
-- **Performance** — Session detail API optimized from 57s to 0.2s (600s cache + truncated payloads)
+- **Performance** — Dashboard overview loads in 0.3s, session detail in 1.7s via lazy ontology loading
 - **AIModelInvocation** — LLM reasoning steps tracked as first-class PROV activities in the knowledge graph
 
 ## The Problem
@@ -161,7 +161,7 @@ Once installed, your AI agent automatically gains:
 | **Ontology** | `ontology_populate`, `ontology_query`, `ontology_stats` | PROV-AGENT knowledge graph |
 | **Sessions** | `list_sessions` | Browse past audit sessions |
 
-### PROV-AGENT Ontology (v0.9.0)
+### PROV-AGENT Ontology (v0.9.1)
 
 InALign builds a W3C PROV + PROV-AGENT compliant knowledge graph from every agent session:
 
@@ -286,7 +286,7 @@ Run `inalign-report` to open a React SPA dashboard (dark theme) at `localhost:82
 
 The dashboard includes JSON/CSV export for all data. Session logs are loaded from `~/.inalign/sessions/` (use `inalign-ingest --latest --save` to populate).
 
-**Performance:** Session detail API optimized from 57s to 0.2s with 600s caching and truncated payloads.
+**Performance:** Dashboard overview loads in 0.3s, session detail in 1.7s via lazy ontology loading.
 
 ## AI Security Analyzer (Pro)
 

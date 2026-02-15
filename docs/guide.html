@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>InALign v0.9.0 Guide - Complete Usage Documentation</title>
+    <title>InALign v0.9.1 Guide - Complete Usage Documentation</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -337,7 +337,7 @@
         <main class="main-content">
             <h1>InALign Guide</h1>
             <p class="subtitle">
-                v0.9.0 &mdash; Everything you need to know about using InALign, from installation to advanced AI security analysis.
+                v0.9.1 &mdash; Everything you need to know about using InALign, from installation to advanced AI security analysis.
             </p>
 
             <!-- Quick Start -->
@@ -466,37 +466,29 @@ inalign-report --port <span class="n">9000</span>
 inalign-report --no-open</pre>
             </div>
 
-            <p>The report launches a <strong style="color:white;">React SPA dashboard</strong> at <code>localhost:8275</code> with a full REST API backend. The dashboard features 6 interactive tabs:</p>
+            <p>The report launches a <strong style="color:white;">React SPA dashboard</strong> at <code>localhost:8275</code> with a full REST API backend. The dashboard has 4 main pages:</p>
 
             <div class="tool-card">
                 <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:16px;">
                     <div>
                         <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Overview</div>
-                        <div style="font-size:13px; color:#94a3b8;">Session stats, Merkle root, chain validity badge, record count</div>
+                        <div style="font-size:13px; color:#94a3b8;">Session summary, risk distribution, verified chains, storage stats</div>
                     </div>
                     <div>
-                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Provenance Chain</div>
-                        <div style="font-size:13px; color:#94a3b8;">Every recorded action with expandable details and hash values</div>
-                    </div>
-                    <div>
-                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Session Log</div>
-                        <div style="font-size:13px; color:#94a3b8;">Full conversation transcript with role filtering (user, assistant, tool)</div>
+                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Sessions</div>
+                        <div style="font-size:13px; color:#94a3b8;">Session list with drill-down to provenance chain, session log, data flows, and security tabs</div>
                     </div>
                     <div>
                         <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Security</div>
-                        <div style="font-size:13px; color:#94a3b8;">GraphRAG risk analysis with MITRE ATT&amp;CK mapped findings</div>
-                    </div>
-                    <div>
-                        <div style="color:#60a5fa; font-weight:600; margin-bottom:4px;">Governance</div>
-                        <div style="font-size:13px; color:#94a3b8;">EU AI Act compliance, OWASP LLM Top 10, agent permissions</div>
+                        <div style="font-size:13px; color:#94a3b8;">GraphRAG risk analysis with MITRE ATT&amp;CK mapped findings across all sessions</div>
                     </div>
                     <div>
                         <div style="color:#a78bfa; font-weight:600; margin-bottom:4px;">AI Analysis <span class="badge badge-pro" style="font-size:10px;">Pro</span></div>
-                        <div style="font-size:13px; color:#94a3b8;">LLM-powered deep security analysis with risk scoring</div>
+                        <div style="font-size:13px; color:#94a3b8;">Zero-Trust (Ollama) or Advanced (Claude/OpenAI) LLM-powered security analysis</div>
                     </div>
                 </div>
             </div>
-            <p>Data export is available in JSON and CSV formats from the dashboard.</p>
+            <p>Data export is available in JSON and CSV formats from the dashboard. Session detail loads in 1.7s via lazy ontology loading.</p>
 
             <!-- CLI: inalign-analyze -->
             <h2 id="cli-analyze">inalign-analyze</h2>
@@ -901,7 +893,7 @@ inalign-ingest --latest --json</pre>
 
             <!-- MCP Tools: Knowledge Graph (Ontology) -->
             <h2 id="tools-ontology">Knowledge Graph (Ontology)</h2>
-            <p>Build and query W3C PROV-compliant knowledge graphs from your agent sessions for deep causal analysis. The v0.9.0 ontology defines <strong style="color:white;">8 classes</strong> (Agent, Session, ToolCall, AIModelInvocation, Entity, Decision, Risk, Policy) and <strong style="color:white;">13 relations</strong> covering W3C PROV core plus PROV-AGENT extensions.</p>
+            <p>Build and query W3C PROV-compliant knowledge graphs from your agent sessions for deep causal analysis. The v0.9.1 ontology defines <strong style="color:white;">8 classes</strong> (Agent, Session, ToolCall, AIModelInvocation, Entity, Decision, Risk, Policy) and <strong style="color:white;">13 relations</strong> covering W3C PROV core plus PROV-AGENT extensions.</p>
 
             <div class="tool-card">
                 <div class="tool-header">
@@ -949,7 +941,7 @@ inalign-ingest --latest --json</pre>
 
             <!-- PROV-AGENT: AIModelInvocation -->
             <h2 id="prov-agent">PROV-AGENT: AIModelInvocation</h2>
-            <p>v0.9.0 introduces the <strong style="color:white;">PROV-AGENT</strong> ontology extension, adding first-class support for tracking LLM reasoning steps as knowledge graph nodes.</p>
+            <p>v0.9.1 introduces the <strong style="color:white;">PROV-AGENT</strong> ontology extension, adding first-class support for tracking LLM reasoning steps as knowledge graph nodes.</p>
 
             <p>The core idea: every time the AI agent "thinks" (reasoning, planning, or generating output), InALign records it as an <code>AIModelInvocation</code> activity node &mdash; a W3C PROV Activity that represents a single LLM API call or reasoning step.</p>
 
@@ -978,7 +970,7 @@ inalign-ingest --latest --json</pre>
 
             <h3>New Relations</h3>
             <div class="code-block">
-<pre><span class="c"># PROV-AGENT relations added in v0.9.0</span>
+<pre><span class="c"># PROV-AGENT relations added in v0.9.1</span>
 <span class="k">invokedModel</span>  <span class="c"># ToolCall &rarr; AIModelInvocation</span>
                <span class="c"># Links the tool call that triggered an LLM reasoning step</span>
 
@@ -1002,7 +994,7 @@ inalign-ingest --latest --json</pre>
 
             <!-- AI Analysis -->
             <h2 id="ai-analysis">AI Analysis Modes</h2>
-            <p>v0.9.0 offers two AI analysis modes for deep security review of your agent sessions. Both run <strong style="color:white;">entirely from your machine</strong> &mdash; InALign never stores or routes your data through any intermediary.</p>
+            <p>v0.9.1 offers two AI analysis modes for deep security review of your agent sessions. Both run <strong style="color:white;">entirely from your machine</strong> &mdash; InALign never stores or routes your data through any intermediary.</p>
 
             <h3>Zero-Trust Mode (Ollama)</h3>
             <div class="tool-card">
@@ -1118,7 +1110,7 @@ inalign-analyze --provider <span class="s">openai</span> --api-key <span class="
                         <td class="check">&#10003;</td>
                     </tr>
                     <tr>
-                        <td>HTML audit dashboard (6 tabs)</td>
+                        <td>React SPA dashboard (4 pages)</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
                         <td class="check">&#10003;</td>
@@ -1276,13 +1268,11 @@ pip install inalign-mcp && inalign-install --local
 <span class="c"># 3. When done, view your audit trail:</span>
 inalign-report
 
-<span class="c"># Opens a 6-tab dashboard in your browser with:</span>
-<span class="c">#   - Overview (session stats, Merkle root, chain validity)</span>
-<span class="c">#   - Provenance chain (every action with hashes)</span>
-<span class="c">#   - Session log (full conversation transcript)</span>
+<span class="c"># Opens a React SPA dashboard in your browser with:</span>
+<span class="c">#   - Overview (session stats, risk distribution, verified chains)</span>
+<span class="c">#   - Sessions (drill-down to provenance, session log, data flows)</span>
 <span class="c">#   - Security (GraphRAG risk analysis, MITRE ATT&amp;CK findings)</span>
-<span class="c">#   - Governance (EU AI Act, OWASP LLM Top 10, permissions)</span>
-<span class="c">#   - Data export (JSON / CSV download)</span></pre>
+<span class="c">#   - AI Analysis (Zero-Trust Ollama / Advanced Claude/OpenAI)</span></pre>
             </div>
 
             <h3>Pro: AI-Powered Security Analysis</h3>
