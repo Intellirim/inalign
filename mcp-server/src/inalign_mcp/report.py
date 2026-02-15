@@ -737,8 +737,8 @@ def generate_html_report(
         # Class distribution cards
         onto_class_cards = ""
         class_colors = {
-            "Agent": "#5b7cfa", "Session": "#3d9970", "ToolCall": "#c08040",
-            "Entity": "#8878b0", "Decision": "#a06080", "Risk": "#c0392b", "Policy": "#4090a0"
+            "Agent": "#5878a8", "Session": "#4a7a6a", "ToolCall": "#7a6a50",
+            "Entity": "#606070", "Decision": "#6a5a6a", "Risk": "#8a5050", "Policy": "#4a6a7a"
         }
         for cls_name in ["Agent", "Session", "ToolCall", "Entity", "Decision", "Risk", "Policy"]:
             cnt = onto_classes.get(cls_name, 0)
@@ -811,11 +811,11 @@ def generate_html_report(
 <title>InALign Dashboard — {session_id}</title>
 <style>
   :root {{
-    --bg: #0b0b0f; --card: #12121a; --surface: #1a1a24; --border: #252530;
-    --text: #d8d8e0; --muted: #8888a0; --dim: #55556a;
-    --green: #3d9970; --red: #c0392b; --blue: #5b7cfa;
-    --purple: #a090c0; --orange: #c08040; --yellow: #b0993a;
-    --accent: #5b7cfa;
+    --bg: #0c0c10; --card: #141418; --surface: #1a1a20; --border: #26262e;
+    --text: #c0c0c8; --muted: #686878; --dim: #484858;
+    --green: #4a8a6a; --red: #985050; --blue: #5878a8;
+    --purple: #706880; --orange: #887058; --yellow: #786838;
+    --accent: #5878a8;
   }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
   body {{
@@ -848,7 +848,7 @@ def generate_html_report(
     border-radius: 6px; color: var(--blue); font-size: 0.8rem; font-weight: 500;
     cursor: pointer; transition: background 0.15s, border-color 0.15s;
   }}
-  .dl-btn:hover {{ background: rgba(88,166,255,0.1); border-color: var(--blue); }}
+  .dl-btn:hover {{ background: rgba(88,120,168,0.1); border-color: var(--blue); }}
   .dl-btn svg {{ width: 14px; height: 14px; fill: currentColor; }}
 
   /* Cards */
@@ -857,7 +857,7 @@ def generate_html_report(
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
     padding: 1.2rem; transition: border-color 0.15s ease;
   }}
-  .card:hover {{ border-color: rgba(77,101,255,0.3); }}
+  .card:hover {{ border-color: rgba(88,120,168,0.3); }}
   .card .label {{ color: var(--dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.3rem; font-weight: 600; }}
   .card .value {{ font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }}
   .card .value.pass {{ color: var(--green); }}
@@ -881,9 +881,9 @@ def generate_html_report(
     width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-size: 1.6rem; font-weight: 700; flex-shrink: 0;
   }}
-  .risk-gauge.pass {{ background: rgba(34,197,94,0.12); color: var(--green); border: 2px solid rgba(34,197,94,0.3); }}
-  .risk-gauge.warn {{ background: rgba(245,158,11,0.12); color: var(--orange); border: 2px solid rgba(245,158,11,0.3); }}
-  .risk-gauge.fail {{ background: rgba(239,68,68,0.12); color: var(--red); border: 2px solid rgba(239,68,68,0.3); }}
+  .risk-gauge.pass {{ background: rgba(74,138,106,0.12); color: var(--green); border: 2px solid rgba(74,138,106,0.3); }}
+  .risk-gauge.warn {{ background: rgba(136,112,88,0.12); color: var(--orange); border: 2px solid rgba(136,112,88,0.3); }}
+  .risk-gauge.fail {{ background: rgba(152,80,80,0.12); color: var(--red); border: 2px solid rgba(152,80,80,0.3); }}
   .audit-meta {{ flex: 1; }}
   .audit-meta h3 {{ font-size: 1.1rem; font-weight: 600; margin-bottom: 0.2rem; }}
   .audit-meta .audit-sub {{ color: var(--muted); font-size: 0.82rem; }}
@@ -900,16 +900,16 @@ def generate_html_report(
   .finding-rec::before {{ content: "\\2192 "; }}
   .mitre-chip {{
     font-family: monospace; font-size: 0.65rem; padding: 0.1rem 0.35rem;
-    background: rgba(77,101,255,0.1); color: var(--accent); border-radius: 3px;
+    background: rgba(88,120,168,0.1); color: var(--accent); border-radius: 3px;
   }}
   .finding-clickable {{ cursor: pointer; }}
   .finding-clickable:hover {{ border-left-color: var(--accent); transform: translateX(2px); transition: all 0.15s ease; }}
   .finding-count {{
-    font-size: 0.68rem; color: var(--accent); background: rgba(77,101,255,0.1);
+    font-size: 0.68rem; color: var(--accent); background: rgba(88,120,168,0.1);
     padding: 0.1rem 0.4rem; border-radius: 3px; margin-left: auto;
   }}
-  .tl-entry.tl-highlight {{ background: rgba(77,101,255,0.12); border-left: 3px solid var(--accent); animation: pulse-highlight 1.5s ease; }}
-  @keyframes pulse-highlight {{ 0% {{ background: rgba(77,101,255,0.25); }} 100% {{ background: rgba(77,101,255,0.12); }} }}
+  .tl-entry.tl-highlight {{ background: rgba(88,120,168,0.12); border-left: 3px solid var(--accent); animation: pulse-highlight 1.5s ease; }}
+  @keyframes pulse-highlight {{ 0% {{ background: rgba(88,120,168,0.25); }} 100% {{ background: rgba(88,120,168,0.12); }} }}
   .rec-item {{
     padding: 0.5rem 0.8rem; font-size: 0.82rem; color: var(--text);
     border-left: 2px solid var(--accent); margin-bottom: 0.4rem; background: var(--surface); border-radius: 0 4px 4px 0;
@@ -924,7 +924,7 @@ def generate_html_report(
   th {{ text-align: left; color: var(--muted); font-weight: 500; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }}
   td {{ padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }}
   .record-row.expandable {{ cursor: pointer; }}
-  .record-row.expandable:hover {{ background: rgba(88,166,255,0.06); }}
+  .record-row.expandable:hover {{ background: rgba(88,120,168,0.06); }}
   .record-row .arrow {{ display: inline-block; font-size: 0.55rem; margin-right: 0.2rem; transition: transform 0.15s; color: var(--muted); }}
   .record-row .arrow.empty {{ visibility: hidden; }}
   .record-row.open .arrow {{ transform: rotate(90deg); }}
@@ -932,17 +932,17 @@ def generate_html_report(
   .hash, .timestamp {{ font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem; color: var(--muted); }}
   .action-name {{ font-weight: 500; }}
   .badge {{ display: inline-block; padding: 0.12rem 0.45rem; border-radius: 4px; font-size: 0.68rem; font-weight: 500; text-transform: uppercase; }}
-  .type-user {{ background: rgba(63,185,80,0.15); color: var(--green); }}
-  .type-tool {{ background: rgba(88,166,255,0.15); color: var(--blue); }}
-  .type-decision {{ background: rgba(188,140,255,0.15); color: var(--purple); }}
-  .type-file {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
-  .type-llm {{ background: rgba(248,81,73,0.15); color: var(--red); }}
+  .type-user {{ background: rgba(74,138,106,0.12); color: var(--green); }}
+  .type-tool {{ background: rgba(88,120,168,0.12); color: var(--blue); }}
+  .type-decision {{ background: rgba(112,104,128,0.12); color: var(--purple); }}
+  .type-file {{ background: rgba(136,112,88,0.12); color: var(--orange); }}
+  .type-llm {{ background: rgba(152,80,80,0.12); color: var(--red); }}
 
   /* Status badges */
-  .st-pass {{ background: rgba(63,185,80,0.15); color: var(--green); }}
-  .st-warn {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
-  .st-fail {{ background: rgba(248,81,73,0.15); color: var(--red); }}
-  .st-na {{ background: rgba(139,148,158,0.15); color: var(--muted); }}
+  .st-pass {{ background: rgba(74,138,106,0.12); color: var(--green); }}
+  .st-warn {{ background: rgba(136,112,88,0.12); color: var(--orange); }}
+  .st-fail {{ background: rgba(152,80,80,0.12); color: var(--red); }}
+  .st-na {{ background: rgba(104,104,120,0.12); color: var(--muted); }}
 
   .mono-sm {{ font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem; }}
   .desc-cell {{ max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
@@ -952,23 +952,23 @@ def generate_html_report(
   .detail-label {{ color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.3rem; }}
   .detail-label:first-child {{ margin-top: 0; }}
   .detail-value {{ color: var(--text); word-break: break-word; margin-bottom: 0.2rem; }}
-  .detail-pre {{ color: var(--text); font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; background: rgba(88,166,255,0.04); padding: 0.3rem; border-radius: 4px; margin-bottom: 0.2rem; }}
+  .detail-pre {{ color: var(--text); font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; background: rgba(88,120,168,0.04); padding: 0.3rem; border-radius: 4px; margin-bottom: 0.2rem; }}
 
-  .merkle {{ font-family: monospace; font-size: 0.8rem; color: var(--blue); word-break: break-all; background: rgba(88,166,255,0.08); padding: 0.6rem; border-radius: 6px; margin-top: 0.4rem; }}
+  .merkle {{ font-family: monospace; font-size: 0.8rem; color: var(--blue); word-break: break-all; background: rgba(88,120,168,0.08); padding: 0.6rem; border-radius: 6px; margin-top: 0.4rem; }}
   .stat-chip {{ display: inline-block; padding: 0.15rem 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; font-size: 0.75rem; margin: 0.15rem; }}
 
   /* Session Log */
   .log-entry {{ padding: 0.4rem 0.6rem; border-bottom: 1px solid rgba(48,54,61,0.5); font-size: 0.82rem; }}
   .log-entry.log-expandable {{ cursor: pointer; }}
-  .log-entry.log-expandable:hover {{ background: rgba(88,166,255,0.04); }}
+  .log-entry.log-expandable:hover {{ background: rgba(88,120,168,0.04); }}
   .log-entry .arrow {{ font-size: 0.55rem; color: var(--muted); transition: transform 0.15s; display: inline-block; }}
   .log-entry.open .arrow {{ transform: rotate(90deg); }}
   .log-header {{ display: flex; align-items: center; gap: 0.5rem; }}
   .log-badge {{ display: inline-block; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.65rem; font-weight: 600; min-width: 65px; text-align: center; }}
-  .role-user {{ background: rgba(63,185,80,0.15); color: var(--green); }}
-  .role-assistant {{ background: rgba(88,166,255,0.15); color: var(--blue); }}
-  .role-thinking {{ background: rgba(188,140,255,0.15); color: var(--purple); }}
-  .role-tool {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
+  .role-user {{ background: rgba(74,138,106,0.12); color: var(--green); }}
+  .role-assistant {{ background: rgba(88,120,168,0.12); color: var(--blue); }}
+  .role-thinking {{ background: rgba(112,104,128,0.12); color: var(--purple); }}
+  .role-tool {{ background: rgba(136,112,88,0.12); color: var(--orange); }}
   .log-preview {{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
   .log-muted {{ color: var(--muted); }}
   .log-ts {{ color: var(--muted); font-size: 0.72rem; font-family: monospace; white-space: nowrap; }}
@@ -992,7 +992,7 @@ def generate_html_report(
   /* Unified Timeline */
   .tl-entry {{ padding: 0.5rem 0.8rem; border-bottom: 1px solid rgba(48,54,61,0.4); font-size: 0.84rem; }}
   .tl-entry.tl-expandable {{ cursor: pointer; }}
-  .tl-entry.tl-expandable:hover {{ background: rgba(88,166,255,0.05); }}
+  .tl-entry.tl-expandable:hover {{ background: rgba(88,120,168,0.05); }}
   .tl-entry.open .tl-arrow {{ transform: rotate(90deg); }}
   .tl-row {{ display: flex; align-items: center; gap: 0.6rem; }}
   .tl-seq {{ color: var(--muted); font-size: 0.72rem; font-family: monospace; min-width: 42px; }}
@@ -1000,18 +1000,18 @@ def generate_html_report(
     display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
     font-size: 0.65rem; font-weight: 600; text-align: center; min-width: 72px; white-space: nowrap;
   }}
-  .tl-user {{ background: rgba(63,185,80,0.15); color: var(--green); }}
-  .tl-assistant {{ background: rgba(88,166,255,0.15); color: var(--blue); }}
-  .tl-thinking {{ background: rgba(188,140,255,0.15); color: var(--purple); }}
-  .tl-tool {{ background: rgba(210,153,34,0.15); color: var(--orange); }}
-  .tl-result {{ background: rgba(248,81,73,0.12); color: #f0883e; }}
+  .tl-user {{ background: rgba(74,138,106,0.12); color: var(--green); }}
+  .tl-assistant {{ background: rgba(88,120,168,0.12); color: var(--blue); }}
+  .tl-thinking {{ background: rgba(112,104,128,0.12); color: var(--purple); }}
+  .tl-tool {{ background: rgba(136,112,88,0.12); color: var(--orange); }}
+  .tl-result {{ background: rgba(136,112,88,0.10); color: var(--orange); }}
   .tl-content {{ flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.4; }}
   .tl-tool-name {{ font-weight: 600; color: var(--blue); }}
   .tl-muted {{ color: var(--muted); }}
   .tl-arrow {{ display: inline-block; font-size: 0.5rem; margin-right: 0.3rem; transition: transform 0.15s; color: var(--muted); }}
   .tl-hash {{
     font-family: monospace; font-size: 0.68rem; color: var(--muted);
-    background: rgba(88,166,255,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
+    background: rgba(88,120,168,0.06); padding: 0.1rem 0.4rem; border-radius: 3px; white-space: nowrap;
   }}
   .tl-ts {{ color: var(--muted); font-size: 0.68rem; font-family: monospace; white-space: nowrap; min-width: 120px; text-align: right; }}
   .tl-detail {{
@@ -1037,16 +1037,16 @@ def generate_html_report(
     transition: all 0.15s;
   }}
   .tl-filter-btn:hover {{ border-color: var(--blue); color: var(--text); }}
-  .tl-filter-btn.active {{ border-color: var(--blue); color: var(--blue); background: rgba(88,166,255,0.08); }}
+  .tl-filter-btn.active {{ border-color: var(--blue); color: var(--blue); background: rgba(88,120,168,0.08); }}
   #tl-container {{ max-height: 80vh; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }}
-  .tl-risky {{ border-left: 3px solid var(--red); background: rgba(239,68,68,0.04); }}
-  .tl-risky:hover {{ background: rgba(239,68,68,0.08); }}
+  .tl-risky {{ border-left: 3px solid var(--red); background: rgba(152,80,80,0.04); }}
+  .tl-risky:hover {{ background: rgba(152,80,80,0.08); }}
   .tl-risk-dot {{
     width: 8px; height: 8px; border-radius: 50%; background: var(--red);
-    flex-shrink: 0; box-shadow: 0 0 6px rgba(239,68,68,0.4);
+    flex-shrink: 0; box-shadow: 0 0 6px rgba(152,80,80,0.4);
   }}
-  .tl-filter-risk {{ border-color: rgba(239,68,68,0.3); color: var(--red); }}
-  .tl-filter-risk.active {{ border-color: var(--red); background: rgba(239,68,68,0.08); }}
+  .tl-filter-risk {{ border-color: rgba(152,80,80,0.3); color: var(--red); }}
+  .tl-filter-risk.active {{ border-color: var(--red); background: rgba(152,80,80,0.08); }}
 
   .footer {{ text-align: center; color: var(--muted); font-size: 0.75rem; margin-top: 2rem; padding-top: 0.8rem; border-top: 1px solid var(--border); }}
   .footer a {{ color: var(--blue); text-decoration: none; }}
@@ -1180,18 +1180,18 @@ def generate_html_report(
     <!-- Security Insights Cards -->
     <div id="onto-insights" style="display:flex;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap;">
       <div class="onto-insight-card" id="insight-cq2" onclick="window._ontoHighlightCQ('cq2')" style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;cursor:pointer;transition:border-color 0.2s;">
-        <div style="font-size:0.7rem;color:var(--orange);font-weight:600;margin-bottom:0.3rem;">Exfiltration Risk (CQ2)</div>
+        <div style="font-size:0.7rem;color:var(--muted);font-weight:600;margin-bottom:0.3rem;">Exfiltration Risk (CQ2)</div>
         <div id="cq2-count" style="font-size:1.4rem;font-weight:700;color:var(--text);">—</div>
         <div style="font-size:0.68rem;color:var(--muted);">Files read before external calls</div>
       </div>
       <div class="onto-insight-card" id="insight-cq3" onclick="window._ontoHighlightCQ('cq3')" style="flex:1;min-width:200px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.7rem 1rem;cursor:pointer;transition:border-color 0.2s;">
-        <div style="font-size:0.7rem;color:var(--red);font-weight:600;margin-bottom:0.3rem;">Policy Violations (CQ3)</div>
+        <div style="font-size:0.7rem;color:var(--muted);font-weight:600;margin-bottom:0.3rem;">Policy Violations (CQ3)</div>
         <div id="cq3-count" style="font-size:1.4rem;font-weight:700;color:var(--text);">—</div>
         <div style="font-size:0.68rem;color:var(--muted);">High-risk tool invocations</div>
       </div>
     </div>
 
-    <canvas id="onto-canvas" style="width:100%;height:500px;border-radius:8px;background:#0a0a0a;cursor:grab;"></canvas>
+    <canvas id="onto-canvas" style="width:100%;height:500px;border-radius:8px;background:#0e0e12;cursor:grab;"></canvas>
 
     <!-- Node Detail Panel -->
     <div id="onto-detail" style="display:none;margin-top:0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;">
@@ -1414,6 +1414,8 @@ SCRIPT_PLACEHOLDER
         "  if (el3) el3.textContent = cq3.violations_found != null ? cq3.violations_found : '0';\n"
         "  if (cq2.patterns_found > 0 && el2) el2.style.color = 'var(--orange)';\n"
         "  if (cq3.violations_found > 0 && el3) el3.style.color = 'var(--red)';\n"
+        "  if (el2 && !cq2.patterns_found) el2.style.color = 'var(--dim)';\n"
+        "  if (el3 && !cq3.violations_found) el3.style.color = 'var(--dim)';\n"
         "})();\n"
         "\n"
         "// Show node detail panel\n"
@@ -1423,7 +1425,7 @@ SCRIPT_PLACEHOLDER
         "  const body = document.getElementById('onto-detail-body');\n"
         "  if (!panel || !node) return;\n"
         "  panel.style.display = 'block';\n"
-        "  const COLORS = {Agent:'#5b7cfa',Session:'#3d9970',ToolCall:'#c08040',Entity:'#8878b0',Decision:'#a06080',Risk:'#c0392b',Policy:'#4090a0'};\n"
+        "  const COLORS = {Agent:'#5878a8',Session:'#4a7a6a',ToolCall:'#7a6a50',Entity:'#606070',Decision:'#6a5a6a',Risk:'#8a5050',Policy:'#4a6a7a'};\n"
         "  const color = COLORS[node.class] || 'var(--accent)';\n"
         "  title.innerHTML = '<span style=\"color:'+color+';\">' + node.class + '</span> &mdash; ' + (node.label||node.id);\n"
         "\n"
@@ -1538,8 +1540,8 @@ SCRIPT_PLACEHOLDER
         "  const W = rect.width, H = rect.height;\n"
         "\n"
         "  const COLORS = {\n"
-        "    Agent:'#5b7cfa', Session:'#3d9970', ToolCall:'#c08040',\n"
-        "    Entity:'#8878b0', Decision:'#a06080', Risk:'#c0392b', Policy:'#4090a0'\n"
+        "    Agent:'#5878a8', Session:'#4a7a6a', ToolCall:'#7a6a50',\n"
+        "    Entity:'#606070', Decision:'#6a5a6a', Risk:'#8a5050', Policy:'#4a6a7a'\n"
         "  };\n"
         "  const SIZES = {Agent:12, Session:14, ToolCall:5, Entity:4, Decision:7, Risk:9, Policy:8};\n"
         "\n"
@@ -1604,7 +1606,7 @@ SCRIPT_PLACEHOLDER
         "\n"
         "  function draw() {\n"
         "    ctx.clearRect(0, 0, W, H);\n"
-        "    ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, W, H);\n"
+        "    ctx.fillStyle = '#0e0e12'; ctx.fillRect(0, 0, W, H);\n"
         "    const sel = window._ontoSelectedNode;\n"
         "    const hlSet = window._ontoHighlightSet;\n"
         "    const selNeighbors = sel ? getNeighborIds(sel.id) : null;\n"
@@ -1619,16 +1621,16 @@ SCRIPT_PLACEHOLDER
         "      // Risk chain: both ends are Risk or connected to Risk\n"
         "      let isRiskEdge = sel && sel.class==='Risk' && (sel.id===e.s || sel.id===e.t);\n"
         "      if (isRiskEdge) {\n"
-        "        ctx.strokeStyle = 'rgba(239,68,68,0.7)'; ctx.lineWidth = 2.5;\n"
-        "        ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 8;\n"
+        "        ctx.strokeStyle = 'rgba(138,80,80,0.7)'; ctx.lineWidth = 2.5;\n"
+        "        ctx.shadowColor = '#8a5050'; ctx.shadowBlur = 6;\n"
         "      } else if (isSelected) {\n"
-        "        ctx.strokeStyle = 'rgba(77,101,255,0.6)'; ctx.lineWidth = 2;\n"
+        "        ctx.strokeStyle = 'rgba(88,120,168,0.6)'; ctx.lineWidth = 2;\n"
         "        ctx.shadowBlur = 0;\n"
         "      } else if (isHL) {\n"
-        "        ctx.strokeStyle = 'rgba(245,158,11,0.5)'; ctx.lineWidth = 1.5;\n"
+        "        ctx.strokeStyle = 'rgba(136,112,88,0.5)'; ctx.lineWidth = 1.5;\n"
         "        ctx.shadowBlur = 0;\n"
         "      } else if (isHovered) {\n"
-        "        ctx.strokeStyle = 'rgba(77,101,255,0.4)'; ctx.lineWidth = 1.5;\n"
+        "        ctx.strokeStyle = 'rgba(88,120,168,0.4)'; ctx.lineWidth = 1.5;\n"
         "        ctx.shadowBlur = 0;\n"
         "      } else {\n"
         "        ctx.strokeStyle = (sel || hlSet) ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)';\n"
