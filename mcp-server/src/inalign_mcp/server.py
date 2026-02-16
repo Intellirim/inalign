@@ -972,6 +972,87 @@ async def list_tools() -> list[Tool]:
     except ImportError:
         pass
 
+    # ============================================
+    # AI ANALYSIS TOOLS (Opt-in, user-triggered)
+    # Zero-trust: data only sent when user explicitly calls these tools.
+    # PII masked before any external API call.
+    # Local Ollama option available for 100% zero-trust analysis.
+    # ============================================
+    tools.extend([
+        Tool(
+            name="analyze_session",
+            description=(
+                "AI-powered deep security analysis of a session. "
+                "IMPORTANT: This sends PII-masked session data to an external LLM API (OpenAI/Anthropic) unless provider=local. "
+                "Use provider=local with Ollama for 100% zero-trust analysis. "
+                "Results are stored locally as Risk nodes in the ontology graph."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Session ID to analyze. Omit for latest."},
+                    "provider": {
+                        "type": "string",
+                        "enum": ["openai", "anthropic", "local"],
+                        "description": "LLM provider. 'local' = Ollama (zero-trust). Default: openai.",
+                        "default": "openai",
+                    },
+                    "api_key": {"type": "string", "description": "API key (for openai/anthropic). Reads from env if omitted."},
+                    "model": {"type": "string", "description": "Model name. Default: gpt-4o (openai), claude-sonnet-4-5-20250929 (anthropic), llama3.2 (local)."},
+                },
+            },
+        ),
+        Tool(
+            name="query_provenance_nl",
+            description=(
+                "Natural language query over provenance data. Ask questions like "
+                "'What files did the agent read before making external calls?' "
+                "ZERO-TRUST: Only DB schema is sent to LLM. Actual data stays local. "
+                "LLM generates SQL, which runs locally against provenance.db."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string", "description": "Natural language question about agent activity."},
+                    "provider": {
+                        "type": "string",
+                        "enum": ["openai", "anthropic", "local"],
+                        "description": "LLM provider. Default: openai.",
+                        "default": "openai",
+                    },
+                    "api_key": {"type": "string", "description": "API key. Reads from env if omitted."},
+                },
+                "required": ["question"],
+            },
+        ),
+        Tool(
+            name="generate_ai_report",
+            description=(
+                "Generate AI-powered compliance/audit narrative report. "
+                "Sends PII-masked analysis summary (not raw data) to LLM for narrative generation. "
+                "Supports SOC2, ISO27001, EU_AI_Act formats."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {"type": "string", "description": "Session ID. Omit for latest."},
+                    "format": {
+                        "type": "string",
+                        "enum": ["soc2", "iso27001", "eu_ai_act", "executive"],
+                        "description": "Report format. Default: executive.",
+                        "default": "executive",
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": ["openai", "anthropic", "local"],
+                        "default": "openai",
+                    },
+                    "api_key": {"type": "string", "description": "API key. Reads from env if omitted."},
+                },
+            },
+        ),
+    ])
+
     return tools
 
 
@@ -1981,6 +2062,191 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             "recent_anchors": history,
         }
         result = [TextContent(type="text", text=json.dumps(status, indent=2, default=str))]
+
+    # ============================================
+    # AI ANALYSIS HANDLERS (Opt-in, user-triggered)
+    # ============================================
+    elif name == "analyze_session":
+        from .ai_analyzer import (
+            prepare_session_for_analysis,
+            call_openai, call_anthropic, call_ollama,
+            _load_ontology_for_session,
+        )
+        sid = arguments.get("session_id", SESSION_ID)
+        provider = arguments.get("provider", "openai")
+        api_key = arguments.get("api_key", "")
+        model = arguments.get("model")
+
+        # Load session records from provenance.db
+        import sqlite3
+        db_path = os.path.expanduser("~/.inalign/provenance.db")
+        session_records = []
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM records WHERE session_id=? ORDER BY sequence_number", (sid,)
+            ).fetchall()
+            session_records = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            pass
+
+        if not session_records:
+            # Try loading from session log files
+            from .ai_analyzer import load_latest_session
+            session_records, _ = load_latest_session()
+            session_records = session_records or []
+
+        if not session_records:
+            result = [TextContent(type="text", text=json.dumps(
+                {"error": "No session data found", "session_id": sid}))]
+        else:
+            # Prepare data with PII masking
+            prepared, pii_count = prepare_session_for_analysis(
+                session_records, max_records=200, session_id=sid)
+
+            # Call LLM based on provider
+            if provider == "openai":
+                api_key = api_key or os.getenv("OPENAI_API_KEY", "")
+                analysis = call_openai(api_key, prepared)
+            elif provider == "anthropic":
+                api_key = api_key or os.getenv("ANTHROPIC_API_KEY", "")
+                analysis = call_anthropic(api_key, prepared)
+            elif provider == "local":
+                analysis = call_ollama(prepared, model or "llama3.2")
+            else:
+                analysis = {"error": f"Unknown provider: {provider}"}
+
+            analysis["_meta"] = {
+                "session_id": sid,
+                "provider": provider,
+                "pii_masked": pii_count,
+                "records_analyzed": len(session_records),
+                "zero_trust": provider == "local",
+            }
+            result = [TextContent(type="text", text=json.dumps(analysis, indent=2, ensure_ascii=False))]
+
+    elif name == "query_provenance_nl":
+        from .nl_query import query_provenance
+        question = arguments.get("question", "")
+        provider = arguments.get("provider", "openai")
+        api_key = arguments.get("api_key", "")
+
+        if not question:
+            result = [TextContent(type="text", text=json.dumps({"error": "No question provided"}))]
+        else:
+            qr = query_provenance(question, provider, api_key)
+            result = [TextContent(type="text", text=json.dumps(qr, indent=2, ensure_ascii=False, default=str))]
+
+    elif name == "generate_ai_report":
+        from .ai_analyzer import (
+            prepare_session_for_analysis, call_openai, call_anthropic, call_ollama,
+            mask_pii,
+        )
+        sid = arguments.get("session_id", SESSION_ID)
+        report_format = arguments.get("format", "executive")
+        provider = arguments.get("provider", "openai")
+        api_key = arguments.get("api_key", "")
+
+        # Gather local analysis data (no external call yet)
+        report_prompt = f"""Generate a {report_format.upper()} format compliance/audit report for this AI agent session.
+
+Format guidelines:
+- executive: 1-page executive summary with risk assessment, key findings, recommendations
+- soc2: SOC 2 Type II format — Trust Service Criteria mapping (Security, Availability, Processing Integrity, Confidentiality, Privacy)
+- iso27001: ISO 27001 Annex A controls assessment
+- eu_ai_act: EU AI Act Articles 9, 12, 14, 15 compliance checklist
+
+The report should be professional, cite specific evidence, and include:
+1. Scope and methodology
+2. Key findings with severity ratings
+3. Control effectiveness assessment
+4. Recommendations with priority
+5. Conclusion and overall risk rating
+
+Output as structured markdown (not JSON)."""
+
+        # Load session data
+        import sqlite3
+        db_path = os.path.expanduser("~/.inalign/provenance.db")
+        session_records = []
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT * FROM records WHERE session_id=? ORDER BY sequence_number", (sid,)
+            ).fetchall()
+            session_records = [dict(r) for r in rows]
+            conn.close()
+        except Exception:
+            pass
+
+        if not session_records:
+            from .ai_analyzer import load_latest_session
+            session_records, _ = load_latest_session()
+            session_records = session_records or []
+
+        if not session_records:
+            result = [TextContent(type="text", text=json.dumps(
+                {"error": "No session data found", "session_id": sid}))]
+        else:
+            prepared, pii_count = prepare_session_for_analysis(
+                session_records, max_records=150, session_id=sid)
+
+            full_prompt = f"{report_prompt}\n\nSession data (PII-masked):\n{prepared}"
+            masked_prompt, _ = mask_pii(full_prompt)
+
+            if provider == "openai":
+                import httpx
+                ak = api_key or os.getenv("OPENAI_API_KEY", "")
+                with httpx.Client(timeout=120) as client:
+                    resp = client.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {ak}", "Content-Type": "application/json"},
+                        json={
+                            "model": "gpt-4o",
+                            "max_completion_tokens": 4096,
+                            "messages": [
+                                {"role": "system", "content": "You are an AI governance compliance auditor."},
+                                {"role": "user", "content": masked_prompt},
+                            ],
+                        },
+                    )
+                if resp.status_code == 200:
+                    report_text = resp.json()["choices"][0]["message"]["content"]
+                    report_result = {"report": report_text, "format": report_format,
+                                     "session_id": sid, "pii_masked": pii_count}
+                else:
+                    report_result = {"error": f"API error {resp.status_code}"}
+            elif provider == "anthropic":
+                import httpx
+                ak = api_key or os.getenv("ANTHROPIC_API_KEY", "")
+                with httpx.Client(timeout=120) as client:
+                    resp = client.post(
+                        "https://api.anthropic.com/v1/messages",
+                        headers={"x-api-key": ak, "anthropic-version": "2023-06-01",
+                                 "content-type": "application/json"},
+                        json={
+                            "model": "claude-sonnet-4-5-20250929",
+                            "max_tokens": 4096,
+                            "system": "You are an AI governance compliance auditor.",
+                            "messages": [{"role": "user", "content": masked_prompt}],
+                        },
+                    )
+                if resp.status_code == 200:
+                    report_text = resp.json()["content"][0]["text"]
+                    report_result = {"report": report_text, "format": report_format,
+                                     "session_id": sid, "pii_masked": pii_count}
+                else:
+                    report_result = {"error": f"API error {resp.status_code}"}
+            elif provider == "local":
+                report_result = call_ollama(masked_prompt, "llama3.2")
+            else:
+                report_result = {"error": f"Unknown provider: {provider}"}
+
+            result = [TextContent(type="text", text=json.dumps(
+                report_result, indent=2, ensure_ascii=False))]
 
     # Unknown tool
     else:
