@@ -917,6 +917,61 @@ async def list_tools() -> list[Tool]:
             ),
         ])
 
+    # ============================================
+    # BLOCKCHAIN ANCHORING TOOLS
+    # ============================================
+    try:
+        from .polygon_anchor import anchor_session as _anchor_test
+        tools.extend([
+            Tool(
+                name="anchor_session",
+                description="Anchor a session's provenance hash chain to Polygon blockchain. Creates a tamper-proof timestamp. Requires POLYGON_PRIVATE_KEY in ~/.inalign.env.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session ID to anchor. Omit for current session."},
+                    },
+                },
+            ),
+            Tool(
+                name="anchor_batch",
+                description="Anchor multiple sessions as a single Merkle root to Polygon. Cost-effective batch anchoring.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_ids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of session IDs. Omit to anchor ALL sessions.",
+                        },
+                    },
+                },
+            ),
+            Tool(
+                name="verify_anchor",
+                description="Verify a blockchain anchor transaction. Checks if the merkle root on-chain matches local records.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session ID to verify integrity"},
+                        "tx_hash": {"type": "string", "description": "Transaction hash to verify on-chain (optional)"},
+                    },
+                },
+            ),
+            Tool(
+                name="anchor_status",
+                description="Get blockchain anchoring status: wallet balance, anchor history, network config.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Filter by session (optional)"},
+                    },
+                },
+            ),
+        ])
+    except ImportError:
+        pass
+
     return tools
 
 
@@ -1885,6 +1940,47 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         sid = arguments.get("session_id", "")
         stats_data = onto_stats(sid)
         result = [TextContent(type="text", text=json.dumps(stats_data, indent=2))]
+
+    # ============================================
+    # BLOCKCHAIN ANCHORING HANDLERS
+    # ============================================
+    elif name == "anchor_session":
+        from .polygon_anchor import anchor_session as _anchor_sess
+        sid = arguments.get("session_id", SESSION_ID)
+        anchor_result = _anchor_sess(sid)
+        result = [TextContent(type="text", text=json.dumps(anchor_result.to_dict(), indent=2))]
+
+    elif name == "anchor_batch":
+        from .polygon_anchor import anchor_batch as _anchor_batch
+        sids = arguments.get("session_ids")
+        anchor_result = _anchor_batch(sids)
+        result = [TextContent(type="text", text=json.dumps(anchor_result.to_dict(), indent=2))]
+
+    elif name == "verify_anchor":
+        from .polygon_anchor import verify_session_integrity, verify_anchor as _verify_tx
+        sid = arguments.get("session_id")
+        tx_hash = arguments.get("tx_hash")
+        if sid:
+            verify_result = verify_session_integrity(sid)
+        elif tx_hash:
+            verify_result = _verify_tx(tx_hash)
+        else:
+            verify_result = {"error": "Provide session_id or tx_hash"}
+        result = [TextContent(type="text", text=json.dumps(verify_result, indent=2))]
+
+    elif name == "anchor_status":
+        from .polygon_anchor import get_balance, get_anchor_history, get_network, get_config
+        sid = arguments.get("session_id")
+        wallet_info = get_balance()
+        history = get_anchor_history(sid, limit=10)
+        status = {
+            "wallet": wallet_info,
+            "network": get_network(),
+            "network_config": get_config(),
+            "anchor_count": len(history),
+            "recent_anchors": history,
+        }
+        result = [TextContent(type="text", text=json.dumps(status, indent=2, default=str))]
 
     # Unknown tool
     else:
