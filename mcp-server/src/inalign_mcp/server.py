@@ -181,6 +181,10 @@ try:
         populate_from_session as onto_populate,
         populate_decisions as onto_populate_decisions,
         populate_risks as onto_populate_risks,
+        populate_data_flow as onto_populate_data_flow,
+        populate_llm_invocations as onto_populate_llm,
+        populate_prompt_response_entities as onto_populate_prompts,
+        link_cross_session_entities as onto_link_cross_session,
         query_neighbors as onto_neighbors,
         get_ontology_stats as onto_stats,
         cq1_agent_accessed_entity as onto_cq1,
@@ -189,6 +193,8 @@ try:
         cq4_downstream_impact as onto_cq4,
         cq5_context_around_hash_break as onto_cq5,
         query_causal_chain as onto_causal,
+        query_temporal_patterns as onto_temporal,
+        query_centrality as onto_centrality,
     )
     ONTOLOGY_AVAILABLE = True
 except ImportError:
@@ -462,7 +468,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="ontology_security_scan",
-            description="Run ontology-powered security analysis. Uses the knowledge graph for: entity sensitivity classification, data flow tracking (exfiltration paths), cross-session threat detection, graph-based policy enforcement, and impact/blast radius analysis. Returns findings with MITRE ATT&CK mappings.",
+            description="Run ontology-powered security analysis (7 analyses). Uses the knowledge graph for: entity sensitivity classification, data flow tracking, cross-session threat detection, policy enforcement, impact analysis, prompt injection flow tracking, and privilege escalation detection. Returns findings with MITRE ATT&CK mappings.",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -878,14 +884,14 @@ async def list_tools() -> list[Tool]:
             ),
             Tool(
                 name="ontology_query",
-                description="Query the knowledge graph. Supports: neighbors (graph traversal), causal_chain (trace back from an activity), cq1-cq5 (competency questions).",
+                description="Query the knowledge graph. Supports: neighbors (graph traversal), causal_chain (trace causes/effects), temporal_patterns (repeating tool sequences), centrality (most important nodes), cq1-cq5 (competency questions).",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "query_type": {
                             "type": "string",
-                            "description": "Query type: neighbors, causal_chain, cq1_access, cq2_exfiltration, cq3_violations, cq4_impact, cq5_hash_break",
-                            "enum": ["neighbors", "causal_chain", "cq1_access", "cq2_exfiltration", "cq3_violations", "cq4_impact", "cq5_hash_break"],
+                            "description": "Query type: neighbors, causal_chain, temporal_patterns, centrality, cq1_access, cq2_exfiltration, cq3_violations, cq4_impact, cq5_hash_break",
+                            "enum": ["neighbors", "causal_chain", "temporal_patterns", "centrality", "cq1_access", "cq2_exfiltration", "cq3_violations", "cq4_impact", "cq5_hash_break"],
                         },
                         "node_id": {"type": "string", "description": "Node ID (for neighbors/causal_chain/cq4_impact)"},
                         "depth": {"type": "integer", "description": "Max traversal depth (default: 2)"},
@@ -1403,13 +1409,22 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     elif name == "ontology_security_scan":
         session_id = arguments.get("session_id", SESSION_ID)
         try:
-            from .ontology import populate_from_session, populate_decisions, populate_risks
+            from .ontology import (
+                populate_from_session, populate_decisions, populate_risks,
+                populate_data_flow, populate_llm_invocations,
+                populate_prompt_response_entities, link_cross_session_entities,
+            )
             from .ontology_security import run_ontology_security_analysis
-            # Ensure ontology is populated
+            # Ensure ontology is fully populated (all 7 functions)
+            # Order matters: prompts before LLM invocations (FK dependency)
             populate_from_session(session_id)
             populate_decisions(session_id)
+            populate_data_flow(session_id)
+            populate_prompt_response_entities(session_id)
+            populate_llm_invocations(session_id)
+            link_cross_session_entities(session_id)
             populate_risks(session_id)
-            # Run graph-powered security analysis
+            # Run graph-powered security analysis (7 analyses)
             scan = run_ontology_security_analysis(session_id)
             result = [TextContent(type="text", text=json.dumps(scan, indent=2, default=str))]
         except Exception as e:
@@ -1809,9 +1824,27 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
         include_risks = arguments.get("include_risks", True)
         populate_result = onto_populate(sid)
         if populate_result.get("status") == "ok":
+            # Core: decisions
             dec_result = onto_populate_decisions(sid)
             populate_result["decision_nodes"] = dec_result.get("nodes", 0)
             populate_result["decision_edges"] = dec_result.get("edges", 0)
+            # Data flow: file/URL entities + derivedFrom lineage
+            df_result = onto_populate_data_flow(sid)
+            populate_result["entity_nodes"] = df_result.get("entity_nodes", 0)
+            populate_result["data_flow_edges"] = df_result.get("edges", 0)
+            populate_result["derived_from"] = df_result.get("derived_from", 0)
+            # Prompt/Response entities FIRST (creates Prompt nodes for usedPrompt FK)
+            pr_result = onto_populate_prompts(sid)
+            populate_result["prompt_entities"] = pr_result.get("prompt_entities", 0)
+            populate_result["response_entities"] = pr_result.get("response_entities", 0)
+            populate_result["injection_suspects"] = pr_result.get("injection_suspects", 0)
+            # LLM invocations AFTER prompts (needs Prompt nodes for usedPrompt edges)
+            llm_result = onto_populate_llm(sid)
+            populate_result["llm_invocations"] = llm_result.get("invocations", 0)
+            populate_result["llm_edges"] = llm_result.get("edges", 0)
+            # Cross-session entity linking
+            cs_result = onto_link_cross_session(sid)
+            populate_result["cross_session_links"] = cs_result.get("links_created", 0)
         if include_risks and populate_result.get("status") == "ok":
             risk_result = onto_populate_risks(sid)
             populate_result["risk_nodes"] = risk_result.get("nodes", 0)
@@ -1828,6 +1861,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
             qr = onto_neighbors(nid, depth, arguments.get("direction", "both"))
         elif qt == "causal_chain":
             qr = onto_causal(nid, depth)
+        elif qt == "temporal_patterns":
+            qr = onto_temporal(sid, min_length=arguments.get("min_length", 2),
+                               max_length=arguments.get("max_length", 5),
+                               min_occurrences=arguments.get("min_occurrences", 2))
+        elif qt == "centrality":
+            qr = onto_centrality(sid, top_n=arguments.get("top_n", 20))
         elif qt == "cq1_access":
             qr = onto_cq1(arguments.get("agent_label", ""), arguments.get("entity_pattern", ""), sid)
         elif qt == "cq2_exfiltration":
